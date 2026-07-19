@@ -1,0 +1,10 @@
+Checks: >
+  -*,
+  bugprone-*,
+  modernize-use-nullptr,
+  performance-*,
+  -performance-enum-size,
+  portability-*
+WarningsAsErrors: '*'
+HeaderFilterRegex: '.*[/\\](include|src|apps|tests)[/\\].*'
+FormatStyle: file

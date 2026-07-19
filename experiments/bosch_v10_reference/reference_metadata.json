@@ -1,0 +1,249 @@
+{
+  "schema_version": 1,
+  "reference_name": "bosch_v10_reference",
+  "reference_source": {
+    "description": "Checked-in MATLAB fixed-priority scheduler archives",
+    "source_commit": "01e717e9fa6d9386572a7f6ed550cbdba7861eef",
+    "dedicated_archive": {
+      "path": "simulink/cps_v10_scheduled_dedicated.mat",
+      "sha256": "7737376742c379f09db1e56c6cc18b2e26c9d183728d9d486b20f18dd3348c7c"
+    },
+    "shared_cloud_archive": {
+      "path": "simulink/cps_v10_scheduled_cloud1.mat",
+      "sha256": "11a17471a97a37405a319368867182f96c81dccbb530f88456924d25a4f68d6d"
+    }
+  },
+  "time": {
+    "canonical_unit": "scheduler_tick",
+    "tick_seconds": 0.0001,
+    "stop_tick": 150000,
+    "stop_seconds": 15.0,
+    "samples": 150001
+  },
+  "randomness": {
+    "scheduler": "none",
+    "network": "none; fixed delay",
+    "matlab_master_seed": 0,
+    "matlab_generator": "twister",
+    "fmu_noise_standard_deviation": 0.0
+  },
+  "network": {
+    "send_offset_ticks": 1,
+    "fixed_delay_ticks": 80,
+    "fixed_delay_seconds": 0.008,
+    "packets": 3750,
+    "sends_within_trace": 3750,
+    "receives_within_trace": 3749
+  },
+  "tasks": [
+    {
+      "task_id": 1,
+      "name": "Sensor",
+      "platform": "vehicle",
+      "period_ticks": 50,
+      "execution_ticks": 6,
+      "deadline_ticks": 50,
+      "offset_ticks": 0,
+      "priority": 1,
+      "activation_column": 1,
+      "finish_column": 2
+    },
+    {
+      "task_id": 2,
+      "name": "Estimator",
+      "platform": "cloud",
+      "period_ticks": 100,
+      "execution_ticks": 9,
+      "deadline_ticks": 100,
+      "offset_ticks": 0,
+      "priority": 1,
+      "activation_column": 5,
+      "finish_column": 6
+    },
+    {
+      "task_id": 3,
+      "name": "Controller",
+      "platform": "cloud",
+      "period_ticks": 200,
+      "execution_ticks": 3,
+      "deadline_ticks": 200,
+      "offset_ticks": 0,
+      "priority": 2,
+      "activation_column": 7,
+      "finish_column": 8
+    },
+    {
+      "task_id": 4,
+      "name": "Feedforward",
+      "platform": "cloud",
+      "period_ticks": 200,
+      "execution_ticks": 12,
+      "deadline_ticks": 200,
+      "offset_ticks": 0,
+      "priority": 3,
+      "activation_column": 9,
+      "finish_column": 10
+    },
+    {
+      "task_id": 5,
+      "name": "Merger",
+      "platform": "cloud",
+      "period_ticks": 200,
+      "execution_ticks": 3,
+      "deadline_ticks": 200,
+      "offset_ticks": 0,
+      "priority": 4,
+      "activation_column": 11,
+      "finish_column": 12
+    },
+    {
+      "task_id": 6,
+      "name": "Actuator",
+      "platform": "vehicle",
+      "period_ticks": 300,
+      "execution_ticks": 5,
+      "deadline_ticks": 300,
+      "offset_ticks": 0,
+      "priority": 1,
+      "activation_column": 15,
+      "finish_column": 16
+    }
+  ],
+  "scenarios": {
+    "dedicated": {
+      "mapping": "one uniprocessor per task",
+      "jobs": 7256,
+      "scheduler_events": 21762,
+      "release_events": 7256,
+      "start_events": 7256,
+      "resume_events": 0,
+      "preemption_events": 0,
+      "finish_events": 7250,
+      "deadline_miss_events": 0,
+      "true_trigger_entries": 22005,
+      "trigger_differences_from_dedicated": 0
+    },
+    "shared_cloud": {
+      "mapping": "four cloud tasks share cloud_cpu_1; vehicle tasks remain dedicated",
+      "jobs": 7256,
+      "scheduler_events": 21759,
+      "release_events": 7256,
+      "start_events": 7253,
+      "resume_events": 0,
+      "preemption_events": 0,
+      "finish_events": 7250,
+      "deadline_miss_events": 0,
+      "true_trigger_entries": 22002,
+      "trigger_differences_from_dedicated": 12003
+    }
+  },
+  "trajectory": {
+    "path": "examples/example_v_10",
+    "source_samples": 1500000,
+    "source_stop_seconds": 149.9999,
+    "captured_stop_seconds": 15.0,
+    "initial_velocity_m_per_s": 10.0,
+    "sha256": {
+      "time_vector.csv": "f6a475cdc95cab8ec05b1e13f07e91d7b71464b0c669c84a9be1a5466a92abc8",
+      "feedforward_sequence_0.csv": "c5bd7589fcfa8e3fae6d0dc284235bd743842f3ad4bc76b4ae5e4b93be0307b2",
+      "feedforward_sequence_1.csv": "37561b7272dd1080d83c1e5df85fc71ab8f33edeae5ee82e3873e3f73da9ed2b",
+      "velocity.csv": "f7aca4318fc3a4a6bfc3dd8758e73caf0b5614b2298736bfd76d573650a6072f"
+    }
+  },
+  "functional_model": {
+    "fmu_path": "LateralMotionControl.fmu",
+    "fmu_sha256": "7af75b714be76f97b6f203e2fc5994d4eb13bdc17dd58aaf951fc174549ee518",
+    "simulink_model_path": "simulink/cps_single_vehicle_v10.slx",
+    "simulink_model_sha256": "10ce60cafb8af77bf2f80827f27a810c97608bd0466cc17ccb3f14a6baa23f36",
+    "selected_outputs": [
+      "lateral_error",
+      "actuator_command",
+      "rolling_real",
+      "rolling_remote",
+      "violation_counter",
+      "critical_section"
+    ],
+    "portable_output_capture_status": "captured on a user-provided MATLAB/Simulink host and row-level validated in the Ubuntu workspace"
+  },
+  "capture_environment": {
+    "execution_host": "user-provided Windows MATLAB/Simulink environment",
+    "matlab_release": "not recorded",
+    "validation_host": "Ubuntu workspace",
+    "validation_date": "2026-07-17"
+  },
+  "generated_artifacts": {
+    "dedicated": {
+      "fmu_outputs.csv": {
+        "sha256": "ce80183a367cdfb3a6a71d126abf707799f3a08c53001f62690b16a85a21e5ed",
+        "data_rows": 150001
+      },
+      "jobs.csv": {
+        "sha256": "32c7bc45e331c139b56b38f569994ec9f3fe720cbd174000b8b9665fad7212e1",
+        "data_rows": 7256
+      },
+      "network_events.csv": {
+        "sha256": "bdac2202466ff42a912a957dba7fc2f3473837651e428c41b9b6370371ef846c",
+        "data_rows": 3750
+      },
+      "scheduler_events.csv": {
+        "sha256": "00e8109212b6803dcdb1725ddc63df3cb0e10cc6c8cf1b59f0f15dea36a78e9d",
+        "data_rows": 21762
+      },
+      "summary.csv": {
+        "sha256": "7645461ea7d61ded9931729f192c8bdf73b36a3ab1a528c9df22bc1665e55ea0",
+        "data_rows": 14
+      },
+      "tasks.csv": {
+        "sha256": "84727372b0cf215ef0c25a3003587d3b77c5006f6ceb7757c7196cf540dd49ae",
+        "data_rows": 6
+      },
+      "trigger_events.csv": {
+        "sha256": "1d5beea27ceaa271b546659150d63f1f3844de74d366d785b26d0002d49eb118",
+        "data_rows": 22005
+      }
+    },
+    "shared_cloud": {
+      "fmu_outputs.csv": {
+        "sha256": "c8e0f9e927af19f6c37282c25339c901e4196dac63cbfe9bac32386c112ed505",
+        "data_rows": 150001
+      },
+      "jobs.csv": {
+        "sha256": "6c271137f475d185fa0f84fc29b58d791ab319adf37e6ecef5ebc9f7c4c2e559",
+        "data_rows": 7256
+      },
+      "network_events.csv": {
+        "sha256": "b027ac8383832f3ef444f5ae34bd39575eb3b9ba797b2f7cd0c2412fdc68815f",
+        "data_rows": 3750
+      },
+      "scheduler_events.csv": {
+        "sha256": "6e13d7a39a6c7d07c5b133bf696fdc76018ab2afe4d5b88ec080b0e3c89a1c6c",
+        "data_rows": 21759
+      },
+      "summary.csv": {
+        "sha256": "07bcc2a334c4f3d2330902cb296f2a322aedc362f6427bdb59b1826c52c24590",
+        "data_rows": 14
+      },
+      "tasks.csv": {
+        "sha256": "45b38cd2ac671db366cce1600d2e885442d89b10cd6650c08d6f8fb26c82130b",
+        "data_rows": 6
+      },
+      "trigger_events.csv": {
+        "sha256": "a10783afaf0cf6bedf2a77520986c87c3aff6a84416e9568c15df62e80df06f8",
+        "data_rows": 22002
+      }
+    }
+  },
+  "comparison_policy": {
+    "scheduler_events": "exact row equality after regeneration, then byte-level CSV comparison",
+    "trigger_events": "exact tick, column, and name equality",
+    "network_events": "exact tick and causal-source equality",
+    "fmu_outputs": "capture raw values first; numerical tolerances remain to be defined before conformance use"
+  },
+  "paper_discrepancy": {
+    "paper_path": "resources/Invited Paper - Physics-Driven Real-Time CPS Challenge.pdf",
+    "paper_sha256": "caa69c1d7dca6d0807f77def793d54882a77548d80c4d7fbe90cf09e76cfcf8a",
+    "paper_statement": "Figure 4 labels the FMU step size as 1 ms",
+    "repository_oracle": "The FMU, Simulink model, trajectory, and MATLAB scheduler use 0.1 ms",
+    "resolution": "The paper states that the GitHub repository prevails when descriptions disagree; this reference uses 0.1 ms"
+  }
+}

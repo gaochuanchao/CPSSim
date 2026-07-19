@@ -1,0 +1,206 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 24,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "BUILD_TESTING": "ON",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "CPSSIM_WARNINGS_AS_ERRORS": "ON"
+      }
+    },
+    {
+      "name": "dev",
+      "displayName": "GCC development",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_CXX_COMPILER": "g++"
+      }
+    },
+    {
+      "name": "release",
+      "displayName": "GCC release",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_CXX_COMPILER": "g++"
+      }
+    },
+    {
+      "name": "asan",
+      "displayName": "GCC ASan and UBSan",
+      "inherits": "dev",
+      "cacheVariables": {
+        "CPSSIM_ENABLE_SANITIZERS": "ON"
+      }
+    },
+    {
+      "name": "clang",
+      "displayName": "Clang development",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_CXX_COMPILER": "clang++"
+      }
+    },
+    {
+      "name": "tidy",
+      "displayName": "Clang with clang-tidy",
+      "inherits": "clang",
+      "cacheVariables": {
+        "CPSSIM_ENABLE_CLANG_TIDY": "ON"
+      }
+    },
+    {
+      "name": "gui",
+      "displayName": "GCC development with Dear ImGui",
+      "inherits": "dev",
+      "cacheVariables": {
+        "CPSSIM_BUILD_GUI": "ON"
+      }
+    },
+    {
+      "name": "make-dev",
+      "displayName": "GCC development with Unix Makefiles",
+      "inherits": "dev",
+      "generator": "Unix Makefiles"
+    },
+    {
+      "name": "make-release",
+      "displayName": "GCC release with Unix Makefiles",
+      "inherits": "release",
+      "generator": "Unix Makefiles"
+    },
+    {
+      "name": "make-asan",
+      "displayName": "GCC ASan and UBSan with Unix Makefiles",
+      "inherits": "asan",
+      "generator": "Unix Makefiles"
+    },
+    {
+      "name": "make-gui",
+      "displayName": "GCC development GUI with Unix Makefiles",
+      "inherits": "make-dev",
+      "cacheVariables": {
+        "CPSSIM_BUILD_GUI": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "dev",
+      "configurePreset": "dev"
+    },
+    {
+      "name": "release",
+      "configurePreset": "release"
+    },
+    {
+      "name": "asan",
+      "configurePreset": "asan"
+    },
+    {
+      "name": "clang",
+      "configurePreset": "clang"
+    },
+    {
+      "name": "tidy",
+      "configurePreset": "tidy"
+    },
+    {
+      "name": "gui",
+      "configurePreset": "gui"
+    },
+    {
+      "name": "make-dev",
+      "configurePreset": "make-dev"
+    },
+    {
+      "name": "make-release",
+      "configurePreset": "make-release"
+    },
+    {
+      "name": "make-asan",
+      "configurePreset": "make-asan"
+    },
+    {
+      "name": "make-gui",
+      "configurePreset": "make-gui"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "dev",
+      "configurePreset": "dev",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "release",
+      "configurePreset": "release",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "asan",
+      "configurePreset": "asan",
+      "environment": {
+        "ASAN_OPTIONS": "detect_leaks=0:halt_on_error=1",
+        "UBSAN_OPTIONS": "halt_on_error=1:print_stacktrace=1"
+      },
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "clang",
+      "configurePreset": "clang",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "tidy",
+      "configurePreset": "tidy",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "make-dev",
+      "configurePreset": "make-dev",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "make-release",
+      "configurePreset": "make-release",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "make-asan",
+      "configurePreset": "make-asan",
+      "environment": {
+        "ASAN_OPTIONS": "detect_leaks=0:halt_on_error=1",
+        "UBSAN_OPTIONS": "halt_on_error=1:print_stacktrace=1"
+      },
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ]
+}

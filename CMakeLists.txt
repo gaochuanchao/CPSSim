@@ -1,0 +1,382 @@
+cmake_minimum_required(VERSION 3.24)
+
+project(
+    CPSSim
+    VERSION 0.1.0
+    DESCRIPTION "Portable deterministic cyber-physical-system simulator"
+    LANGUAGES C CXX
+)
+
+option(CPSSIM_WARNINGS_AS_ERRORS "Treat project warnings as errors" ON)
+option(CPSSIM_ENABLE_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
+option(CPSSIM_ENABLE_CLANG_TIDY "Run clang-tidy while compiling project targets" OFF)
+option(CPSSIM_BUILD_GUI "Build the optional Dear ImGui visualization executable" OFF)
+
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+
+include(ClangTidy)
+include(ProjectSanitizers)
+include(ProjectWarnings)
+
+cpssim_configure_clang_tidy()
+
+find_package(nlohmann_json 3.11 QUIET)
+
+if(NOT nlohmann_json_FOUND)
+    include(FetchContent)
+
+    string(MAKE_C_IDENTIFIER "${CMAKE_GENERATOR}" CPSSIM_DEPENDENCY_GENERATOR)
+    set(
+        FETCHCONTENT_BASE_DIR
+        "${CMAKE_CURRENT_SOURCE_DIR}/build/_deps/${CPSSIM_DEPENDENCY_GENERATOR}"
+    )
+    FetchContent_Declare(
+        nlohmann_json
+        URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz
+        URL_HASH SHA256=d6c65aca6b1ed68e7a182f4757257b107ae403032760ed6ef121c9d55e81757d
+        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    )
+    FetchContent_MakeAvailable(nlohmann_json)
+endif()
+
+add_library(
+    cpssim_core STATIC
+    src/cpssim/config/json_config.cpp
+    src/cpssim/config/json_run_plan.cpp
+    src/cpssim/core/version.cpp
+    src/cpssim/functional/functional_runtime.cpp
+    src/cpssim/functional/mock_functional_model.cpp
+    src/cpssim/kernel/event_queue.cpp
+    src/cpssim/kernel/periodic_release.cpp
+    src/cpssim/kernel/scheduler.cpp
+    src/cpssim/kernel/simulation_engine.cpp
+    src/cpssim/model/event.cpp
+    src/cpssim/model/experiment_config.cpp
+    src/cpssim/model/message.cpp
+    src/cpssim/model/run_plan.cpp
+    src/cpssim/model/runtime_state.cpp
+    src/cpssim/model/specifications.cpp
+    src/cpssim/model/time.cpp
+    src/cpssim/network/fixed_delay_network.cpp
+    src/cpssim/policy/fixed_priority.cpp
+    src/cpssim/policy/resource_allocator.cpp
+    src/cpssim/trace/event_json.cpp
+)
+add_library(cpssim::core ALIAS cpssim_core)
+
+target_compile_features(cpssim_core PUBLIC cxx_std_20)
+target_compile_definitions(
+    cpssim_core
+    PRIVATE CPSSIM_VERSION="${PROJECT_VERSION}"
+)
+target_include_directories(
+    cpssim_core
+    PUBLIC
+        "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>"
+)
+get_target_property(
+    CPSSIM_NLOHMANN_INCLUDE_DIRECTORIES
+    nlohmann_json::nlohmann_json
+    INTERFACE_INCLUDE_DIRECTORIES
+)
+target_include_directories(
+    cpssim_core
+    SYSTEM PRIVATE ${CPSSIM_NLOHMANN_INCLUDE_DIRECTORIES}
+)
+target_link_libraries(cpssim_core PRIVATE nlohmann_json::nlohmann_json)
+
+cpssim_set_project_warnings(cpssim_core)
+cpssim_enable_sanitizers(cpssim_core)
+
+add_library(
+    cpssim_bosch_adapter STATIC
+    src/cpssim/bosch/trigger_encoder.cpp
+)
+target_link_libraries(cpssim_bosch_adapter PUBLIC cpssim::core)
+
+cpssim_set_project_warnings(cpssim_bosch_adapter)
+cpssim_enable_sanitizers(cpssim_bosch_adapter)
+
+add_library(
+    cpssim_fmi2_adapter STATIC
+    src/cpssim/fmi/fmi2_importer.cpp
+)
+add_library(cpssim::fmi2_adapter ALIAS cpssim_fmi2_adapter)
+target_compile_features(cpssim_fmi2_adapter PUBLIC cxx_std_20)
+target_include_directories(
+    cpssim_fmi2_adapter
+    PUBLIC
+        "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>"
+)
+target_link_libraries(cpssim_fmi2_adapter PRIVATE ${CMAKE_DL_LIBS})
+
+cpssim_set_project_warnings(cpssim_fmi2_adapter)
+cpssim_enable_sanitizers(cpssim_fmi2_adapter)
+
+add_library(
+    cpssim_bosch_fmi2_adapter STATIC
+    src/cpssim/bosch/bosch_fmi2_functional_model.cpp
+    src/cpssim/bosch/example_data.cpp
+)
+target_link_libraries(
+    cpssim_bosch_fmi2_adapter
+    PUBLIC
+        cpssim::core
+        cpssim_bosch_adapter
+        cpssim_fmi2_adapter
+)
+
+cpssim_set_project_warnings(cpssim_bosch_fmi2_adapter)
+cpssim_enable_sanitizers(cpssim_bosch_fmi2_adapter)
+
+add_library(
+    cpssim_bosch_reference STATIC
+    src/cpssim/conformance/bosch_reference.cpp
+)
+target_link_libraries(cpssim_bosch_reference PUBLIC cpssim_bosch_adapter)
+
+cpssim_set_project_warnings(cpssim_bosch_reference)
+cpssim_enable_sanitizers(cpssim_bosch_reference)
+
+add_library(
+    cpssim_bosch_functional_reference STATIC
+    src/cpssim/conformance/bosch_functional_reference.cpp
+)
+target_link_libraries(
+    cpssim_bosch_functional_reference
+    PUBLIC
+        cpssim_bosch_fmi2_adapter
+        cpssim_bosch_reference
+)
+
+cpssim_set_project_warnings(cpssim_bosch_functional_reference)
+cpssim_enable_sanitizers(cpssim_bosch_functional_reference)
+
+add_executable(cpssim_cli apps/cli/main.cpp)
+target_link_libraries(cpssim_cli PRIVATE cpssim::core)
+
+cpssim_set_project_warnings(cpssim_cli)
+cpssim_enable_sanitizers(cpssim_cli)
+
+add_library(
+    cpssim_gui_support STATIC
+    src/cpssim/gui/architecture_graph.cpp
+    src/cpssim/gui/draft_run_plan.cpp
+    src/cpssim/gui/presentation_model.cpp
+    src/cpssim/gui/selection_model.cpp
+    src/cpssim/gui/signal_series.cpp
+    src/cpssim/gui/simulation_controller.cpp
+    src/cpssim/gui/simulation_session.cpp
+    src/cpssim/gui/timeline_model.cpp
+)
+target_link_libraries(cpssim_gui_support PUBLIC cpssim::core)
+
+cpssim_set_project_warnings(cpssim_gui_support)
+cpssim_enable_sanitizers(cpssim_gui_support)
+
+if(CPSSIM_BUILD_GUI)
+    find_package(OpenGL REQUIRED)
+    find_package(glfw3 3.3 CONFIG REQUIRED)
+
+    include(FetchContent)
+    string(MAKE_C_IDENTIFIER "${CMAKE_GENERATOR}" CPSSIM_GUI_DEPENDENCY_GENERATOR)
+    set(
+        FETCHCONTENT_BASE_DIR
+        "${CMAKE_CURRENT_SOURCE_DIR}/build/_deps/${CPSSIM_GUI_DEPENDENCY_GENERATOR}"
+    )
+    FetchContent_Declare(
+        imgui
+        URL https://github.com/ocornut/imgui/archive/refs/tags/v1.92.8.tar.gz
+        URL_HASH SHA256=fecb33d33930e12ff53a34064e9d3a06c8f7c3e04408f14cd36c80e3faac863b
+        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    )
+    FetchContent_MakeAvailable(imgui)
+
+    add_library(
+        cpssim_imgui STATIC
+        "${imgui_SOURCE_DIR}/imgui.cpp"
+        "${imgui_SOURCE_DIR}/imgui_draw.cpp"
+        "${imgui_SOURCE_DIR}/imgui_tables.cpp"
+        "${imgui_SOURCE_DIR}/imgui_widgets.cpp"
+        "${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp"
+        "${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp"
+    )
+    target_include_directories(
+        cpssim_imgui
+        SYSTEM PUBLIC
+            "${imgui_SOURCE_DIR}"
+            "${imgui_SOURCE_DIR}/backends"
+    )
+    target_link_libraries(cpssim_imgui PUBLIC glfw OpenGL::GL)
+
+    add_executable(
+        cpssim_gui
+        apps/gui/gui_application.cpp
+        apps/gui/main.cpp
+        apps/gui/views/architecture_view.cpp
+        apps/gui/views/event_view.cpp
+        apps/gui/views/experiment_explorer.cpp
+        apps/gui/views/inspector_view.cpp
+        apps/gui/views/resource_view.cpp
+        apps/gui/views/run_plan_editor.cpp
+        apps/gui/views/signal_view.cpp
+        apps/gui/views/timeline_view.cpp
+        apps/gui/views/toolbar_view.cpp
+    )
+    target_link_libraries(cpssim_gui PRIVATE cpssim_gui_support cpssim_imgui)
+
+    cpssim_set_project_warnings(cpssim_gui)
+    cpssim_enable_sanitizers(cpssim_gui)
+endif()
+
+add_executable(cpssim_bosch_conformance apps/conformance/main.cpp)
+target_link_libraries(cpssim_bosch_conformance PRIVATE cpssim_bosch_reference)
+
+cpssim_set_project_warnings(cpssim_bosch_conformance)
+cpssim_enable_sanitizers(cpssim_bosch_conformance)
+
+add_executable(cpssim_bosch_example apps/bosch_example/main.cpp)
+target_link_libraries(
+    cpssim_bosch_example
+    PRIVATE
+        cpssim_bosch_fmi2_adapter
+        cpssim_bosch_reference
+)
+
+cpssim_set_project_warnings(cpssim_bosch_example)
+cpssim_enable_sanitizers(cpssim_bosch_example)
+
+include(CTest)
+
+if(BUILD_TESTING)
+    find_package(Catch2 3 CONFIG REQUIRED)
+
+    add_library(
+        cpssim_bosch_fmu_linux SHARED
+        LateralMotionControl/sources/LateralMotionControl.c
+    )
+    target_include_directories(
+        cpssim_bosch_fmu_linux
+        PRIVATE LateralMotionControl/sources
+    )
+    if(NOT WIN32)
+        target_link_libraries(cpssim_bosch_fmu_linux PRIVATE m)
+    endif()
+    set_target_properties(
+        cpssim_bosch_fmu_linux
+        PROPERTIES
+            PREFIX ""
+            OUTPUT_NAME "LateralMotionControl"
+    )
+
+    add_executable(
+        cpssim_tests
+        tests/bosch/trigger_encoder_test.cpp
+        tests/config/json_config_test.cpp
+        tests/config/json_run_plan_test.cpp
+        tests/conformance/bosch_reference_test.cpp
+        tests/functional/functional_runtime_test.cpp
+        tests/gui/architecture_graph_test.cpp
+        tests/gui/draft_run_plan_test.cpp
+        tests/gui/presentation_model_test.cpp
+        tests/gui/selection_model_test.cpp
+        tests/gui/signal_series_test.cpp
+        tests/gui/simulation_controller_test.cpp
+        tests/gui/timeline_model_test.cpp
+        tests/kernel/event_queue_test.cpp
+        tests/kernel/multi_resource_simulation_test.cpp
+        tests/kernel/network_simulation_test.cpp
+        tests/kernel/periodic_release_test.cpp
+        tests/kernel/scheduler_test.cpp
+        tests/kernel/simulation_engine_test.cpp
+        tests/model/categories_test.cpp
+        tests/model/event_test.cpp
+        tests/model/identifiers_test.cpp
+        tests/model/message_test.cpp
+        tests/model/run_plan_test.cpp
+        tests/model/runtime_state_test.cpp
+        tests/model/specifications_test.cpp
+        tests/model/time_test.cpp
+        tests/network/fixed_delay_network_test.cpp
+        tests/policy/fixed_priority_test.cpp
+        tests/policy/resource_allocator_test.cpp
+        tests/smoke_test.cpp
+        tests/trace/event_json_test.cpp
+    )
+    target_link_libraries(
+        cpssim_tests
+        PRIVATE
+            cpssim::core
+            cpssim_bosch_reference
+            cpssim_gui_support
+            Catch2::Catch2WithMain
+    )
+
+    cpssim_set_project_warnings(cpssim_tests)
+    cpssim_enable_sanitizers(cpssim_tests)
+
+    include(Catch)
+    catch_discover_tests(cpssim_tests DISCOVERY_MODE PRE_TEST)
+
+    add_executable(cpssim_fmi2_tests tests/fmi/fmi2_importer_test.cpp)
+    target_link_libraries(
+        cpssim_fmi2_tests
+        PRIVATE
+            cpssim_fmi2_adapter
+            Catch2::Catch2WithMain
+    )
+    add_dependencies(cpssim_fmi2_tests cpssim_bosch_fmu_linux)
+
+    cpssim_set_project_warnings(cpssim_fmi2_tests)
+    cpssim_enable_sanitizers(cpssim_fmi2_tests)
+
+    catch_discover_tests(
+        cpssim_fmi2_tests
+        TEST_PREFIX "fmi2: "
+        DISCOVERY_MODE PRE_TEST
+        PROPERTIES
+            ENVIRONMENT
+                "CPSSIM_T15_BOSCH_FMU_LIBRARY=$<TARGET_FILE:cpssim_bosch_fmu_linux>"
+    )
+
+    add_executable(
+        cpssim_functional_tests
+        tests/bosch/bosch_fmi2_functional_model_test.cpp
+        tests/bosch/example_data_test.cpp
+        tests/conformance/bosch_functional_reference_test.cpp
+    )
+    target_link_libraries(
+        cpssim_functional_tests
+        PRIVATE
+            cpssim_bosch_functional_reference
+            Catch2::Catch2WithMain
+    )
+    add_dependencies(cpssim_functional_tests cpssim_bosch_fmu_linux)
+
+    cpssim_set_project_warnings(cpssim_functional_tests)
+    cpssim_enable_sanitizers(cpssim_functional_tests)
+
+    catch_discover_tests(
+        cpssim_functional_tests
+        TEST_PREFIX "functional: "
+        DISCOVERY_MODE PRE_TEST
+        PROPERTIES
+            ENVIRONMENT
+                "CPSSIM_T16_BOSCH_FMU_LIBRARY=$<TARGET_FILE:cpssim_bosch_fmu_linux>"
+    )
+
+    add_test(
+        NAME cpssim_bosch_conformance_dedicated
+        COMMAND cpssim_bosch_conformance
+                "${CMAKE_CURRENT_SOURCE_DIR}/experiments/bosch_v10_reference"
+                dedicated
+    )
+    add_test(
+        NAME cpssim_bosch_conformance_shared_cloud
+        COMMAND cpssim_bosch_conformance
+                "${CMAKE_CURRENT_SOURCE_DIR}/experiments/bosch_v10_reference"
+                shared_cloud
+    )
+endif()
