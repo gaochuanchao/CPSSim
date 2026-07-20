@@ -16,6 +16,7 @@ This is the documentation home. You do not need to read every file.
 | Understand why a decision was made | [Architecture decisions](adr/README.md) |
 | Review the latest dated implementation evidence | [Development log](devlog/) |
 | Build, use, or customize the GUI | [GUI tutorial](gui/README.md) |
+| Understand run metrics and exported files | [Results and export](guide/RESULTS-AND-EXPORT.md) |
 
 ## One-screen mental model
 
@@ -64,9 +65,10 @@ scheduling on independent exclusive resources, fixed-delay causal messages,
 online functional-model interaction, Bosch timing/trigger conformance, FMI 2.0
 Co-Simulation import, strict single-vehicle execution of all three supplied
 Bosch trajectory formats, and an optional GUI workbench with run-plan editing,
-an architecture graph, a scheduling timeline, and functional plots.
+an architecture graph, a scheduling timeline, functional plots, derived run
+results, and atomic raw/Excel export.
 The terminal interface supports a persistent command shell plus interactive
 and direct execution of the three supplied Bosch trajectories.
 Shared-capacity resources, task channels, network contention/loss, multiple
-scheduling domains, multi-vehicle functional coupling, and workspace
-persistence are future work, not hidden current behavior.
+scheduling domains, multi-vehicle functional coupling, multi-run comparison,
+and parameter sweeps are future work, not hidden current behavior.

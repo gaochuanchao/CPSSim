@@ -63,6 +63,7 @@ The view files are deliberately small boundaries:
 | `signal_view` | typed functional series | selected series, time viewport, shared time selection |
 | `resource_view` | copied resource/runtime rows | shared selection |
 | `event_view` | canonical event rows | shared event/time selection |
+| `results_view` | shared generic metrics and optional Bosch plots | shared resource/time selection |
 
 ### Graphics-independent GUI support
 
@@ -82,6 +83,9 @@ The view files are deliberately small boundaries:
 | [`workspace_state.*`](../../src/cpssim/gui/workspace_state.hpp) | versioned presentation preferences and normalized splitter geometry | [`workspace_state_test.cpp`](../../tests/gui/workspace_state_test.cpp) |
 | [`resource_presentation.*`](../../src/cpssim/gui/resource_presentation.hpp) | utilization derived from detached resource counters | [`resource_presentation_test.cpp`](../../tests/gui/resource_presentation_test.cpp) |
 | [`event_table_model.*`](../../src/cpssim/gui/event_table_model.hpp) | canonical event-row projection, filtering, and cause lookup | [`event_table_model_test.cpp`](../../tests/gui/event_table_model_test.cpp) |
+| [`analysis/run_result.*`](../../src/cpssim/analysis/run_result.hpp) | immutable detached run result and deterministic generic metrics | [`run_result_test.cpp`](../../tests/analysis/run_result_test.cpp) |
+| [`application/result_export.*`](../../src/cpssim/application/result_export.hpp) | versioned manifest plus atomic authoritative JSON/CSV publication | [`result_export_test.cpp`](../../tests/application/result_export_test.cpp) |
+| [`application/results_workbook.*`](../../src/cpssim/application/results_workbook.hpp) | pinned-library XLSX convenience output and row-limit splitting | [`result_export_test.cpp`](../../tests/application/result_export_test.cpp) |
 
 If logic can be tested without opening a window, it normally belongs in
 `cpssim_gui_support`, not in an ImGui draw function.
@@ -159,11 +163,13 @@ Use this table before adding a field:
 | Explorer/System Builder structural identity | `StructuralSelection` |
 | Runtime entity and inclusive tick range | `GuiSelection` |
 | Derived graph/timeline/signal data | corresponding GUI-support builder/cache |
+| Immutable run result and generic metrics | `RunResult`, derived from `SimulationSnapshot` |
+| Atomic result-directory publication | `result_export` application service |
 | Home/Workbench and optional active project/session | `GuiApplicationState` |
 | Project specifications, workspace metadata, and sole session | `ProjectContext` |
 | Atomic system/project/session reconstruction | `system_builder_workflow` application service |
 | Recent-project history | GUI user-preference file through `RecentProjects` |
-| Theme, panel visibility, splitter ratios, tabs, event filters, and selected signals | `GuiWorkspaceState`, mirrored by `GuiApplication` and persisted by `ProjectContext` |
+| Theme, panel visibility, splitter ratios, tabs (including Results), event filters, and selected signals | `GuiWorkspaceState`, mirrored by `GuiApplication` and persisted by `ProjectContext` |
 | Non-persisted canvas viewport and text scale | corresponding view-state struct or `GuiApplication` |
 | Current monitor scale, base style, last valid framebuffer density | native loop in `main.cpp` |
 

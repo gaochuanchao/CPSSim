@@ -109,7 +109,7 @@ Goal 2 does not introduce Bosch-specific model editing.
 +------------------------------------------------------------------+
 | File / View / Help         Run Pause Reset Next event   status    |
 +----------------+----------------------------------+--------------+
-| Experiment     | Architecture / Timeline / Signals| Run Config   |
+| Experiment     | Architecture/Timeline/Signals/Results | Run Config |
 | Explorer       |                                  |              |
 + - - splitter - +                                  + - splitter - +
 | System Builder |                                  | Runtime      |
@@ -209,7 +209,23 @@ used only for drawing. Visual downsampling preserves visible endpoints and
 bucket extrema; it never changes full-resolution observations.
 
 The current plot uses one shared value axis. Unit-grouped axes remain future
-work. Selected signal identities persist in workspace schema 2.
+work. Selected signal identities persist in workspace schema 3.
+
+### Results and export
+
+The **Results** tab derives generic job, deadline, preemption, response-time,
+message, and resource metrics from the detached run. Bosch projects also show
+lateral error with +/-0.2 m bounds, critical-section context, deadline-miss
+markers, and the control signals selected in Functional Signals. Plot clicks
+publish the same exact tick selection used by Timeline and Canonical Events.
+
+Use **File → Export Run Results** to export the complete run or the inclusive
+time range currently selected in the workbench. Raw JSON/CSV is always written;
+the Excel workbook is optional. Choose a destination with **Browse**, or keep
+the default project `results/` directory. Cancel writes nothing, existing run
+IDs are rejected, and a failed export cannot publish a partial run directory.
+See [Results and export](../guide/RESULTS-AND-EXPORT.md) for schemas and exact
+integer/large-workbook policies.
 
 ### Resources and canonical events
 

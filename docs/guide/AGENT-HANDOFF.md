@@ -141,6 +141,9 @@ these rules.
 | `ProjectContext` | project root/metadata, loaded specifications/workspace, runtime factory inputs, and sole GUI session |
 | `RecentProjects` | normalized bounded GUI user-preference history |
 | `system_builder_workflow` | canonical config/plan validation and atomic project/session reconstruction |
+| `RunResult` | detached immutable run input, typed signal series, and deterministic generic metrics |
+| `result_export` | atomic run-directory publication and raw result schemas |
+| `results_workbook` | XLSX convenience rendering and deterministic row splitting |
 
 ## Task protocol
 
@@ -191,16 +194,44 @@ the C++ behavior silently.
   persisted; graph task drops edit the pending plan and never migrate active
   jobs;
 - current-monitor display scale updates automatically; theme changes rebuild
-  an unscaled base style before that scale is applied once; workspace schema 2
-  persists panel/splitter/tab/event-filter/selected-signal presentation state;
+  an unscaled base style before that scale is applied once; workspace schemas
+  1 and 2 migrate to schema 3, which also persists Results visibility and the
+  active Results tab;
 - Bosch example execution currently uses one functional model and one of the
   validated single-vehicle `dedicated`/`shared_cloud` run plans; multi-vehicle,
   probabilistic timing, and three-core cloud experiments remain future work;
 - MATLAB/Simulink remains a correctness oracle, not the simulator architecture.
 
+Goal 4 exports one immutable run at a time. Multi-run comparison, parameter
+sweeps, plot-image export, and multi-vehicle results remain future work.
+
 End every handoff with exact commands/results, changed documents, limitations,
 and the next permitted task. Update this page whenever the implemented project
 boundary changes.
+
+## Latest Goal 4 results/export validation
+
+Goal 4 was implemented on 2026-07-20 with one detached `RunResult` shared by
+the Results tab and exporters. Focused validation covered exact response and
+message timing, unavailable values, deterministic resource ordering,
+inclusive range projection, manifest round trips, CSV escaping and row counts,
+large integer ticks, atomic cleanup and duplicate IDs, XLSX creation and
+deterministic row-limit splitting, Bosch typed-series/threshold/critical-section
+derivation, and native result-directory selection/cancellation:
+
+- `ctest --test-dir build/gui --output-on-failure -L '^(gui|project)$'`:
+  113/113 focused tests passed, including current DPI tests;
+- `./scripts/verify.sh full`: formatting plus Debug, ASan/UBSan, Release,
+  Clang, and clang-tidy profiles passed all 247 tests in each profile;
+- `cmake --build --preset make-dev --target cpssim_gui -j2`: passed; and
+- a five-second `cpssim_gui` startup smoke reached the GUI frame loop without
+  an assertion or startup diagnostic.
+
+The automated smoke did not interact with native dialogs or inspect plots in a
+desktop spreadsheet application. Manually verify complete and selected-range
+generic/Bosch exports, CSV/XLSX opening, threshold alignment, cancel behavior,
+and a duplicate run ID on a desktop. No system package is required for XLSX:
+libxlsxwriter v1.2.4 and zlib 1.3.1 are fetched at pinned commits.
 
 ## Latest Goal 3 workbench validation
 
