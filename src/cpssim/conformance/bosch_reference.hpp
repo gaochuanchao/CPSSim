@@ -11,6 +11,8 @@
 #pragma once
 
 #include "cpssim/functional/functional_model.hpp"
+#include "cpssim/model/experiment_config.hpp"
+#include "cpssim/policy/resource_allocator.hpp"
 
 #include <cstddef>
 #include <filesystem>
@@ -45,6 +47,12 @@ struct BoschOnlineRun {
     std::vector<FunctionalObservation> functional_trace;
 };
 
+/*** Reusable validated system and assignments for one pinned Bosch scenario. ***/
+struct BoschReferenceInputs {
+    ExperimentConfig config;
+    std::vector<TaskAssignment> assignments;
+};
+
 // Returns the stable directory/command spelling for a reference scenario.
 std::string_view bosch_reference_scenario_name(BoschReferenceScenario scenario);
 
@@ -53,6 +61,9 @@ std::string_view bosch_reference_scenario_name(BoschReferenceScenario scenario);
  * Throws std::invalid_argument for every other spelling.
  ***/
 BoschReferenceScenario parse_bosch_reference_scenario(std::string_view name);
+
+BoschReferenceInputs load_bosch_reference_inputs(
+    const std::filesystem::path& reference_root, BoschReferenceScenario scenario);
 
 /***
  * Loads one pinned scenario below reference_root, runs CPSSim through the

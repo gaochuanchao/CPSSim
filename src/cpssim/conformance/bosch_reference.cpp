@@ -594,6 +594,14 @@ BoschReferenceScenario parse_bosch_reference_scenario(std::string_view name) {
     throw std::invalid_argument{"scenario must be dedicated or shared_cloud"};
 }
 
+BoschReferenceInputs load_bosch_reference_inputs(
+    const std::filesystem::path& reference_root, BoschReferenceScenario scenario) {
+    auto experiment =
+        load_reference_experiment(reference_root / bosch_reference_scenario_name(scenario));
+    return {.config = std::move(experiment.config),
+            .assignments = std::move(experiment.assignments)};
+}
+
 /*** Runs one normal engine and compares all three normalized observable streams. ***/
 ConformanceReport compare_bosch_reference(const std::filesystem::path& reference_root,
                                           BoschReferenceScenario scenario) {
