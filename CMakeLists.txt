@@ -208,6 +208,7 @@ add_library(
     src/cpssim/gui/architecture_graph.cpp
     src/cpssim/gui/display_scale.cpp
     src/cpssim/gui/draft_run_plan.cpp
+    src/cpssim/gui/editable_system_draft.cpp
     src/cpssim/gui/presentation_model.cpp
     src/cpssim/gui/selection_model.cpp
     src/cpssim/gui/signal_series.cpp
@@ -451,6 +452,7 @@ if(BUILD_TESTING)
             tests/gui/architecture_graph_test.cpp
             tests/gui/display_scale_test.cpp
             tests/gui/draft_run_plan_test.cpp
+            tests/gui/editable_system_draft_test.cpp
             tests/gui/presentation_model_test.cpp
             tests/gui/selection_model_test.cpp
             tests/gui/signal_series_test.cpp
