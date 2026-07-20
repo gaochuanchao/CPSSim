@@ -259,6 +259,7 @@ add_library(
     src/cpssim/gui/editable_system_draft.cpp
     src/cpssim/gui/system_builder_interaction.cpp
     src/cpssim/gui/presentation_model.cpp
+    src/cpssim/gui/plot_visualizer_model.cpp
     src/cpssim/gui/resource_presentation.cpp
     src/cpssim/gui/selection_model.cpp
     src/cpssim/gui/signal_series.cpp
@@ -316,6 +317,14 @@ if(CPSSIM_BUILD_GUI)
     FetchContent_MakeAvailable(imgui)
 
     FetchContent_Declare(
+        implot
+        GIT_REPOSITORY https://github.com/epezent/implot.git
+        GIT_TAG 524f9fcd48d76c13fdf94c5ffbba8787a1ff7e39
+        GIT_SHALLOW FALSE
+    )
+    FetchContent_MakeAvailable(implot)
+
+    FetchContent_Declare(
         portable_file_dialogs
         GIT_REPOSITORY https://github.com/samhocevar/portable-file-dialogs.git
         GIT_TAG c12ea8c9a727f5320a2b4570aee863bbede2a204
@@ -340,6 +349,14 @@ if(CPSSIM_BUILD_GUI)
     )
     target_link_libraries(cpssim_imgui PUBLIC glfw OpenGL::GL)
 
+    add_library(
+        cpssim_implot STATIC
+        "${implot_SOURCE_DIR}/implot.cpp"
+        "${implot_SOURCE_DIR}/implot_items.cpp"
+    )
+    target_include_directories(cpssim_implot SYSTEM PUBLIC "${implot_SOURCE_DIR}")
+    target_link_libraries(cpssim_implot PUBLIC cpssim_imgui)
+
     add_executable(
         cpssim_gui
         apps/gui/gui_application.cpp
@@ -351,6 +368,7 @@ if(CPSSIM_BUILD_GUI)
         apps/gui/views/inspector_view.cpp
         apps/gui/views/resource_view.cpp
         apps/gui/views/results_view.cpp
+        apps/gui/views/plot_visualizer.cpp
         apps/gui/views/run_plan_editor.cpp
         apps/gui/views/signal_view.cpp
         apps/gui/views/system_builder.cpp
@@ -360,7 +378,7 @@ if(CPSSIM_BUILD_GUI)
     target_include_directories(cpssim_gui SYSTEM PRIVATE "${portable_file_dialogs_SOURCE_DIR}")
     target_link_libraries(
         cpssim_gui
-        PRIVATE cpssim_gui_support cpssim_bosch_gui_application cpssim_imgui
+        PRIVATE cpssim_gui_support cpssim_bosch_gui_application cpssim_imgui cpssim_implot
     )
     configure_file(
         "${CMAKE_CURRENT_SOURCE_DIR}/apps/gui/imgui.ini"

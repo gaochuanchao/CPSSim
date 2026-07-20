@@ -6,10 +6,12 @@
  ***/
 
 #include "cpssim/gui/signal_series.hpp"
+#include "cpssim/gui/plot_visualizer_model.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
+#include <chrono>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -202,6 +204,40 @@ TEST_CASE("signal downsampling is deterministic and preserves visible extrema",
     REQUIRE((visible.front().tick == 1));
     REQUIRE((visible.back().tick == 8));
     REQUIRE((series.samples.size() == values.size()));
+}
+
+TEST_CASE("completed plot browser searches and groups selected signals by unit",
+          "[gui][signal][visualizer]") {
+    const std::vector<GuiSignalDescriptor> registry{
+        {{GuiSignalScalarType::Real, "state"}, "Plant/State", "State", "m", "test"},
+        {{GuiSignalScalarType::Integer, "count"}, "Plant/Count", "Count", "m", "test"},
+        {{GuiSignalScalarType::Boolean, "active"}, "Plant/Active", "Active", "", "test"}};
+    const auto built = build_signal_model({observation(0, 1.0, 2, true)}, registry);
+    REQUIRE(search_plot_signals(*built.model, "state").size() == 1);
+    const auto lanes = build_plot_lanes(*built.model,
+                                        {{GuiSignalScalarType::Real, "state"},
+                                         {GuiSignalScalarType::Integer, "count"},
+                                         {GuiSignalScalarType::Boolean, "active"}});
+    REQUIRE(lanes.size() == 2);
+    REQUIRE(lanes[0].unit == "m");
+    REQUIRE(lanes[0].series.size() == 2);
+    REQUIRE(lanes[1].digital);
+}
+
+TEST_CASE("plot ranges and tick units retain exact source ticks",
+          "[gui][signal][visualizer][range]") {
+    auto value = SimulationSnapshot{.run_state = GuiRunState::Finished,
+                                    .current_tick = 20,
+                                    .stop_tick = 20,
+                                    .experiment = {}, .event_log = {},
+                                    .functional_model_attached = false,
+                                    .functional_signal_registry = {},
+                                    .functional_observations = {}, .resources = {}};
+    value.experiment.tick_period = std::chrono::milliseconds{2};
+    const auto result = build_run_result(std::move(value), "generic");
+    REQUIRE(resolve_plot_range(result, GuiPlotRangeMode::Selected, GuiTickRange{3, 7}, 0, 0) == GuiPlotRange{3, 7});
+    REQUIRE(resolve_plot_range(result, GuiPlotRangeMode::Custom, std::nullopt, 4, 99) == GuiPlotRange{4, 20});
+    REQUIRE(plot_tick_coordinate(5, GuiPlotXAxisUnit::Seconds, result.metrics.tick_period) == 0.01);
 }
 
 } // namespace

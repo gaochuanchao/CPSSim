@@ -15,6 +15,7 @@
 #include "views/inspector_view.hpp"
 #include "views/resource_view.hpp"
 #include "views/results_view.hpp"
+#include "views/plot_visualizer.hpp"
 #include "views/run_plan_editor.hpp"
 #include "views/signal_view.hpp"
 #include "views/system_builder.hpp"
@@ -1694,6 +1695,8 @@ void GuiApplication::draw_frame() {
     draw_project_dialog();
     draw_bosch_wizard();
     draw_export_dialog();
+    draw_plot_visualizer(open_plot_visualizer_, completed_results_.get(), workspace_state_,
+                         runtime_selection_, plot_visualizer_view_state_);
     if (validate_system_draft_requested_) {
         validate_system_draft_requested_ = false;
         validate_system_draft();

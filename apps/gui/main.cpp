@@ -21,6 +21,7 @@
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
+#include "implot.h"
 
 #include <GLFW/glfw3.h>
 
@@ -108,6 +109,7 @@ int run_gui(std::unique_ptr<cpssim::GuiSimulationSession> session,
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
+    ImPlot::CreateContext();
     // The application owns layout persistence; Dear ImGui must never rewrite
     // the tracked default layout through its conventional working-directory file.
     ImGui::GetIO().IniFilename = nullptr;
@@ -116,6 +118,7 @@ int run_gui(std::unique_ptr<cpssim::GuiSimulationSession> session,
     auto display_scale = startup_display_scale;
     apply_display_scale(base_style, display_scale);
     if (!ImGui_ImplGlfw_InitForOpenGL(window, true)) {
+        ImPlot::DestroyContext();
         ImGui::DestroyContext();
         glfwDestroyWindow(window);
         glfwTerminate();
@@ -123,10 +126,20 @@ int run_gui(std::unique_ptr<cpssim::GuiSimulationSession> session,
     }
     if (!ImGui_ImplOpenGL3_Init("#version 150")) {
         ImGui_ImplGlfw_Shutdown();
+        ImPlot::DestroyContext();
         ImGui::DestroyContext();
         glfwDestroyWindow(window);
         glfwTerminate();
         throw std::runtime_error{"Dear ImGui OpenGL3 backend initialization failed"};
+    }
+    if ((ImGui::GetIO().BackendFlags & ImGuiBackendFlags_RendererHasVtxOffset) == 0) {
+        ImGui_ImplOpenGL3_Shutdown();
+        ImGui_ImplGlfw_Shutdown();
+        ImPlot::DestroyContext();
+        ImGui::DestroyContext();
+        glfwDestroyWindow(window);
+        glfwTerminate();
+        throw std::runtime_error{"OpenGL renderer lacks vertex-offset support required by ImPlot"};
     }
     display_scale = cpssim::sanitize_gui_display_scale(
         ImGui_ImplGlfw_GetContentScaleForWindow(window), display_scale);
@@ -195,6 +208,7 @@ int run_gui(std::unique_ptr<cpssim::GuiSimulationSession> session,
 
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
+    ImPlot::DestroyContext();
     ImGui::DestroyContext();
     glfwDestroyWindow(window);
     glfwTerminate();
