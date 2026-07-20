@@ -56,13 +56,36 @@ const char* event_phase_name(EventPhase phase) {
     throw std::logic_error{"unknown event phase"};
 }
 
-template <typename Identifier>
-void draw_optional_id(const char* label, const std::optional<Identifier>& identifier) {
-    if (identifier.has_value()) {
-        ImGui::Text("%s: %llu", label, static_cast<unsigned long long>(identifier->value()));
-    } else {
-        ImGui::TextDisabled("%s: Unavailable", label);
+bool begin_property_grid(const char* identity) {
+    if (!ImGui::BeginTable(identity, 2,
+                           ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV)) {
+        return false;
     }
+    ImGui::TableSetupColumn("Property", ImGuiTableColumnFlags_WidthFixed,
+                            9.0F * ImGui::GetFontSize());
+    ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
+    return true;
+}
+
+void draw_property(const char* label, const std::string& value, bool unavailable = false) {
+    ImGui::TableNextRow();
+    ImGui::TableSetColumnIndex(0);
+    ImGui::TextUnformatted(label);
+    ImGui::TableSetColumnIndex(1);
+    if (unavailable) {
+        ImGui::TextDisabled("%s", value.c_str());
+    } else {
+        ImGui::TextUnformatted(value.c_str());
+    }
+    if (ImGui::IsItemHovered() && ImGui::BeginItemTooltip()) {
+        ImGui::TextUnformatted(value.c_str());
+        ImGui::EndTooltip();
+    }
+}
+
+template <typename Identifier>
+std::string optional_id_text(const std::optional<Identifier>& identifier) {
+    return identifier.has_value() ? std::to_string(identifier->value()) : "Unavailable";
 }
 
 const GuiResourceSnapshot* find_runtime_resource(const SimulationSnapshot& snapshot,
@@ -85,23 +108,23 @@ void draw_runtime_resource(const SimulationSnapshot& snapshot, ResourceId resour
         return;
     }
     ImGui::SeparatorText("Runtime resource");
-    ImGui::Text("Resource ID: %llu", static_cast<unsigned long long>(resource_id.value()));
-    if (runtime->running_job.has_value()) {
-        ImGui::Text("Running job: %s", job_label(*runtime->running_job).c_str());
-    } else {
-        ImGui::Text("Running job: Idle");
+    if (begin_property_grid("Runtime resource properties")) {
+        draw_property("Resource", std::to_string(resource_id.value()));
+        draw_property("Running",
+                      runtime->running_job.has_value() ? job_label(*runtime->running_job) : "Idle");
+        draw_property("Ready", std::to_string(runtime->ready_jobs.size()));
+        draw_property("Busy ticks", std::to_string(runtime->busy_ticks));
+        draw_property("Idle ticks", std::to_string(runtime->idle_ticks));
+        const auto total = runtime->busy_ticks + runtime->idle_ticks;
+        const auto utilization = total > 0 ? 100.0 * static_cast<double>(runtime->busy_ticks) /
+                                                 static_cast<double>(total)
+                                           : 0.0;
+        draw_property("Utilization", std::to_string(utilization).substr(0, 5) + "%");
+        ImGui::EndTable();
     }
-    ImGui::Text("Ready jobs: %zu", runtime->ready_jobs.size());
     for (const auto& job : runtime->ready_jobs) {
         ImGui::BulletText("%s", job_label(job).c_str());
     }
-    ImGui::Text("Busy ticks: %lld", static_cast<long long>(runtime->busy_ticks));
-    ImGui::Text("Idle ticks: %lld", static_cast<long long>(runtime->idle_ticks));
-    const auto total = runtime->busy_ticks + runtime->idle_ticks;
-    const auto utilization =
-        total > 0 ? 100.0 * static_cast<double>(runtime->busy_ticks) / static_cast<double>(total)
-                  : 0.0;
-    ImGui::Text("Utilization: %.1f%%", utilization);
 }
 
 bool event_refers_to_job(const Event& event, JobIdentity job) {
@@ -164,26 +187,25 @@ void draw_job(const SimulationSnapshot& snapshot, JobIdentity selected) {
         }
     }
     ImGui::SeparatorText("Runtime job");
-    ImGui::Text("Task ID: %llu", static_cast<unsigned long long>(selected.task_id().value()));
-    ImGui::Text("Job ID: %llu", static_cast<unsigned long long>(selected.job_id().value()));
-    ImGui::Text("Lifecycle: %s", lifecycle);
-    const auto draw_tick = [](const char* label, std::optional<Tick> value) {
-        if (value.has_value()) {
-            ImGui::Text("%s: %lld", label, static_cast<long long>(*value));
-        } else {
-            ImGui::TextDisabled("%s: Unavailable", label);
-        }
-    };
-    draw_tick("Release tick", release);
-    draw_tick("Start tick", start);
-    draw_tick("Finish tick", finish);
-    draw_tick("Deadline", deadline);
-    if (release.has_value() && finish.has_value()) {
-        ImGui::Text("Response time: %lld ticks", static_cast<long long>(*finish - *release));
-    } else {
-        ImGui::TextDisabled("Response time: Unavailable");
+    if (begin_property_grid("Runtime job properties")) {
+        draw_property("Task", std::to_string(selected.task_id().value()));
+        draw_property("Job", std::to_string(selected.job_id().value()));
+        draw_property("Lifecycle", lifecycle);
+        const auto tick_text = [](std::optional<Tick> value) {
+            return value.has_value() ? std::to_string(*value) : "Unavailable";
+        };
+        draw_property("Release tick", tick_text(release), !release.has_value());
+        draw_property("Start tick", tick_text(start), !start.has_value());
+        draw_property("Finish tick", tick_text(finish), !finish.has_value());
+        draw_property("Deadline", tick_text(deadline), !deadline.has_value());
+        const auto response = release.has_value() && finish.has_value()
+                                  ? std::to_string(*finish - *release) + " ticks"
+                                  : "Unavailable";
+        draw_property("Response time", response, !release.has_value() || !finish.has_value());
+        draw_property("Resource", optional_id_text(assigned_resource),
+                      !assigned_resource.has_value());
+        ImGui::EndTable();
     }
-    draw_optional_id("Assigned resource", assigned_resource);
 }
 
 const Event* find_event(const SimulationSnapshot& snapshot, EventSequence sequence) {
@@ -201,20 +223,31 @@ void draw_event(const SimulationSnapshot& snapshot, EventSequence sequence,
         return;
     }
     ImGui::SeparatorText("Canonical event");
-    ImGui::Text("Sequence: %llu", static_cast<unsigned long long>(sequence.value()));
-    ImGui::Text("Tick: %lld", static_cast<long long>(event->tick()));
     const auto physical_ms = static_cast<double>(event->tick()) *
                              static_cast<double>(snapshot.experiment.tick_period.count()) /
                              1'000'000.0;
-    ImGui::Text("Physical time: %.6f ms", physical_ms);
-    ImGui::Text("Type: %s", event_type_name(event->type()));
-    ImGui::Text("Phase: %s", event_phase_name(event->phase()));
-    draw_optional_id("Task ID", event->entities().task_id);
-    draw_optional_id("Job ID", event->entities().job_id);
-    draw_optional_id("Resource ID", event->entities().resource_id);
-    draw_optional_id("Message ID", event->entities().message_id);
-    draw_optional_id("Vehicle ID", event->entities().vehicle_id);
-    draw_optional_id("Cause sequence", event->cause_sequence());
+    if (begin_property_grid("Canonical event properties")) {
+        draw_property("Sequence", std::to_string(sequence.value()));
+        draw_property("Tick", std::to_string(event->tick()));
+        auto time_text = std::to_string(physical_ms);
+        time_text.resize(std::min<std::size_t>(time_text.size(), 8));
+        draw_property("Time", time_text + " ms");
+        draw_property("Type", event_type_name(event->type()));
+        draw_property("Phase", event_phase_name(event->phase()));
+        draw_property("Task", optional_id_text(event->entities().task_id),
+                      !event->entities().task_id.has_value());
+        draw_property("Job", optional_id_text(event->entities().job_id),
+                      !event->entities().job_id.has_value());
+        draw_property("Resource", optional_id_text(event->entities().resource_id),
+                      !event->entities().resource_id.has_value());
+        draw_property("Message", optional_id_text(event->entities().message_id),
+                      !event->entities().message_id.has_value());
+        draw_property("Vehicle", optional_id_text(event->entities().vehicle_id),
+                      !event->entities().vehicle_id.has_value());
+        draw_property("Cause", optional_id_text(event->cause_sequence()),
+                      !event->cause_sequence().has_value());
+        ImGui::EndTable();
+    }
     if (event->entities().task_id.has_value() && event->entities().job_id.has_value() &&
         ImGui::Button("Select referenced job")) {
         selection.select_job({*event->entities().task_id, *event->entities().job_id});
@@ -229,8 +262,11 @@ void draw_event(const SimulationSnapshot& snapshot, EventSequence sequence,
 void draw_inspector_view(const SimulationSnapshot& snapshot, GuiSelection& selection) {
     if (const auto range = selection.tick_range(); range.has_value()) {
         ImGui::SeparatorText("Timeline selection");
-        ImGui::Text("Ticks: %lld to %lld", static_cast<long long>(range->begin_tick),
-                    static_cast<long long>(range->end_tick));
+        if (begin_property_grid("Timeline selection properties")) {
+            draw_property("Ticks", std::to_string(range->begin_tick) + " to " +
+                                       std::to_string(range->end_tick));
+            ImGui::EndTable();
+        }
     }
     switch (selection.kind()) {
     case GuiSelectionKind::Resource:
