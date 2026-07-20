@@ -201,6 +201,7 @@ cpssim_enable_sanitizers(cpssim_cli)
 
 add_library(
     cpssim_gui_support STATIC
+    src/cpssim/analysis/run_result.cpp
     src/cpssim/application/project/project.cpp
     src/cpssim/application/project/project_template.cpp
     src/cpssim/application/project/project_workflow.cpp
@@ -468,6 +469,7 @@ if(BUILD_TESTING)
             tests/gui/simulation_controller_test.cpp
             tests/gui/timeline_model_test.cpp
             tests/gui/workspace_state_test.cpp
+            tests/analysis/run_result_test.cpp
         LIBRARIES cpssim_gui_support
         LABEL gui
     )
