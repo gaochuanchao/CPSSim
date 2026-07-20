@@ -46,7 +46,7 @@ canonical trace cannot depend on render timing.
 | File | Responsibility |
 |---|---|
 | [`apps/gui/main.cpp`](../../apps/gui/main.cpp) | Argument parsing, current-monitor scale, native window, graphics backends, and frame loop |
-| [`gui_application.*`](../../apps/gui/gui_application.hpp) | Workbench layout, panel visibility, shared selection, view-state ownership, and dialogs |
+| [`gui_application.*`](../../apps/gui/gui_application.hpp) | Workbench layout, panel visibility, independent structural/runtime selection, view-state ownership, and dialogs |
 | [`apps/gui/views/`](../../apps/gui/views/) | Immediate-mode widgets and canvas drawing for individual views |
 
 The view files are deliberately small boundaries:
@@ -54,10 +54,10 @@ The view files are deliberately small boundaries:
 | View | Draws | Presentation state it may change |
 |---|---|---|
 | `toolbar_view` | Run/Pause/Reset/Next event and status | queued simulation commands |
-| `experiment_explorer` | validated experiment tree | shared entity selection |
-| `inspector_view` | selected immutable/runtime/event details | none |
-| `run_plan_editor` | draft assignments, stop tick, validation | `RunPlanDraft` through session methods |
-| `system_builder` | system forms, profile matrix, routes, diagnostics | `EditableSystemDraft` and explicit pending default assignments |
+| `experiment_explorer` | draft structural tree and context actions | structural selection through `SystemExplorerInteraction` |
+| `inspector_view` | selected event/job/runtime-resource details | runtime selection may move from event to referenced job |
+| `run_plan_editor` | assignments, stop tick, validation/apply actions | pending run configuration only |
+| `system_builder` | selected structural properties, profile matrix, route table, diagnostics | `EditableSystemDraft` only |
 | `architecture_view` | task/resource/route/assignment canvas | selection, canvas viewport, run-plan draft assignment; system previews are read-only |
 | `timeline_view` | Ready/Running intervals and event markers | selection, visible categories, time viewport |
 | `signal_view` | typed functional series | selected series, time viewport, shared time selection |
@@ -73,14 +73,20 @@ The view files are deliberately small boundaries:
 | [`simulation_session.*`](../../src/cpssim/gui/simulation_session.hpp) | loaded experiment, draft/active plan boundary, atomic controller replacement | [`draft_run_plan_test.cpp`](../../tests/gui/draft_run_plan_test.cpp) |
 | [`draft_run_plan.*`](../../src/cpssim/gui/draft_run_plan.hpp) | incomplete editable run-plan values and validation input | [`draft_run_plan_test.cpp`](../../tests/gui/draft_run_plan_test.cpp) |
 | [`editable_system_draft.*`](../../src/cpssim/gui/editable_system_draft.hpp) | detached system rows, stable IDs, mutation policy, structured diagnostics, canonical conversion | [`editable_system_draft_test.cpp`](../../tests/gui/editable_system_draft_test.cpp) |
+| [`system_builder_interaction.*`](../../src/cpssim/gui/system_builder_interaction.hpp) | deterministic Explorer creation, duplication, cascade confirmation, selection repair, and focus/scroll intent | [`system_builder_interaction_test.cpp`](../../tests/gui/system_builder_interaction_test.cpp) |
 | [`presentation_model.*`](../../src/cpssim/gui/presentation_model.hpp) | sorted detached experiment descriptions | [`presentation_model_test.cpp`](../../tests/gui/presentation_model_test.cpp) |
-| [`selection_model.*`](../../src/cpssim/gui/selection_model.hpp) | shared strong entity identity and optional tick range | [`selection_model_test.cpp`](../../tests/gui/selection_model_test.cpp) |
+| [`selection_model.*`](../../src/cpssim/gui/selection_model.hpp) | independent structural and runtime strong identities plus optional runtime tick range | [`selection_model_test.cpp`](../../tests/gui/selection_model_test.cpp) |
 | [`architecture_graph.*`](../../src/cpssim/gui/architecture_graph.hpp) | deterministic graph records and logical layout | [`architecture_graph_test.cpp`](../../tests/gui/architecture_graph_test.cpp) |
 | [`timeline_model.*`](../../src/cpssim/gui/timeline_model.hpp) | strict event-to-interval derivation and incremental cache | [`timeline_model_test.cpp`](../../tests/gui/timeline_model_test.cpp) |
 | [`signal_series.*`](../../src/cpssim/gui/signal_series.hpp) | typed scalar extraction, diagnostics, cache, and visual downsampling | [`signal_series_test.cpp`](../../tests/gui/signal_series_test.cpp) |
 
 If logic can be tested without opening a window, it normally belongs in
 `cpssim_gui_support`, not in an ImGui draw function.
+
+The fixed workbench composes `Explorer / System Builder` on the left and `Run
+Configuration / Runtime Inspector` on the right. Each pair uses a font-scaled
+minimum height and an in-memory normalized horizontal-split ratio. No docking
+or Goal 3 workspace persistence is involved.
 
 ## 3. One frame and one command
 
@@ -146,7 +152,8 @@ Use this table before adding a field:
 | Functional lifecycle and observation trace | `FunctionalRuntime` |
 | Current GUI-owned functional model | `SimulationController` |
 | Detached experiment/runtime/trace/functional copy | `SimulationSnapshot` |
-| Selected entity and inclusive tick range | `GuiSelection` |
+| Explorer/System Builder structural identity | `StructuralSelection` |
+| Runtime entity and inclusive tick range | `GuiSelection` |
 | Derived graph/timeline/signal data | corresponding GUI-support builder/cache |
 | Home/Workbench and optional active project/session | `GuiApplicationState` |
 | Project specifications, workspace metadata, and sole session | `ProjectContext` |
@@ -203,8 +210,10 @@ flowchart TD
     Replacement --> Swap[atomic GuiApplicationState replacement]
 ```
 
-The draft uses stable strong IDs internally. Referenced task/resource deletion
-is blocked rather than cascaded. A valid unapplied draft may replace only the
+The draft uses stable strong IDs internally. Explorer actions are routed
+through the headless interaction controller. Task/resource deletion presents
+computed profile, route, and assignment impact before one confirmed cascade;
+Cancel is inert and all effects remain in drafts. A valid unapplied draft may replace only the
 Architecture tab's detached presentation input and is labelled as a read-only
 preview. It never becomes engine input until Apply and restart succeeds.
 
@@ -249,28 +258,30 @@ rebuilding all presentation records on every unchanged frame. If trace-copy
 cost becomes measurable, optimize the snapshot contract through an explicit
 immutable/incremental design rather than exposing live containers.
 
-## 8. Shared selection
+## 8. Independent structural and runtime selection
 
-`GuiSelection` contains one selected entity and an independent optional
-inclusive tick range:
+`StructuralSelection` contains the Explorer identity that maps to System
+Builder. `GuiSelection` contains runtime highlighting/inspection identity and
+an independent optional inclusive tick range:
 
 ```text
-entity = none | experiment | task | resource | route | job | event
-time   = no range | [begin_tick, end_tick]
+structural = system | section | resource | task | profile key | route key
+runtime    = none | experiment | task | resource | route | job | event
+time       = no range | [begin_tick, end_tick]
 ```
 
-Views publish and observe the same value:
+The values have separate owners:
 
 ```mermaid
 flowchart LR
-    Explorer --> Selection[GuiSelection]
-    Architecture --> Selection
-    Timeline --> Selection
-    Signals --> Selection
-    Events --> Selection
-    Selection --> Inspector
-    Selection --> Timeline
-    Selection --> Signals
+    Explorer --> Structural[StructuralSelection]
+    Structural --> Builder[System Builder]
+    Architecture --> Runtime[GuiSelection]
+    Timeline --> Runtime
+    Signals --> Runtime
+    Events --> Runtime
+    Resources --> Runtime
+    Runtime --> Inspector[Runtime Inspector]
 ```
 
 There are no direct view-to-view calls. `synchronize_selection` clears an

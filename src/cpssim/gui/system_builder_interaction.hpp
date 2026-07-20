@@ -42,8 +42,8 @@ struct SystemDeletionImpact {
 /*** Owns pending confirmation while all mutations remain in caller-owned drafts. ***/
 class SystemExplorerInteraction {
   public:
-    SystemEntityCreateAvailability create_availability(
-        StructuralSection section, const EditableSystemDraft& draft) const;
+    SystemEntityCreateAvailability create_availability(StructuralSection section,
+                                                       const EditableSystemDraft& draft) const;
 
     SystemExplorerActionResult create(StructuralSection section, EditableSystemDraft& draft,
                                       StructuralSelection& selection);

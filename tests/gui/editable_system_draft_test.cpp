@@ -98,10 +98,8 @@ TEST_CASE("resource and task edits preserve IDs while duplicates omit dependenci
 TEST_CASE("draft allocates the first unused profile and route combinations deterministically",
           "[gui][system-builder][create]") {
     auto draft = EditableSystemDraft{make_config()};
-    REQUIRE((draft.next_execution_profile() ==
-             DraftExecutionProfileKey{TaskId{8}, ResourceId{4}}));
-    REQUIRE((draft.add_execution_profile(2) ==
-             DraftExecutionProfileKey{TaskId{8}, ResourceId{4}}));
+    REQUIRE((draft.next_execution_profile() == DraftExecutionProfileKey{TaskId{8}, ResourceId{4}}));
+    REQUIRE((draft.add_execution_profile(2) == DraftExecutionProfileKey{TaskId{8}, ResourceId{4}}));
     REQUIRE((draft.next_message_route() == DraftMessageRouteKey{TaskId{3}, TaskId{3}}));
     REQUIRE((draft.add_message_route() == DraftMessageRouteKey{TaskId{3}, TaskId{3}}));
 }

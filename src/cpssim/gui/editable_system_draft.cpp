@@ -178,9 +178,8 @@ EditableSystemDraft::resource_cascade_impact(ResourceId resource_id) const {
 
 bool EditableSystemDraft::cascade_remove_resource(ResourceId resource_id) {
     const auto resource =
-        std::find_if(resources_.begin(), resources_.end(), [resource_id](const auto& row) {
-            return row.id == resource_id;
-        });
+        std::find_if(resources_.begin(), resources_.end(),
+                     [resource_id](const auto& row) { return row.id == resource_id; });
     if (resource == resources_.end()) {
         return false;
     }
@@ -270,16 +269,13 @@ SystemDraftCascadeImpact EditableSystemDraft::task_cascade_impact(TaskId task_id
     result.execution_profiles = static_cast<std::size_t>(
         std::count_if(profiles_.begin(), profiles_.end(),
                       [task_id](const auto& profile) { return profile.task_id == task_id; }));
-    result.incoming_routes =
-        static_cast<std::size_t>(std::count_if(routes_.begin(), routes_.end(),
-                                               [task_id](const auto& route) {
-                                                   return route.destination_task_id == task_id;
-                                               }));
-    result.outgoing_routes =
-        static_cast<std::size_t>(std::count_if(routes_.begin(), routes_.end(),
-                                               [task_id](const auto& route) {
-                                                   return route.source_task_id == task_id;
-                                               }));
+    result.incoming_routes = static_cast<std::size_t>(
+        std::count_if(routes_.begin(), routes_.end(), [task_id](const auto& route) {
+            return route.destination_task_id == task_id;
+        }));
+    result.outgoing_routes = static_cast<std::size_t>(
+        std::count_if(routes_.begin(), routes_.end(),
+                      [task_id](const auto& route) { return route.source_task_id == task_id; }));
     return result;
 }
 
@@ -289,8 +285,7 @@ bool EditableSystemDraft::cascade_remove_task(TaskId task_id) {
     if (task == tasks_.end()) {
         return false;
     }
-    std::erase_if(profiles_,
-                  [task_id](const auto& profile) { return profile.task_id == task_id; });
+    std::erase_if(profiles_, [task_id](const auto& profile) { return profile.task_id == task_id; });
     std::erase_if(routes_, [task_id](const auto& route) {
         return route.source_task_id == task_id || route.destination_task_id == task_id;
     });

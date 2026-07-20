@@ -26,11 +26,9 @@ TEST_CASE("Explorer creation selects scrolls and focuses the new structural enti
     REQUIRE((selection.task_id() == TaskId{2}));
     REQUIRE((task.focus == SystemBuilderFocusTarget::TaskName));
 
-    const auto profile =
-        interaction.create(StructuralSection::ExecutionProfiles, draft, selection);
+    const auto profile = interaction.create(StructuralSection::ExecutionProfiles, draft, selection);
     REQUIRE(profile.changed);
-    REQUIRE((selection.execution_profile() ==
-             DraftExecutionProfileKey{TaskId{1}, ResourceId{2}}));
+    REQUIRE((selection.execution_profile() == DraftExecutionProfileKey{TaskId{1}, ResourceId{2}}));
     REQUIRE((profile.focus == SystemBuilderFocusTarget::ProfileExecutionTime));
 }
 

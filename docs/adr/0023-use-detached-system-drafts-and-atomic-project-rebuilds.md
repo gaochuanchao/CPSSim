@@ -2,6 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-07-20
+- Extended: 2026-07-20, Explorer-driven structural lifecycle
 - Owners: CPSSim maintainers
 - Related goal: Goal 2 System Builder
 
@@ -22,9 +23,11 @@ to `ExperimentConfig`, `ProjectContext`, or runtime state.
 
 Dirty state is derived by comparing typed values with the draft's construction
 baseline. New IDs use the smallest unused positive value. Renaming or changing
-timing never changes an ID. Removing a referenced task or resource is blocked
-until the user explicitly removes its profiles and routes; the builder does
-not perform implicit cascades.
+timing never changes an ID. Explorer deletion first computes the affected
+profiles, incoming/outgoing routes, and pending assignments, then requires
+explicit confirmation. Confirmation cascades only through the detached system
+and run-plan drafts; Cancel changes nothing. Duplicating a task or resource
+copies only that entity's values and never copies dependent profiles or routes.
 
 Validation returns entity- and field-addressed diagnostics. A diagnostic-free
 draft is converted through the existing `ResourceSpec`, `TaskSpec`, and
@@ -53,6 +56,11 @@ architecture canvas does not edit system structure.
 Bosch project systems remain adapter-owned and read-only. Goal 2 adds no Bosch
 model-editing semantics.
 
+Structural and runtime selection are separate values. Explorer selection uses
+stable IDs or profile/route composite keys and controls only System Builder.
+Timeline/event/resource selection controls only Runtime Inspector. Shared
+highlighting may observe both domains but cannot overwrite either owner.
+
 ## Consequences
 
 - invalid drafts, incompatible plans, and failed functional construction leave
@@ -61,6 +69,8 @@ model-editing semantics.
   formats without persisting runtime state;
 - forms and tables may evolve without moving semantic validation into ImGui;
 - task additions require an explicit default assignment before Apply; and
+- confirmed task/resource deletion can deliberately make the draft invalid
+  until remaining tasks receive accessible profiles/assignments; and
 - project-wide transactional disk persistence remains governed by the Goal 1
   safe-write behavior rather than by the editor.
 

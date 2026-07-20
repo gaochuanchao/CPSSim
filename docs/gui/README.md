@@ -58,7 +58,7 @@ use the Bosch Challenge wizard. A created/opened project starts with a paused
 active run. To change its run plan:
 
 1. In **Experiment Explorer**, expand Tasks and Resources to inspect the input.
-2. In **Inspector > Run plan**, choose one accessible resource for every task.
+2. In **Run Configuration**, choose one accessible resource for every task.
 3. Set the draft stop tick.
 4. Select **Validate**. Any problem appears beside the relevant task or field.
 5. Select **Apply and reset**. This creates a new paused simulation.
@@ -79,15 +79,19 @@ The toolbar distinguishes four states:
 Changing the rendering rate, panel size, or text size cannot change logical
 ticks or canonical event ordering.
 
-### System Builder
+### Explorer and System Builder
 
-Generic projects include a **System Builder** tab with General, Resources,
-Tasks, Execution Profiles, Message Routes, and Validation sections. All edits
+Generic projects place **System Builder** directly below **Experiment
+Explorer**. Select System, a section, resource, task, execution profile, or
+message route in Explorer to open its corresponding property form. All edits
 remain detached until **Apply and restart** succeeds.
 
 - IDs are stable when names or timing fields change.
-- Removing a referenced task/resource is blocked until its profiles/routes are
-  removed explicitly.
+- Right-click a section to add an entity; the new entity is selected and its
+  primary field receives keyboard focus.
+- Right-click an entity to duplicate it or request deletion. Task/resource
+  deletion lists affected profiles, routes, and pending assignments before a
+  confirmed draft-only cascade.
 - Each matrix cell enables or removes one deterministic execution profile.
 - Each task needs an explicit default resource assignment before Apply.
 - A valid modified system appears in Architecture as a labelled read-only
@@ -105,27 +109,34 @@ Goal 2 does not introduce Bosch-specific model editing.
 +------------------------------------------------------------------+
 | File / View / Help         Run Pause Reset Next event   status    |
 +----------------+----------------------------------+--------------+
-| Experiment     | Architecture / Timeline / Signals| Inspector    |
-| Explorer       |                                  | + Run plan   |
+| Experiment     | Architecture / Timeline / Signals| Run Config   |
+| Explorer       |                                  |              |
++ - - splitter - +                                  + - splitter - +
+| System Builder |                                  | Runtime      |
+|                |                                  | Inspector    |
 +----------------+----------------------------------+--------------+
 |                | Resources / Canonical events                    |
 +------------------------------------------------------------------+
 ```
 
-Panel boundaries are resizable. Use the **View** menu to hide or restore a
-panel. The same menu shows the current monitor scale and provides an adjustable
-text-size slider. The slider is an additional multiplier on top of automatic
-DPI scaling. Text size is presentation state and is not persisted.
+The left and right sidebars have draggable horizontal splitters with minimum
+heights. Their normalized ratios are in-memory presentation state and are not
+persisted. Other panel boundaries remain resizable. Use the **View** menu to
+hide or restore a panel. The same menu shows the current monitor scale and
+provides an adjustable text-size slider. The slider is an additional
+multiplier on top of automatic DPI scaling.
 
-### Experiment Explorer and Inspector
+### Structural and runtime selection
 
-The Explorer shows validated configuration, not a second parse of the JSON
-file. Select an experiment, task, resource, or message route to show its stable
-identity and details in the Inspector.
+Explorer structural selection controls only System Builder. Timeline,
+Canonical Events, Architecture, and Resources use a separate runtime selection
+that controls Runtime Inspector. Selecting in one domain does not replace the
+other domain's identity.
 
-Selections are shared. For example, selecting a task can highlight its graph
-node, filter related runtime information, and update the Inspector. A visible
-label or row number is never used as identity.
+Runtime Inspector contains event, job, runtime-resource, and time-selection
+observations. Structural timing, names, routes, and execution profiles are not
+duplicated there. Stable IDs or composite keys—not visible labels or row
+numbers—identify both selection domains.
 
 ### Run plan
 

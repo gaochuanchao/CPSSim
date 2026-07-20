@@ -9,12 +9,11 @@
 namespace cpssim {
 namespace {
 
-SystemExplorerActionResult select_created(StructuralSection section,
-                                          StructuralSelection selection,
+SystemExplorerActionResult select_created(StructuralSection section, StructuralSelection selection,
                                           SystemBuilderFocusTarget focus) {
     return {.changed = true,
             .expand_section = section,
-            .scroll_to = std::move(selection),
+            .scroll_to = selection,
             .focus = focus,
             .diagnostic = {}};
 }
@@ -46,8 +45,8 @@ std::size_t assignment_count(const std::vector<DraftTaskAssignment>& assignments
 template <typename Rows, typename Id, typename Select>
 void select_neighbor(const Rows& rows, Id removed_id, StructuralSelection& selection,
                      StructuralSection parent, Select select) {
-    const auto removed =
-        std::find_if(rows.begin(), rows.end(), [removed_id](const auto& row) { return row.id == removed_id; });
+    const auto removed = std::find_if(
+        rows.begin(), rows.end(), [removed_id](const auto& row) { return row.id == removed_id; });
     if (rows.size() <= 1 || removed == rows.end()) {
         selection.select_section(parent);
         return;
@@ -73,8 +72,9 @@ void clear_resource_assignments(std::vector<DraftTaskAssignment>& assignments,
 
 } // namespace
 
-SystemEntityCreateAvailability SystemExplorerInteraction::create_availability(
-    StructuralSection section, const EditableSystemDraft& draft) const {
+SystemEntityCreateAvailability
+SystemExplorerInteraction::create_availability(StructuralSection section,
+                                               const EditableSystemDraft& draft) const {
     switch (section) {
     case StructuralSection::Resources:
     case StructuralSection::Tasks:
@@ -84,8 +84,7 @@ SystemEntityCreateAvailability SystemExplorerInteraction::create_availability(
                    ? SystemEntityCreateAvailability{.available = true, .explanation = {}}
                    : SystemEntityCreateAvailability{
                          .available = false,
-                         .explanation =
-                             "Add a task/resource or remove an existing profile first."};
+                         .explanation = "Add a task/resource or remove an existing profile first."};
     case StructuralSection::MessageRoutes:
         if (draft.tasks().empty()) {
             return {.available = false,
@@ -118,22 +117,27 @@ SystemExplorerActionResult SystemExplorerInteraction::create(StructuralSection s
     }
     case StructuralSection::ExecutionProfiles: {
         const auto profile = draft.add_execution_profile();
-        selection.select_execution_profile(*profile);
+        if (!profile.has_value()) {
+            return failed_action("No unused task-resource profile combination is available.");
+        }
+        selection.select_execution_profile(profile.value());
         return select_created(section, selection, SystemBuilderFocusTarget::ProfileExecutionTime);
     }
     case StructuralSection::MessageRoutes: {
         const auto route = draft.add_message_route();
-        selection.select_message_route(*route);
+        if (!route.has_value()) {
+            return failed_action("No unused message-route endpoint pair is available.");
+        }
+        selection.select_message_route(route.value());
         return select_created(section, selection, SystemBuilderFocusTarget::RouteSource);
     }
     }
     return failed_action("Unsupported structural section.");
 }
 
-SystemExplorerActionResult
-SystemExplorerInteraction::duplicate(const StructuralSelection& target,
-                                     EditableSystemDraft& draft,
-                                     StructuralSelection& selection) {
+SystemExplorerActionResult SystemExplorerInteraction::duplicate(const StructuralSelection& target,
+                                                                EditableSystemDraft& draft,
+                                                                StructuralSelection& selection) {
     switch (target.kind()) {
     case StructuralSelectionKind::Resource: {
         const auto id = target.resource_id();
@@ -160,7 +164,11 @@ SystemExplorerInteraction::duplicate(const StructuralSelection& target,
                               SystemBuilderFocusTarget::TaskName);
     }
     case StructuralSelectionKind::ExecutionProfile: {
-        const auto duplicated = draft.duplicate_execution_profile(*target.execution_profile());
+        const auto profile = target.execution_profile();
+        if (!profile.has_value()) {
+            break;
+        }
+        const auto duplicated = draft.duplicate_execution_profile(profile.value());
         if (!duplicated.has_value()) {
             return failed_action(
                 create_availability(StructuralSection::ExecutionProfiles, draft).explanation);
@@ -170,7 +178,11 @@ SystemExplorerInteraction::duplicate(const StructuralSelection& target,
                               SystemBuilderFocusTarget::ProfileExecutionTime);
     }
     case StructuralSelectionKind::MessageRoute: {
-        const auto duplicated = draft.duplicate_message_route(*target.message_route());
+        const auto route = target.message_route();
+        if (!route.has_value()) {
+            break;
+        }
+        const auto duplicated = draft.duplicate_message_route(route.value());
         if (!duplicated.has_value()) {
             return failed_action(
                 create_availability(StructuralSection::MessageRoutes, draft).explanation);
@@ -193,12 +205,22 @@ bool SystemExplorerInteraction::request_delete(
                                 .structural = {},
                                 .run_plan_assignments = assignment_count(assignments, target)};
     switch (target.kind()) {
-    case StructuralSelectionKind::Resource:
-        impact.structural = draft.resource_cascade_impact(*target.resource_id());
+    case StructuralSelectionKind::Resource: {
+        const auto resource_id = target.resource_id();
+        if (!resource_id.has_value()) {
+            return false;
+        }
+        impact.structural = draft.resource_cascade_impact(resource_id.value());
         break;
-    case StructuralSelectionKind::Task:
-        impact.structural = draft.task_cascade_impact(*target.task_id());
+    }
+    case StructuralSelectionKind::Task: {
+        const auto task_id = target.task_id();
+        if (!task_id.has_value()) {
+            return false;
+        }
+        impact.structural = draft.task_cascade_impact(task_id.value());
         break;
+    }
     case StructuralSelectionKind::ExecutionProfile:
     case StructuralSelectionKind::MessageRoute:
         break;
@@ -206,13 +228,14 @@ bool SystemExplorerInteraction::request_delete(
     case StructuralSelectionKind::Section:
         return false;
     }
-    pending_delete_ = std::move(impact);
+    pending_delete_ = impact;
     return true;
 }
 
-SystemExplorerActionResult SystemExplorerInteraction::confirm_delete(
-    EditableSystemDraft& draft, std::vector<DraftTaskAssignment>& assignments,
-    StructuralSelection& selection) {
+SystemExplorerActionResult
+SystemExplorerInteraction::confirm_delete(EditableSystemDraft& draft,
+                                          std::vector<DraftTaskAssignment>& assignments,
+                                          StructuralSelection& selection) {
     if (!pending_delete_.has_value()) {
         return failed_action("No structural deletion is pending.");
     }
@@ -221,7 +244,11 @@ SystemExplorerActionResult SystemExplorerInteraction::confirm_delete(
     auto changed = false;
     switch (target.kind()) {
     case StructuralSelectionKind::Resource: {
-        const auto id = *target.resource_id();
+        const auto resource_id = target.resource_id();
+        if (!resource_id.has_value()) {
+            break;
+        }
+        const auto id = resource_id.value();
         select_neighbor(draft.resources(), id, selection, StructuralSection::Resources,
                         [](auto& selected, auto neighbor) { selected.select_resource(neighbor); });
         changed = draft.cascade_remove_resource(id);
@@ -229,21 +256,29 @@ SystemExplorerActionResult SystemExplorerInteraction::confirm_delete(
         break;
     }
     case StructuralSelectionKind::Task: {
-        const auto id = *target.task_id();
+        const auto task_id = target.task_id();
+        if (!task_id.has_value()) {
+            break;
+        }
+        const auto id = task_id.value();
         select_neighbor(draft.tasks(), id, selection, StructuralSection::Tasks,
                         [](auto& selected, auto neighbor) { selected.select_task(neighbor); });
         changed = draft.cascade_remove_task(id);
         erase_task_assignment(assignments, id);
         break;
     }
-    case StructuralSelectionKind::ExecutionProfile:
-        changed = draft.remove_execution_profile(*target.execution_profile());
+    case StructuralSelectionKind::ExecutionProfile: {
+        const auto profile = target.execution_profile();
+        changed = profile.has_value() && draft.remove_execution_profile(profile.value());
         selection.select_section(StructuralSection::ExecutionProfiles);
         break;
-    case StructuralSelectionKind::MessageRoute:
-        changed = draft.remove_message_route(*target.message_route());
+    }
+    case StructuralSelectionKind::MessageRoute: {
+        const auto route = target.message_route();
+        changed = route.has_value() && draft.remove_message_route(route.value());
         selection.select_section(StructuralSection::MessageRoutes);
         break;
+    }
     case StructuralSelectionKind::System:
     case StructuralSelectionKind::Section:
         break;

@@ -240,8 +240,8 @@ Manual checks:
 ## Implemented boundary
 
 - `EditableSystemDraft` is a Dear-ImGui-independent typed draft with derived
-  dirty state, deterministic positive ID allocation, blocked referenced-entity
-  deletion, complete field-addressed diagnostics, and canonical
+  dirty state, deterministic positive ID allocation, confirmed dependency-
+  aware cascade deletion, complete field-addressed diagnostics, and canonical
   `ExperimentConfig` conversion.
 - The System Builder provides General, Resources, Tasks, Execution Profiles,
   Message Routes, and Validation tabs. The profile matrix is horizontally
@@ -257,6 +257,9 @@ Manual checks:
   changes requires Apply and save, Discard, or Cancel.
 - A valid modified draft can drive a labelled read-only architecture preview.
   Structural graph editing and Bosch-specific editing remain out of scope.
+- Explorer owns structural creation, duplication, deletion, and selection. The
+  selected property editor is directly below it; Run Configuration and the
+  runtime-only Inspector form the independent right sidebar.
 
 The ownership decision is recorded by
 [ADR-0023](../adr/0023-use-detached-system-drafts-and-atomic-project-rebuilds.md).

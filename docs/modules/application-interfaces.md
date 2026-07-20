@@ -20,8 +20,9 @@ networking, trigger, FMI, or event-ordering behavior.
 - [`command_parser.hpp`](../../apps/cli/command_parser.hpp) tokenizes only
   interactive terminal lines. Direct argv bypasses tokenization.
 - [`system_builder_workflow.hpp`](../../src/cpssim/application/project/system_builder_workflow.hpp)
-  validates an `EditableSystemDraft` plus explicit assignments and builds one
-  complete replacement `ProjectContext` before application-state mutation.
+  validates an `EditableSystemDraft` plus pending stop tick, policy, and
+  explicit assignments, then builds one complete replacement `ProjectContext`
+  before application-state mutation.
 
 ## Ownership and flow
 

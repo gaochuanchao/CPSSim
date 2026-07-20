@@ -46,8 +46,8 @@ configuration/runtime access.
 
 Goal 2 adds `EditableSystemDraft` as a detached application/GUI-support value.
 It copies every current schema-v4 system field, derives dirty state from typed
-comparison, allocates deterministic positive IDs, blocks referenced deletion,
-and returns entity/field diagnostics. Only a diagnostic-free draft is passed
+comparison, allocates deterministic positive IDs, computes confirmed cascade
+impact, and returns entity/field diagnostics. Only a diagnostic-free draft is passed
 through the existing immutable specification constructors. Explicit pending
 default assignments are separately validated by `build_run_plan`; successful
 application constructs and swaps a complete paused `ProjectContext`.

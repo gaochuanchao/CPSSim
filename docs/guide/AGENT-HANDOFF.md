@@ -39,6 +39,10 @@ Generic projects now provide a complete forms-and-tables System Builder over a
 detached typed draft. Resources, tasks, execution profiles, routes, and
 explicit default assignments validate before one atomic paused project/session
 replacement; valid unapplied drafts can drive a read-only architecture preview.
+Explorer now owns structural create/duplicate/confirmed-cascade actions and
+drives the selected property editor below it. Structural selection is separate
+from runtime selection; Run Configuration and Runtime Inspector occupy the
+split right sidebar without duplicating structural properties.
 The repository command surface is limited to `make`, `make run-cli`,
 `make run-gui`, `make test`, `make clean`, and `make help`. The CLI provides a
 registered persistent shell and direct commands; its Bosch wizard/direct path
@@ -113,6 +117,8 @@ these rules.
 | `RunPlan` | validated assignments, inclusive stop tick, and scheduling-policy kind |
 | `RunPlanDraft` | incomplete GUI/application choices, detached from active runtime |
 | `EditableSystemDraft` | detached system fields, stable ID allocation, mutation policy, and structured diagnostics |
+| `StructuralSelection` | Explorer section/entity/profile/route identity controlling System Builder |
+| `SystemExplorerInteraction` | headless create/duplicate/cascade-confirm lifecycle and focus/scroll intent |
 | runtime `Task` | applied assignment and next release |
 | `EventQueue` | pending candidates and sequence allocation |
 | `SchedulingPolicy` | read-only ranking/preemption recommendation |
@@ -127,7 +133,7 @@ these rules.
 | `SimulationController` | GUI commands, current GUI-owned functional model, and detached snapshots |
 | `GuiSimulationSession` | loaded experiment, functional-model factory/registry, draft validation, and atomic active-controller replacement |
 | `ExperimentPresentationSnapshot` | sorted detached configuration and applied assignment copy |
-| `GuiSelection` | selected experiment/task/resource/route/job/event identity and optional tick range |
+| `GuiSelection` | runtime highlight/inspection identity and optional tick range |
 | `GuiTimelineCache` | disposable validated timeline prefix and derived lifecycle presentation |
 | `GuiSignalCache` | disposable validated functional schema and full-resolution derived scalar series |
 | `GuiApplication` | panel visibility, view state, text scale, fixed workbench layout, and About-dialog state |
@@ -195,27 +201,31 @@ End every handoff with exact commands/results, changed documents, limitations,
 and the next permitted task. Update this page whenever the implemented project
 boundary changes.
 
-## Latest Goal 2 System Builder validation
+## Latest Extended Goal 2 System Builder validation
 
-Goal 2 was implemented on 2026-07-20. Focused validation covered canonical
-round trips, minimal drafts, dirty state, deterministic IDs, all editor
-mutations, blocked referenced deletion, profiles/routes, structured
-diagnostics, explicit new-task assignments, atomic rebuild failures,
+Extended Goal 2 was implemented on 2026-07-20. Focused validation covered
+canonical round trips, minimal drafts, dirty state, deterministic IDs,
+Explorer creation/duplication/focus intent, disabled additions, confirmed
+cascade impact/execution/cancel, independent selection domains, profiles/routes,
+structured diagnostics, atomic rebuild failures, pending run settings,
 transition decisions, and save/reopen behavior:
 
 - `cmake --build --preset gui --target cpssim_gui -j2`: passed;
 - `ctest --test-dir build/dev --output-on-failure -L "^(gui|project)$"`:
-  82/82 focused tests passed, including current DPI tests;
+  92/92 focused tests passed, including current DPI tests;
 - `cmake --build --preset tidy --target cpssim_gui_support
   cpssim_project_tests -j2`: passed; and
-- `./scripts/verify.sh full`: passed formatting, Debug, ASan/UBSan, Release,
-  Clang, and clang-tidy verification; each test profile passed all 216 tests,
-  including the Bosch functional and conformance regressions.
+- `./scripts/verify.sh full`: formatting plus Debug, ASan/UBSan, Release,
+  Clang, and clang-tidy profiles passed all 226 tests, including CLI, DPI,
+  canonical ordering, Bosch functional output, and conformance regressions;
+- `make`: built the documented CLI, GUI, Bosch adapters, and FMU targets; and
+- `./build/make-dev/cpssim_cli help`: passed and listed the registered command
+  surface.
 
-The automated environment still has no usable X11 display, so the forms,
-tables, native prompts, keyboard traversal, and monitor switching require a
-manual desktop smoke test. Bosch systems are intentionally read-only; Goal 2
-does not define Bosch-specific model editing.
+The automated environment still has no usable X11 display, so context menus,
+focus/scroll behavior, splitters, native prompts, keyboard traversal, and
+monitor switching require a manual desktop smoke test. Bosch systems remain
+intentionally read-only.
 
 ## Latest Goal 1 project-workflow validation
 

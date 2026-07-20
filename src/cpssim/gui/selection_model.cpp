@@ -110,17 +110,15 @@ void synchronize_structural_selection(StructuralSelection& selection,
     case StructuralSelectionKind::Resource: {
         const auto resource_id = selection.resource_id();
         if (!resource_id.has_value() ||
-            !contains_row(draft.resources(), [resource_id](const auto& row) {
-                return row.id == *resource_id;
-            })) {
+            !contains_row(draft.resources(),
+                          [resource_id](const auto& row) { return row.id == *resource_id; })) {
             selection.select_section(StructuralSection::Resources);
         }
         return;
     }
     case StructuralSelectionKind::Task: {
         const auto task_id = selection.task_id();
-        if (!task_id.has_value() ||
-            !contains_row(draft.tasks(), [task_id](const auto& row) {
+        if (!task_id.has_value() || !contains_row(draft.tasks(), [task_id](const auto& row) {
                 return row.id == *task_id;
             })) {
             selection.select_section(StructuralSection::Tasks);
@@ -137,8 +135,7 @@ void synchronize_structural_selection(StructuralSelection& selection,
     }
     case StructuralSelectionKind::MessageRoute: {
         const auto key = selection.message_route();
-        if (!key.has_value() ||
-            !contains_row(draft.routes(), [&key](const auto& row) {
+        if (!key.has_value() || !contains_row(draft.routes(), [&key](const auto& row) {
                 return row.source_task_id == key->source_task_id &&
                        row.destination_task_id == key->destination_task_id;
             })) {
