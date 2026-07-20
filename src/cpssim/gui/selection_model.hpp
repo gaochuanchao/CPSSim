@@ -10,12 +10,63 @@
 
 #pragma once
 
+#include "cpssim/gui/editable_system_draft.hpp"
 #include "cpssim/gui/simulation_controller.hpp"
 
 #include <optional>
 #include <variant>
 
 namespace cpssim {
+
+enum class StructuralSection {
+    Resources,
+    Tasks,
+    ExecutionProfiles,
+    MessageRoutes,
+};
+
+enum class StructuralSelectionKind {
+    System,
+    Section,
+    Resource,
+    Task,
+    ExecutionProfile,
+    MessageRoute,
+};
+
+struct StructuralSystemSelection {
+    bool operator==(const StructuralSystemSelection&) const = default;
+};
+
+/*** Owns the Explorer selection independently of runtime observation selection. ***/
+class StructuralSelection {
+  public:
+    StructuralSelectionKind kind() const;
+
+    void select_system();
+    void select_section(StructuralSection section);
+    void select_resource(ResourceId resource_id);
+    void select_task(TaskId task_id);
+    void select_execution_profile(DraftExecutionProfileKey profile);
+    void select_message_route(DraftMessageRouteKey route);
+
+    std::optional<StructuralSection> section() const;
+    std::optional<ResourceId> resource_id() const;
+    std::optional<TaskId> task_id() const;
+    std::optional<DraftExecutionProfileKey> execution_profile() const;
+    std::optional<DraftMessageRouteKey> message_route() const;
+
+    bool operator==(const StructuralSelection&) const = default;
+
+  private:
+    using Value = std::variant<StructuralSystemSelection, StructuralSection, ResourceId, TaskId,
+                               DraftExecutionProfileKey, DraftMessageRouteKey>;
+    Value value_{StructuralSystemSelection{}};
+};
+
+// Repairs only structural identity against the detached draft.
+void synchronize_structural_selection(StructuralSelection& selection,
+                                      const EditableSystemDraft& draft);
 
 /*** Distinguishes the stable entity domain currently selected by the GUI. ***/
 enum class GuiSelectionKind {

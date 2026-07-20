@@ -144,14 +144,6 @@ ResourceId EditableSystemDraft::duplicate_resource(std::size_t index) {
     const auto original = resources_[index];
     const auto id = allocate_resource_id();
     resources_.push_back({.id = id, .name = unique_copy_name(resources_, original.name)});
-    const auto original_profiles = profiles_;
-    for (const auto& profile : original_profiles) {
-        if (profile.resource_id == original.id) {
-            profiles_.push_back({.task_id = profile.task_id,
-                                 .resource_id = id,
-                                 .execution_time = profile.execution_time});
-        }
-    }
     return id;
 }
 
@@ -174,6 +166,29 @@ SystemDraftMutationResult EditableSystemDraft::remove_resource(std::size_t index
     }
     resources_.erase(resources_.begin() + static_cast<std::ptrdiff_t>(index));
     return {.changed = true, .diagnostic = std::nullopt};
+}
+
+SystemDraftCascadeImpact
+EditableSystemDraft::resource_cascade_impact(ResourceId resource_id) const {
+    return {.execution_profiles = static_cast<std::size_t>(std::count_if(
+                profiles_.begin(), profiles_.end(), [resource_id](const auto& profile) {
+                    return profile.resource_id == resource_id;
+                }))};
+}
+
+bool EditableSystemDraft::cascade_remove_resource(ResourceId resource_id) {
+    const auto resource =
+        std::find_if(resources_.begin(), resources_.end(), [resource_id](const auto& row) {
+            return row.id == resource_id;
+        });
+    if (resource == resources_.end()) {
+        return false;
+    }
+    std::erase_if(profiles_, [resource_id](const auto& profile) {
+        return profile.resource_id == resource_id;
+    });
+    resources_.erase(resource);
+    return true;
 }
 
 void EditableSystemDraft::set_resource_id(std::size_t index, ResourceId id) {
@@ -219,14 +234,6 @@ TaskId EditableSystemDraft::duplicate_task(std::size_t index) {
                       .deadline = original.deadline,
                       .offset = original.offset,
                       .priority = original.priority});
-    const auto original_profiles = profiles_;
-    for (const auto& profile : original_profiles) {
-        if (profile.task_id == original.id) {
-            profiles_.push_back({.task_id = id,
-                                 .resource_id = profile.resource_id,
-                                 .execution_time = profile.execution_time});
-        }
-    }
     return id;
 }
 
@@ -256,6 +263,39 @@ SystemDraftMutationResult EditableSystemDraft::remove_task(std::size_t index) {
     }
     tasks_.erase(tasks_.begin() + static_cast<std::ptrdiff_t>(index));
     return {.changed = true, .diagnostic = std::nullopt};
+}
+
+SystemDraftCascadeImpact EditableSystemDraft::task_cascade_impact(TaskId task_id) const {
+    SystemDraftCascadeImpact result;
+    result.execution_profiles = static_cast<std::size_t>(
+        std::count_if(profiles_.begin(), profiles_.end(),
+                      [task_id](const auto& profile) { return profile.task_id == task_id; }));
+    result.incoming_routes =
+        static_cast<std::size_t>(std::count_if(routes_.begin(), routes_.end(),
+                                               [task_id](const auto& route) {
+                                                   return route.destination_task_id == task_id;
+                                               }));
+    result.outgoing_routes =
+        static_cast<std::size_t>(std::count_if(routes_.begin(), routes_.end(),
+                                               [task_id](const auto& route) {
+                                                   return route.source_task_id == task_id;
+                                               }));
+    return result;
+}
+
+bool EditableSystemDraft::cascade_remove_task(TaskId task_id) {
+    const auto task = std::find_if(tasks_.begin(), tasks_.end(),
+                                   [task_id](const auto& row) { return row.id == task_id; });
+    if (task == tasks_.end()) {
+        return false;
+    }
+    std::erase_if(profiles_,
+                  [task_id](const auto& profile) { return profile.task_id == task_id; });
+    std::erase_if(routes_, [task_id](const auto& route) {
+        return route.source_task_id == task_id || route.destination_task_id == task_id;
+    });
+    tasks_.erase(task);
+    return true;
 }
 
 void EditableSystemDraft::set_task_id(std::size_t index, TaskId id) {
@@ -307,6 +347,43 @@ std::optional<Tick> EditableSystemDraft::execution_profile(TaskId task_id,
     return found == profiles_.end() ? std::nullopt : std::optional<Tick>{found->execution_time};
 }
 
+std::optional<DraftExecutionProfileKey> EditableSystemDraft::next_execution_profile() const {
+    for (const auto& task : tasks_) {
+        for (const auto& resource : resources_) {
+            if (!execution_profile(task.id, resource.id).has_value()) {
+                return DraftExecutionProfileKey{task.id, resource.id};
+            }
+        }
+    }
+    return std::nullopt;
+}
+
+std::optional<DraftExecutionProfileKey>
+EditableSystemDraft::add_execution_profile(Tick execution_time) {
+    const auto key = next_execution_profile();
+    if (key.has_value()) {
+        set_execution_profile(key->task_id, key->resource_id, execution_time);
+    }
+    return key;
+}
+
+std::optional<DraftExecutionProfileKey>
+EditableSystemDraft::duplicate_execution_profile(DraftExecutionProfileKey profile) {
+    const auto execution_time = execution_profile(profile.task_id, profile.resource_id);
+    if (!execution_time.has_value()) {
+        return std::nullopt;
+    }
+    return add_execution_profile(*execution_time);
+}
+
+bool EditableSystemDraft::remove_execution_profile(DraftExecutionProfileKey profile) {
+    const auto previous_size = profiles_.size();
+    std::erase_if(profiles_, [&profile](const auto& row) {
+        return row.task_id == profile.task_id && row.resource_id == profile.resource_id;
+    });
+    return profiles_.size() != previous_size;
+}
+
 void EditableSystemDraft::set_execution_profile(TaskId task_id, ResourceId resource_id,
                                                 std::optional<Tick> execution_time) {
     const auto found = std::find_if(
@@ -338,6 +415,55 @@ std::size_t EditableSystemDraft::add_message_route(TaskId source_task_id,
                        .send_offset = 1,
                        .delay = 1});
     return routes_.size() - 1;
+}
+
+std::optional<DraftMessageRouteKey> EditableSystemDraft::next_message_route() const {
+    for (const auto& source : tasks_) {
+        for (const auto& destination : tasks_) {
+            const auto used = std::any_of(routes_.begin(), routes_.end(), [&](const auto& route) {
+                return route.source_task_id == source.id &&
+                       route.destination_task_id == destination.id;
+            });
+            if (!used) {
+                return DraftMessageRouteKey{source.id, destination.id};
+            }
+        }
+    }
+    return std::nullopt;
+}
+
+std::optional<DraftMessageRouteKey> EditableSystemDraft::add_message_route() {
+    const auto key = next_message_route();
+    if (key.has_value()) {
+        static_cast<void>(add_message_route(key->source_task_id, key->destination_task_id));
+    }
+    return key;
+}
+
+std::optional<DraftMessageRouteKey>
+EditableSystemDraft::duplicate_message_route(DraftMessageRouteKey route) {
+    const auto found = std::find_if(routes_.begin(), routes_.end(), [&route](const auto& row) {
+        return row.source_task_id == route.source_task_id &&
+               row.destination_task_id == route.destination_task_id;
+    });
+    const auto key = next_message_route();
+    if (found == routes_.end() || !key.has_value()) {
+        return std::nullopt;
+    }
+    routes_.push_back({.source_task_id = key->source_task_id,
+                       .destination_task_id = key->destination_task_id,
+                       .send_offset = found->send_offset,
+                       .delay = found->delay});
+    return key;
+}
+
+bool EditableSystemDraft::remove_message_route(DraftMessageRouteKey route) {
+    const auto previous_size = routes_.size();
+    std::erase_if(routes_, [&route](const auto& row) {
+        return row.source_task_id == route.source_task_id &&
+               row.destination_task_id == route.destination_task_id;
+    });
+    return routes_.size() != previous_size;
 }
 
 void EditableSystemDraft::set_message_route(std::size_t index, DraftMessageRoute route) {

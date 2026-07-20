@@ -77,7 +77,7 @@ TEST_CASE("system draft dirty state clears when typed edits return to the baseli
     REQUIRE_FALSE(draft.dirty());
 }
 
-TEST_CASE("resource and task edits preserve IDs while duplicates copy profiles",
+TEST_CASE("resource and task edits preserve IDs while duplicates omit dependencies",
           "[gui][system-builder][mutation]") {
     auto draft = EditableSystemDraft{make_config()};
     draft.set_resource_name(0, "renamed local");
@@ -90,9 +90,39 @@ TEST_CASE("resource and task edits preserve IDs while duplicates copy profiles",
     const auto task_copy = draft.duplicate_task(0);
     REQUIRE((resource_copy == ResourceId{1}));
     REQUIRE((task_copy == TaskId{1}));
-    REQUIRE(draft.execution_profile(task_copy, ResourceId{4}).has_value());
-    REQUIRE(draft.execution_profile(TaskId{3}, resource_copy).has_value());
-    REQUIRE(draft.build().valid());
+    REQUIRE_FALSE(draft.execution_profile(task_copy, ResourceId{4}).has_value());
+    REQUIRE_FALSE(draft.execution_profile(TaskId{3}, resource_copy).has_value());
+    REQUIRE_FALSE(draft.build().valid());
+}
+
+TEST_CASE("draft allocates the first unused profile and route combinations deterministically",
+          "[gui][system-builder][create]") {
+    auto draft = EditableSystemDraft{make_config()};
+    REQUIRE((draft.next_execution_profile() ==
+             DraftExecutionProfileKey{TaskId{8}, ResourceId{4}}));
+    REQUIRE((draft.add_execution_profile(2) ==
+             DraftExecutionProfileKey{TaskId{8}, ResourceId{4}}));
+    REQUIRE((draft.next_message_route() == DraftMessageRouteKey{TaskId{3}, TaskId{3}}));
+    REQUIRE((draft.add_message_route() == DraftMessageRouteKey{TaskId{3}, TaskId{3}}));
+}
+
+TEST_CASE("confirmed draft cascades report and remove only structural dependencies",
+          "[gui][system-builder][cascade]") {
+    auto draft = EditableSystemDraft{make_config()};
+    REQUIRE((draft.resource_cascade_impact(ResourceId{9}) ==
+             SystemDraftCascadeImpact{.execution_profiles = 2}));
+    REQUIRE((draft.task_cascade_impact(TaskId{3}) ==
+             SystemDraftCascadeImpact{
+                 .execution_profiles = 2, .incoming_routes = 0, .outgoing_routes = 1}));
+
+    REQUIRE(draft.cascade_remove_task(TaskId{3}));
+    REQUIRE((draft.tasks().size() == 1));
+    REQUIRE((draft.profiles().size() == 1));
+    REQUIRE(draft.routes().empty());
+    REQUIRE_FALSE(draft.cascade_remove_task(TaskId{3}));
+
+    REQUIRE(draft.cascade_remove_resource(ResourceId{9}));
+    REQUIRE(draft.profiles().empty());
 }
 
 TEST_CASE("referenced entity removal is blocked consistently", "[gui][system-builder][removal]") {

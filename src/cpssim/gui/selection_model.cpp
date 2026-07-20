@@ -9,9 +9,14 @@
 #include "cpssim/gui/selection_model.hpp"
 
 #include <algorithm>
+#include <utility>
 
 namespace cpssim {
 namespace {
+
+template <typename Rows, typename Predicate> bool contains_row(const Rows& rows, Predicate match) {
+    return std::any_of(rows.begin(), rows.end(), std::move(match));
+}
 
 /*** Reports whether an event refers to one complete task-local job identity. ***/
 bool event_refers_to_job(const Event& event, JobIdentity job) {
@@ -32,6 +37,117 @@ bool snapshot_contains_job(const SimulationSnapshot& snapshot, JobIdentity job) 
 }
 
 } // namespace
+
+StructuralSelectionKind StructuralSelection::kind() const {
+    switch (value_.index()) {
+    case 0:
+        return StructuralSelectionKind::System;
+    case 1:
+        return StructuralSelectionKind::Section;
+    case 2:
+        return StructuralSelectionKind::Resource;
+    case 3:
+        return StructuralSelectionKind::Task;
+    case 4:
+        return StructuralSelectionKind::ExecutionProfile;
+    case 5:
+        return StructuralSelectionKind::MessageRoute;
+    default:
+        return StructuralSelectionKind::System;
+    }
+}
+
+void StructuralSelection::select_system() { value_ = StructuralSystemSelection{}; }
+void StructuralSelection::select_section(StructuralSection section) { value_ = section; }
+void StructuralSelection::select_resource(ResourceId resource_id) { value_ = resource_id; }
+void StructuralSelection::select_task(TaskId task_id) { value_ = task_id; }
+void StructuralSelection::select_execution_profile(DraftExecutionProfileKey profile) {
+    value_ = profile;
+}
+void StructuralSelection::select_message_route(DraftMessageRouteKey route) { value_ = route; }
+
+std::optional<StructuralSection> StructuralSelection::section() const {
+    if (const auto* value = std::get_if<StructuralSection>(&value_)) {
+        return *value;
+    }
+    return std::nullopt;
+}
+
+std::optional<ResourceId> StructuralSelection::resource_id() const {
+    if (const auto* value = std::get_if<ResourceId>(&value_)) {
+        return *value;
+    }
+    return std::nullopt;
+}
+
+std::optional<TaskId> StructuralSelection::task_id() const {
+    if (const auto* value = std::get_if<TaskId>(&value_)) {
+        return *value;
+    }
+    return std::nullopt;
+}
+
+std::optional<DraftExecutionProfileKey> StructuralSelection::execution_profile() const {
+    if (const auto* value = std::get_if<DraftExecutionProfileKey>(&value_)) {
+        return *value;
+    }
+    return std::nullopt;
+}
+
+std::optional<DraftMessageRouteKey> StructuralSelection::message_route() const {
+    if (const auto* value = std::get_if<DraftMessageRouteKey>(&value_)) {
+        return *value;
+    }
+    return std::nullopt;
+}
+
+void synchronize_structural_selection(StructuralSelection& selection,
+                                      const EditableSystemDraft& draft) {
+    switch (selection.kind()) {
+    case StructuralSelectionKind::System:
+    case StructuralSelectionKind::Section:
+        return;
+    case StructuralSelectionKind::Resource: {
+        const auto resource_id = selection.resource_id();
+        if (!resource_id.has_value() ||
+            !contains_row(draft.resources(), [resource_id](const auto& row) {
+                return row.id == *resource_id;
+            })) {
+            selection.select_section(StructuralSection::Resources);
+        }
+        return;
+    }
+    case StructuralSelectionKind::Task: {
+        const auto task_id = selection.task_id();
+        if (!task_id.has_value() ||
+            !contains_row(draft.tasks(), [task_id](const auto& row) {
+                return row.id == *task_id;
+            })) {
+            selection.select_section(StructuralSection::Tasks);
+        }
+        return;
+    }
+    case StructuralSelectionKind::ExecutionProfile: {
+        const auto key = selection.execution_profile();
+        if (!key.has_value() ||
+            !draft.execution_profile(key->task_id, key->resource_id).has_value()) {
+            selection.select_section(StructuralSection::ExecutionProfiles);
+        }
+        return;
+    }
+    case StructuralSelectionKind::MessageRoute: {
+        const auto key = selection.message_route();
+        if (!key.has_value() ||
+            !contains_row(draft.routes(), [&key](const auto& row) {
+                return row.source_task_id == key->source_task_id &&
+                       row.destination_task_id == key->destination_task_id;
+            })) {
+            selection.select_section(StructuralSection::MessageRoutes);
+        }
+        return;
+    }
+    }
+}
 
 /*** Returns the active alternative's stable entity domain. ***/
 GuiSelectionKind GuiSelection::kind() const {

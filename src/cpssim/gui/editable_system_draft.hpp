@@ -105,6 +105,31 @@ struct DraftMessageRoute {
     bool operator==(const DraftMessageRoute&) const = default;
 };
 
+/*** Stable composite identity for one draft execution profile. ***/
+struct DraftExecutionProfileKey {
+    TaskId task_id;
+    ResourceId resource_id;
+
+    bool operator==(const DraftExecutionProfileKey&) const = default;
+};
+
+/*** Stable composite identity for one draft message route. ***/
+struct DraftMessageRouteKey {
+    TaskId source_task_id;
+    TaskId destination_task_id;
+
+    bool operator==(const DraftMessageRouteKey&) const = default;
+};
+
+/*** Counts the structural dependencies removed by one confirmed cascade. ***/
+struct SystemDraftCascadeImpact {
+    std::size_t execution_profiles{0};
+    std::size_t incoming_routes{0};
+    std::size_t outgoing_routes{0};
+
+    bool operator==(const SystemDraftCascadeImpact&) const = default;
+};
+
 struct SystemDraftBuildResult {
     std::optional<ExperimentConfig> config;
     std::vector<SystemDraftDiagnostic> diagnostics;
@@ -141,22 +166,35 @@ class EditableSystemDraft {
     ResourceId add_resource();
     ResourceId duplicate_resource(std::size_t index);
     SystemDraftMutationResult remove_resource(std::size_t index);
+    SystemDraftCascadeImpact resource_cascade_impact(ResourceId resource_id) const;
+    bool cascade_remove_resource(ResourceId resource_id);
     void set_resource_id(std::size_t index, ResourceId id);
     void set_resource_name(std::size_t index, std::string name);
 
     TaskId add_task();
     TaskId duplicate_task(std::size_t index);
     SystemDraftMutationResult remove_task(std::size_t index);
+    SystemDraftCascadeImpact task_cascade_impact(TaskId task_id) const;
+    bool cascade_remove_task(TaskId task_id);
     void set_task_id(std::size_t index, TaskId id);
     void set_task_name(std::size_t index, std::string name);
     void set_task_timing(std::size_t index, PeriodicTimingSpec timing, Priority priority);
 
     std::optional<Tick> execution_profile(TaskId task_id, ResourceId resource_id) const;
+    std::optional<DraftExecutionProfileKey> next_execution_profile() const;
+    std::optional<DraftExecutionProfileKey> add_execution_profile(Tick execution_time = 1);
+    std::optional<DraftExecutionProfileKey>
+    duplicate_execution_profile(DraftExecutionProfileKey profile);
+    bool remove_execution_profile(DraftExecutionProfileKey profile);
     void set_execution_profile(TaskId task_id, ResourceId resource_id,
                                std::optional<Tick> execution_time);
     void append_execution_profile(DraftExecutionProfile profile);
 
     std::size_t add_message_route(TaskId source_task_id, TaskId destination_task_id);
+    std::optional<DraftMessageRouteKey> next_message_route() const;
+    std::optional<DraftMessageRouteKey> add_message_route();
+    std::optional<DraftMessageRouteKey> duplicate_message_route(DraftMessageRouteKey route);
+    bool remove_message_route(DraftMessageRouteKey route);
     void set_message_route(std::size_t index, DraftMessageRoute route);
     void remove_message_route(std::size_t index);
 

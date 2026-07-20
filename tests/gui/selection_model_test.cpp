@@ -69,6 +69,27 @@ TEST_CASE("GUI selection stores strong entity identities", "[gui][selection]") {
     REQUIRE_FALSE(selection.tick_range().has_value());
 }
 
+TEST_CASE("structural and runtime selections retain independent strong identities",
+          "[gui][selection][structural]") {
+    StructuralSelection structural;
+    GuiSelection runtime;
+
+    structural.select_task(TaskId{7});
+    runtime.select_event(EventSequence{12});
+    REQUIRE((structural.kind() == StructuralSelectionKind::Task));
+    REQUIRE((structural.task_id() == TaskId{7}));
+    REQUIRE((runtime.kind() == GuiSelectionKind::Event));
+
+    runtime.select_resource(ResourceId{4});
+    REQUIRE((structural.task_id() == TaskId{7}));
+    structural.select_execution_profile({TaskId{1}, ResourceId{1}});
+    REQUIRE((runtime.resource_id() == ResourceId{4}));
+
+    const auto draft = EditableSystemDraft::minimal();
+    synchronize_structural_selection(structural, draft);
+    REQUIRE((structural.kind() == StructuralSelectionKind::ExecutionProfile));
+}
+
 /*** Verifies event emphasis uses stable typed references, never labels/indexes. ***/
 TEST_CASE("GUI selection matches related canonical events", "[gui][selection][event]") {
     const Event event{5,
