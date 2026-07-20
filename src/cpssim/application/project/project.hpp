@@ -1,0 +1,93 @@
+/***
+ * File: src/cpssim/application/project/project.hpp
+ * Purpose: Declare GUI-application project metadata, context, and persistence.
+ * Creator: Chuanchao Gao
+ * Documentation date: 2026-07-20
+ ***/
+
+#pragma once
+
+#include "cpssim/gui/simulation_session.hpp"
+
+#include <cstdint>
+#include <filesystem>
+#include <memory>
+#include <string>
+#include <string_view>
+
+namespace cpssim {
+
+inline constexpr std::uint32_t current_project_schema_version = 1;
+inline constexpr std::uint32_t current_project_workspace_schema_version = 1;
+
+/*** Persistent metadata and project-owned relative file references. ***/
+struct ProjectMetadata {
+    std::uint32_t schema_version{current_project_schema_version};
+    std::string name;
+    std::filesystem::path system_file{"system.json"};
+    std::filesystem::path workspace_file{"workspace.json"};
+    std::filesystem::path default_run_plan{"run-plans/default.json"};
+    std::string scenario_kind{"generic"};
+
+    bool operator==(const ProjectMetadata&) const = default;
+};
+
+/*** Minimal presentation-only workspace persisted by G1.2. ***/
+struct ProjectWorkspace {
+    std::uint32_t schema_version{current_project_workspace_schema_version};
+
+    bool operator==(const ProjectWorkspace&) const = default;
+};
+
+/*** Validated inputs for creation below a caller-selected parent directory. ***/
+struct ProjectCreationRequest {
+    std::filesystem::path parent_directory;
+    std::string name;
+    ExperimentConfig system;
+    RunPlan default_run_plan;
+    std::string scenario_kind{"generic"};
+    ProjectWorkspace workspace{};
+};
+
+/*** Owns one loaded project and its sole active GUI simulation session. ***/
+class ProjectContext {
+  public:
+    ProjectContext(std::filesystem::path root, ProjectMetadata metadata, RunPlan default_run_plan,
+                   ProjectWorkspace workspace, std::unique_ptr<GuiSimulationSession> session);
+
+    const std::filesystem::path& root() const { return root_; }
+    const ProjectMetadata& metadata() const { return metadata_; }
+    const RunPlan& default_run_plan() const { return default_run_plan_; }
+    const ProjectWorkspace& workspace() const { return workspace_; }
+    GuiSimulationSession& session() { return *session_; }
+    const GuiSimulationSession& session() const { return *session_; }
+
+  private:
+    std::filesystem::path root_;
+    ProjectMetadata metadata_;
+    RunPlan default_run_plan_;
+    ProjectWorkspace workspace_;
+    std::unique_ptr<GuiSimulationSession> session_;
+};
+
+std::string serialize_project_metadata_json(const ProjectMetadata& metadata);
+ProjectMetadata parse_project_metadata_json(std::string_view json_text);
+
+std::string serialize_project_workspace_json(const ProjectWorkspace& workspace);
+ProjectWorkspace parse_project_workspace_json(std::string_view json_text);
+
+// Constructs and applies the validated default plan before returning ownership.
+std::unique_ptr<ProjectContext>
+make_project_context(std::filesystem::path root, ProjectMetadata metadata, ExperimentConfig system,
+                     RunPlan default_run_plan, ProjectWorkspace workspace = {});
+
+// Creates <parent>/<name>, writes project.json last, and returns an active context.
+std::unique_ptr<ProjectContext> create_project(const ProjectCreationRequest& request);
+
+// Loads, validates, and constructs a complete replacement without changing GUI state.
+std::unique_ptr<ProjectContext> load_project(const std::filesystem::path& project_file);
+
+// Saves specifications, the default plan, workspace, and metadata only.
+void save_project(const ProjectContext& project);
+
+} // namespace cpssim

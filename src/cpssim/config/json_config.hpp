@@ -13,6 +13,7 @@
 #include "cpssim/model/experiment_config.hpp"
 
 #include <filesystem>
+#include <string>
 #include <string_view>
 
 namespace cpssim {
@@ -24,6 +25,9 @@ namespace cpssim {
  ***/
 ExperimentConfig parse_experiment_config(std::string_view json_text);
 
+// Serializes a validated configuration in the current canonical schema.
+std::string serialize_experiment_config_json(const ExperimentConfig& config);
+
 /***
  * Reads an experiment JSON file and delegates parsing and validation to
  * parse_experiment_config.
@@ -31,5 +35,8 @@ ExperimentConfig parse_experiment_config(std::string_view json_text);
  * std::invalid_argument for invalid document content.
  ***/
 ExperimentConfig load_experiment_config(const std::filesystem::path& path);
+
+// Serializes before opening the destination for writing.
+void save_experiment_config(const std::filesystem::path& path, const ExperimentConfig& config);
 
 } // namespace cpssim

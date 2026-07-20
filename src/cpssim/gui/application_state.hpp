@@ -1,17 +1,18 @@
 /***
  * File: src/cpssim/gui/application_state.hpp
- * Purpose: Own the GUI's optional simulation session and derive its screen.
+ * Purpose: Own the GUI's optional standalone session or project context.
  * Creator: Chuanchao Gao
  * Documentation date: 2026-07-20
  ***/
 
 #pragma once
 
-#include "cpssim/gui/simulation_session.hpp"
+#include "cpssim/application/project/project.hpp"
 
 #include <memory>
 #include <stdexcept>
 #include <utility>
+#include <variant>
 
 namespace cpssim {
 
@@ -20,7 +21,7 @@ enum class GuiApplicationScreen {
     Workbench,
 };
 
-/*** Owns an optional, fully constructed GUI simulation session. ***/
+/*** Owns Home, a legacy standalone session, or one complete project context. ***/
 class GuiApplicationState {
   public:
     GuiApplicationState() = default;
@@ -29,24 +30,55 @@ class GuiApplicationState {
         replace_session(std::move(session));
     }
 
-    GuiApplicationScreen screen() const noexcept {
-        return session_ == nullptr ? GuiApplicationScreen::Home : GuiApplicationScreen::Workbench;
+    explicit GuiApplicationState(std::unique_ptr<ProjectContext> project) {
+        replace_project(std::move(project));
     }
 
-    bool has_active_session() const noexcept { return session_ != nullptr; }
+    GuiApplicationScreen screen() const noexcept {
+        return std::holds_alternative<std::monostate>(workbench_) ? GuiApplicationScreen::Home
+                                                                  : GuiApplicationScreen::Workbench;
+    }
+
+    bool has_active_session() const noexcept {
+        return !std::holds_alternative<std::monostate>(workbench_);
+    }
+
+    bool has_active_project() const noexcept {
+        return std::holds_alternative<std::unique_ptr<ProjectContext>>(workbench_);
+    }
 
     GuiSimulationSession& active_session() {
-        if (session_ == nullptr) {
-            throw std::logic_error{"the GUI has no active simulation session"};
+        if (auto* session = std::get_if<std::unique_ptr<GuiSimulationSession>>(&workbench_)) {
+            return **session;
         }
-        return *session_;
+        if (auto* project = std::get_if<std::unique_ptr<ProjectContext>>(&workbench_)) {
+            return (*project)->session();
+        }
+        throw std::logic_error{"the GUI has no active simulation session"};
     }
 
     const GuiSimulationSession& active_session() const {
-        if (session_ == nullptr) {
-            throw std::logic_error{"the GUI has no active simulation session"};
+        if (const auto* session = std::get_if<std::unique_ptr<GuiSimulationSession>>(&workbench_)) {
+            return **session;
         }
-        return *session_;
+        if (const auto* project = std::get_if<std::unique_ptr<ProjectContext>>(&workbench_)) {
+            return (*project)->session();
+        }
+        throw std::logic_error{"the GUI has no active simulation session"};
+    }
+
+    ProjectContext& active_project() {
+        if (auto* project = std::get_if<std::unique_ptr<ProjectContext>>(&workbench_)) {
+            return **project;
+        }
+        throw std::logic_error{"the GUI has no active project"};
+    }
+
+    const ProjectContext& active_project() const {
+        if (const auto* project = std::get_if<std::unique_ptr<ProjectContext>>(&workbench_)) {
+            return **project;
+        }
+        throw std::logic_error{"the GUI has no active project"};
     }
 
     // The caller constructs and validates the replacement before ownership changes.
@@ -54,13 +86,23 @@ class GuiApplicationState {
         if (replacement == nullptr) {
             throw std::invalid_argument{"a replacement GUI session must not be empty"};
         }
-        session_ = std::move(replacement);
+        workbench_ = std::move(replacement);
     }
 
-    void clear_session() noexcept { session_.reset(); }
+    // The loader constructs and validates the project before this call.
+    void replace_project(std::unique_ptr<ProjectContext> replacement) {
+        if (replacement == nullptr) {
+            throw std::invalid_argument{"a replacement GUI project must not be empty"};
+        }
+        workbench_ = std::move(replacement);
+    }
+
+    void clear_session() noexcept { workbench_.emplace<std::monostate>(); }
 
   private:
-    std::unique_ptr<GuiSimulationSession> session_;
+    std::variant<std::monostate, std::unique_ptr<GuiSimulationSession>,
+                 std::unique_ptr<ProjectContext>>
+        workbench_;
 };
 
 } // namespace cpssim

@@ -242,6 +242,20 @@ Acceptance:
 - all internal paths are relative to the project directory;
 - malformed files fail before replacing the active project.
 
+Implemented boundary:
+
+- `ProjectContext` owns project metadata, the loaded default run plan, minimal
+  workspace state, and exactly one active `GuiSimulationSession`;
+- programmatic creation writes `system.json`, `run-plans/default.json`, and
+  `workspace.json` before writing `project.json` as the completion marker;
+- strict loading rejects malformed schemas, invalid system/run-plan data,
+  absolute references, lexical traversal, and resolved paths outside the
+  project root before constructing a replacement context;
+- `GuiApplicationState` owns either a legacy standalone session or a project
+  context, preserving G1.1 startup and atomic replacement behavior;
+- native dialogs, interactive creation, Bosch construction, recent projects,
+  and expanded workspace preferences remain later G1 tasks.
+
 ### G1.3 — File dialogs
 
 Acceptance:

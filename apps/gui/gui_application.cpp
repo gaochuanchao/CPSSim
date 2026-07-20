@@ -40,6 +40,13 @@ GuiApplication::GuiApplication(std::unique_ptr<GuiSimulationSession> session) {
     initialize_presentation_state();
 }
 
+GuiApplication::GuiApplication(std::unique_ptr<ProjectContext> project) {
+    if (project != nullptr) {
+        application_state_.replace_project(std::move(project));
+    }
+    initialize_presentation_state();
+}
+
 /*** Establishes presentation defaults shared by Home and Workbench startup. ***/
 void GuiApplication::initialize_presentation_state() {
     selection_.select_experiment();
@@ -53,6 +60,22 @@ void GuiApplication::replace_session(std::unique_ptr<GuiSimulationSession> sessi
     selection_.select_experiment();
     run_plan_file_status_.clear();
 }
+
+/*** Activates one fully constructed project and its uniquely owned session. ***/
+void GuiApplication::replace_project(std::unique_ptr<ProjectContext> project) {
+    application_state_.replace_project(std::move(project));
+    selection_.select_experiment();
+    run_plan_file_status_.clear();
+}
+
+/*** Loads completely before replacing the current project or standalone session. ***/
+void GuiApplication::load_project_file(const std::filesystem::path& project_file) {
+    auto replacement = load_project(project_file);
+    replace_project(std::move(replacement));
+}
+
+/*** Persists only specifications and presentation metadata for the active project. ***/
+void GuiApplication::save_active_project() { save_project(application_state_.active_project()); }
 
 /*** Returns the application to Home without retaining a session reference. ***/
 void GuiApplication::clear_session() {
@@ -390,8 +413,9 @@ void GuiApplication::draw_home_screen() {
             home_action_status_ = message;
         }
     };
-    placeholder("Create New Project", "Project creation will be implemented in G1.2.");
-    placeholder("Open Existing Project", "Project opening will be implemented in G1.2.");
+    placeholder("Create New Project",
+                "Interactive project creation will be added with file selection in G1.3.");
+    placeholder("Open Existing Project", "Project file selection will be implemented in G1.3.");
     placeholder("Bosch Challenge Example", "The Bosch project wizard will be implemented in G1.4.");
 
     if (!home_action_status_.empty()) {

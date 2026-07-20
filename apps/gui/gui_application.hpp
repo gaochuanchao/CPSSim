@@ -19,6 +19,7 @@
 #include "cpssim/gui/selection_model.hpp"
 
 #include <array>
+#include <filesystem>
 #include <memory>
 #include <string>
 
@@ -29,10 +30,15 @@ class GuiApplication {
   public:
     GuiApplication();
     explicit GuiApplication(std::unique_ptr<GuiSimulationSession> session);
+    explicit GuiApplication(std::unique_ptr<ProjectContext> project);
 
     GuiApplicationScreen screen() const noexcept { return application_state_.screen(); }
     bool has_active_session() const noexcept { return application_state_.has_active_session(); }
+    bool has_active_project() const noexcept { return application_state_.has_active_project(); }
     void replace_session(std::unique_ptr<GuiSimulationSession> session);
+    void replace_project(std::unique_ptr<ProjectContext> project);
+    void load_project_file(const std::filesystem::path& project_file);
+    void save_active_project();
     void clear_session();
     void update_active_session();
 

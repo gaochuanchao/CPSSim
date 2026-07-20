@@ -201,6 +201,7 @@ cpssim_enable_sanitizers(cpssim_cli)
 
 add_library(
     cpssim_gui_support STATIC
+    src/cpssim/application/project/project.cpp
     src/cpssim/gui/architecture_graph.cpp
     src/cpssim/gui/display_scale.cpp
     src/cpssim/gui/draft_run_plan.cpp
@@ -212,6 +213,11 @@ add_library(
     src/cpssim/gui/timeline_model.cpp
 )
 target_link_libraries(cpssim_gui_support PUBLIC cpssim::core)
+target_include_directories(
+    cpssim_gui_support
+    SYSTEM PRIVATE ${CPSSIM_NLOHMANN_INCLUDE_DIRECTORIES}
+)
+target_link_libraries(cpssim_gui_support PRIVATE nlohmann_json::nlohmann_json)
 
 cpssim_set_project_warnings(cpssim_gui_support)
 cpssim_enable_sanitizers(cpssim_gui_support)
@@ -417,6 +423,13 @@ if(BUILD_TESTING)
             tests/gui/timeline_model_test.cpp
         LIBRARIES cpssim_gui_support
         LABEL gui
+    )
+
+    cpssim_add_catch_tests(
+        cpssim_project_tests
+        SOURCES tests/application/project/project_persistence_test.cpp
+        LIBRARIES cpssim_gui_support
+        LABEL project
     )
 
     cpssim_add_catch_tests(

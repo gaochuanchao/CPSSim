@@ -472,6 +472,59 @@ ExperimentConfig parse_experiment_config(std::string_view json_text) {
     return parse_document(document);
 }
 
+/*** Serializes validated model values using the complete version-4 schema. ***/
+std::string serialize_experiment_config_json(const ExperimentConfig& config) {
+    const auto preemption = [&config] {
+        switch (config.scheduling().preemption_mode) {
+        case PreemptionMode::Preemptive:
+            return "preemptive";
+        case PreemptionMode::NonPreemptive:
+            return "non_preemptive";
+        }
+        throw std::logic_error{"unknown preemption mode"};
+    }();
+
+    Json resources = Json::array();
+    for (const auto& resource : config.resources()) {
+        resources.push_back(Json{{"id", resource.id().value()}, {"name", resource.name()}});
+    }
+
+    Json tasks = Json::array();
+    for (const auto& task : config.tasks()) {
+        tasks.push_back(Json{{"deadline_ticks", task.deadline()},
+                             {"id", task.id().value()},
+                             {"name", task.name()},
+                             {"offset_ticks", task.offset()},
+                             {"period_ticks", task.period()},
+                             {"priority", task.priority()}});
+    }
+
+    Json profiles = Json::array();
+    for (const auto& profile : config.task_resource_profiles()) {
+        profiles.push_back(Json{
+            {"execution_time", Json{{"kind", "deterministic"}, {"ticks", profile.execution_time}}},
+            {"resource_id", profile.resource_id.value()},
+            {"task_id", profile.task_id.value()}});
+    }
+
+    Json routes = Json::array();
+    for (const auto& route : config.message_routes()) {
+        routes.push_back(Json{{"delay_ticks", route.delay},
+                              {"destination_task_id", route.destination_task_id.value()},
+                              {"send_offset_ticks", route.send_offset},
+                              {"source_task_id", route.source_task_id.value()}});
+    }
+
+    const Json document{{"message_routes", std::move(routes)},
+                        {"resources", std::move(resources)},
+                        {"scheduling", Json{{"preemption", preemption}}},
+                        {"schema_version", 4},
+                        {"task_resource_profiles", std::move(profiles)},
+                        {"tasks", std::move(tasks)},
+                        {"tick_period_ns", config.tick_period().count()}};
+    return document.dump(2) + '\n';
+}
+
 /***
  * Opens and reads the complete file, reports I/O failures with its path, and
  * parses the resulting text through the same public validation boundary.
@@ -489,6 +542,19 @@ ExperimentConfig load_experiment_config(const std::filesystem::path& path) {
     }
 
     return parse_experiment_config(contents.str());
+}
+
+void save_experiment_config(const std::filesystem::path& path, const ExperimentConfig& config) {
+    const auto contents = serialize_experiment_config_json(config);
+    std::ofstream output{path, std::ios::trunc};
+    if (!output) {
+        throw std::runtime_error{"cannot open experiment configuration for writing: " +
+                                 path.string()};
+    }
+    output << contents;
+    if (!output) {
+        throw std::runtime_error{"cannot write experiment configuration: " + path.string()};
+    }
 }
 
 } // namespace cpssim
