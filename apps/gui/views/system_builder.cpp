@@ -213,7 +213,7 @@ void draw_task_overview(const EditableSystemDraft& draft) {
 
 void draw_task(EditableSystemDraft& draft, const SystemDraftBuildResult& validation,
                std::vector<DraftTaskAssignment>& assignments, StructuralSelection& selection,
-               SystemBuilderViewState& state) {
+               SystemBuilderViewState& state, bool protected_identity) {
     const auto index = task_index(draft, *selection.task_id());
     if (!index.has_value()) {
         return;
@@ -229,12 +229,15 @@ void draw_task(EditableSystemDraft& draft, const SystemDraftBuildResult& validat
     property_label("Name");
     auto name = text_buffer<256>(task.name);
     request_focus(state, SystemBuilderFocusTarget::TaskName);
+    ImGui::BeginDisabled(protected_identity);
     if (ImGui::InputText("##task-name", name.data(), name.size())) {
         draft.set_task_name(*index, name.data());
     }
+    ImGui::EndDisabled();
     draw_field_diagnostics(validation, SystemDraftEntityKind::Task, *index, SystemDraftField::Name);
     property_label("ID");
     auto id = task.id.value();
+    ImGui::BeginDisabled(protected_identity);
     if (ImGui::InputScalar("##task-id", ImGuiDataType_U64, &id)) {
         const auto assignment =
             std::find_if(assignments.begin(), assignments.end(),
@@ -245,6 +248,7 @@ void draw_task(EditableSystemDraft& draft, const SystemDraftBuildResult& validat
         draft.set_task_id(*index, TaskId{id});
         selection.select_task(TaskId{id});
     }
+    ImGui::EndDisabled();
     draw_field_diagnostics(validation, SystemDraftEntityKind::Task, *index, SystemDraftField::Id);
     const auto timing_input = [&](const char* label, const char* identity, Tick& value,
                                   SystemDraftField field) {
@@ -265,6 +269,12 @@ void draw_task(EditableSystemDraft& draft, const SystemDraftBuildResult& validat
     }
     draw_field_diagnostics(validation, SystemDraftEntityKind::Task, *index,
                            SystemDraftField::TaskPriority);
+    if (protected_identity) {
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(1);
+        ImGui::TextDisabled("This task identity is fixed by the Bosch FMU interface. Timing, "
+                            "execution profile, and allocation remain editable.");
+    }
     ImGui::EndTable();
 }
 
@@ -413,7 +423,8 @@ bool route_pair_used(const EditableSystemDraft& draft, DraftMessageRouteKey cand
 }
 
 void draw_route(EditableSystemDraft& draft, const SystemDraftBuildResult& validation,
-                StructuralSelection& selection, SystemBuilderViewState& state) {
+                StructuralSelection& selection, SystemBuilderViewState& state,
+                bool protected_endpoints) {
     const auto key = *selection.message_route();
     const auto index = route_index(draft, key);
     if (!index.has_value()) {
@@ -426,6 +437,7 @@ void draw_route(EditableSystemDraft& draft, const SystemDraftBuildResult& valida
     }
     property_label("Source task");
     request_focus(state, SystemBuilderFocusTarget::RouteSource);
+    ImGui::BeginDisabled(protected_endpoints);
     if (ImGui::BeginCombo("##route-source", task_label(draft, route.source_task_id).c_str())) {
         for (const auto& task : draft.tasks()) {
             const DraftMessageRouteKey candidate{task.id, edited_key.destination_task_id};
@@ -439,7 +451,9 @@ void draw_route(EditableSystemDraft& draft, const SystemDraftBuildResult& valida
         }
         ImGui::EndCombo();
     }
+    ImGui::EndDisabled();
     property_label("Destination task");
+    ImGui::BeginDisabled(protected_endpoints);
     if (ImGui::BeginCombo("##route-destination",
                           task_label(draft, route.destination_task_id).c_str())) {
         for (const auto& task : draft.tasks()) {
@@ -454,6 +468,7 @@ void draw_route(EditableSystemDraft& draft, const SystemDraftBuildResult& valida
         }
         ImGui::EndCombo();
     }
+    ImGui::EndDisabled();
     property_label("Send offset");
     ImGui::InputScalar("##send-offset", ImGuiDataType_S64, &route.send_offset);
     draw_field_diagnostics(validation, SystemDraftEntityKind::MessageRoute, *index,
@@ -465,6 +480,12 @@ void draw_route(EditableSystemDraft& draft, const SystemDraftBuildResult& valida
     if (route != draft.routes()[*index]) {
         draft.set_message_route(*index, route);
         selection.select_message_route(edited_key);
+    }
+    if (protected_endpoints) {
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(1);
+        ImGui::TextDisabled(
+            "Bosch network route endpoints are fixed; send offset and delay remain editable.");
     }
     ImGui::EndTable();
 }
@@ -485,7 +506,8 @@ void draw_validation(const SystemDraftBuildResult& validation) {
 void draw_system_builder(EditableSystemDraft& draft, const SystemDraftBuildResult& validation,
                          std::vector<DraftTaskAssignment>& assignments,
                          StructuralSelection& selection, bool editing_enabled,
-                         std::string_view project_name, SystemBuilderViewState& state) {
+                         ProjectSystemEditPolicy edit_policy, std::string_view project_name,
+                         SystemBuilderViewState& state) {
     ImGui::BeginDisabled(!editing_enabled);
     switch (selection.kind()) {
     case StructuralSelectionKind::System:
@@ -511,13 +533,15 @@ void draw_system_builder(EditableSystemDraft& draft, const SystemDraftBuildResul
         draw_resource(draft, validation, assignments, selection, state);
         break;
     case StructuralSelectionKind::Task:
-        draw_task(draft, validation, assignments, selection, state);
+        draw_task(draft, validation, assignments, selection, state,
+                  edit_policy == ProjectSystemEditPolicy::BoschCompatible);
         break;
     case StructuralSelectionKind::ExecutionProfile:
         draw_profile(draft, validation, selection, state);
         break;
     case StructuralSelectionKind::MessageRoute:
-        draw_route(draft, validation, selection, state);
+        draw_route(draft, validation, selection, state,
+                   edit_policy == ProjectSystemEditPolicy::BoschCompatible);
         break;
     }
     ImGui::EndDisabled();

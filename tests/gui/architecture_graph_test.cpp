@@ -245,4 +245,15 @@ TEST_CASE("architecture graph covers the initial large-graph interaction target"
     REQUIRE((graph == build_architecture_graph(experiment)));
 }
 
+TEST_CASE("functional dependencies are distinct presentation-only graph edges",
+          "[gui][architecture][functional]") {
+    const auto experiment = make_graph_presentation();
+    const std::vector<GuiFunctionalDependency> dependencies{{TaskId{1}, TaskId{2}, "data"}};
+    const auto graph = build_architecture_graph(experiment, dependencies);
+    REQUIRE(graph.edges.front().kind == GuiGraphEdgeKind::FunctionalDependency);
+    REQUIRE(graph.edges.front().functional_reference == dependencies.front());
+    REQUIRE(graph.edges.front().route_reference == std::nullopt);
+    REQUIRE(experiment.routes.size() == 1);
+}
+
 } // namespace

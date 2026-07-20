@@ -305,18 +305,25 @@ std::string serialize_project_workspace_json(const ProjectWorkspace& workspace) 
     const auto theme = workspace.theme == GuiTheme::Light ? "light" : "dark";
     const auto tab_name = [](GuiCenterTab tab) {
         switch (tab) {
-        case GuiCenterTab::Architecture: return "architecture";
-        case GuiCenterTab::Timeline: return "timeline";
-        case GuiCenterTab::Signals: return "signals";
-        case GuiCenterTab::Results: return "results";
-        case GuiCenterTab::Resources: return "resources";
-        case GuiCenterTab::Events: return "events";
+        case GuiCenterTab::Architecture:
+            return "architecture";
+        case GuiCenterTab::Timeline:
+            return "timeline";
+        case GuiCenterTab::Signals:
+            return "signals";
+        case GuiCenterTab::Results:
+            return "results";
+        case GuiCenterTab::Resources:
+            return "resources";
+        case GuiCenterTab::Events:
+            return "events";
         }
         return "architecture";
     };
     const auto tab_array = [&tab_name](const std::vector<GuiCenterTab>& tabs) {
         auto result = Json::array();
-        for (const auto tab : tabs) result.push_back(tab_name(tab));
+        for (const auto tab : tabs)
+            result.push_back(tab_name(tab));
         return result;
     };
     const auto event_type = [](EventType type) {
@@ -362,52 +369,65 @@ std::string serialize_project_workspace_json(const ProjectWorkspace& workspace) 
     }
     const auto& panels = workspace.panels;
     const auto& columns = workspace.event_columns;
-    const Json document{{"active_tabs", {{"upper", tab_name(workspace.active_upper_tab)},
-                                          {"lower", tab_name(workspace.active_lower_tab)}}},
-                        {"center_tabs", {{"upper", tab_array(workspace.upper_tabs)},
-                                         {"lower", tab_array(workspace.lower_tabs)}}},
-                        {"execution", {{"mode", workspace.run_mode == GuiRunMode::Fast ? "fast" : "live"},
-                                       {"batch_unit", workspace.fast_batch_unit == GuiFastBatchUnit::Ticks ? "ticks" : "events"},
-                                       {"event_batch_size", workspace.fast_event_batch_size},
-                                       {"tick_batch_size", workspace.fast_tick_batch_size}}},
-                        {"event_columns",
-                         {{"cause", columns.cause},
-                          {"job", columns.job},
-                          {"message", columns.message},
-                          {"phase", columns.phase},
-                          {"resource", columns.resource},
-                          {"sequence", columns.sequence},
-                          {"task", columns.task},
-                          {"tick", columns.tick},
-                          {"time", columns.time},
-                          {"type", columns.type},
-                          {"vehicle", columns.vehicle}}},
-                        {"event_filters", std::move(filters)},
-                        {"panels",
-                         {{"architecture", panels.architecture},
-                          {"events", panels.events},
-                          {"explorer", panels.explorer},
-                          {"inspector", panels.inspector},
-                          {"resources", panels.resources},
-                          {"results", panels.results},
-                          {"signals", panels.signals},
-                          {"system_builder", panels.system_builder},
-                          {"timeline", panels.timeline}}},
-                        {"schema_version", workspace.schema_version},
-                        {"selected_signals", std::move(signals)},
-                        {"splitters",
-                         {{"center", workspace.center_split_ratio},
-                          {"left_sidebar", workspace.left_sidebar_ratio},
-                          {"right_sidebar", workspace.right_sidebar_ratio}}},
-                        {"visualizer", {{"x_axis", workspace.plot_x_axis_unit == GuiPlotXAxisUnit::Seconds ? "seconds" : "ticks"},
-                                        {"range", workspace.plot_range_mode == GuiPlotRangeMode::Selected ? "selected" : workspace.plot_range_mode == GuiPlotRangeMode::Custom ? "custom" : "full"},
-                                        {"custom_begin", workspace.plot_custom_begin}, {"custom_end", workspace.plot_custom_end},
-                                        {"auto_y", workspace.plot_auto_y}, {"y_min", workspace.plot_y_min}, {"y_max", workspace.plot_y_max},
-                                        {"grid", workspace.plot_grid}, {"legend", workspace.plot_legend}, {"thickness", workspace.plot_line_thickness},
-                                        {"markers", workspace.plot_markers}, {"bosch_thresholds", workspace.plot_bosch_thresholds},
-                                        {"bosch_critical_sections", workspace.plot_bosch_critical_sections},
-                                        {"bosch_deadline_misses", workspace.plot_bosch_deadline_misses}, {"selected_tick", workspace.plot_selected_tick}}},
-                        {"theme", theme}};
+    const Json document{
+        {"active_tabs",
+         {{"upper", tab_name(workspace.active_upper_tab)},
+          {"lower", tab_name(workspace.active_lower_tab)}}},
+        {"center_tabs",
+         {{"upper", tab_array(workspace.upper_tabs)}, {"lower", tab_array(workspace.lower_tabs)}}},
+        {"execution",
+         {{"mode", workspace.run_mode == GuiRunMode::Fast ? "fast" : "live"},
+          {"batch_unit", workspace.fast_batch_unit == GuiFastBatchUnit::Ticks ? "ticks" : "events"},
+          {"event_batch_size", workspace.fast_event_batch_size},
+          {"tick_batch_size", workspace.fast_tick_batch_size}}},
+        {"event_columns",
+         {{"cause", columns.cause},
+          {"job", columns.job},
+          {"message", columns.message},
+          {"phase", columns.phase},
+          {"resource", columns.resource},
+          {"sequence", columns.sequence},
+          {"task", columns.task},
+          {"tick", columns.tick},
+          {"time", columns.time},
+          {"type", columns.type},
+          {"vehicle", columns.vehicle}}},
+        {"event_filters", std::move(filters)},
+        {"panels",
+         {{"architecture", panels.architecture},
+          {"events", panels.events},
+          {"explorer", panels.explorer},
+          {"inspector", panels.inspector},
+          {"resources", panels.resources},
+          {"results", panels.results},
+          {"signals", panels.signals},
+          {"system_builder", panels.system_builder},
+          {"timeline", panels.timeline}}},
+        {"schema_version", workspace.schema_version},
+        {"selected_signals", std::move(signals)},
+        {"splitters",
+         {{"center", workspace.center_split_ratio},
+          {"left_sidebar", workspace.left_sidebar_ratio},
+          {"right_sidebar", workspace.right_sidebar_ratio}}},
+        {"visualizer",
+         {{"x_axis", workspace.plot_x_axis_unit == GuiPlotXAxisUnit::Seconds ? "seconds" : "ticks"},
+          {"range", workspace.plot_range_mode == GuiPlotRangeMode::Selected ? "selected"
+                    : workspace.plot_range_mode == GuiPlotRangeMode::Custom ? "custom"
+                                                                            : "full"},
+          {"custom_begin", workspace.plot_custom_begin},
+          {"custom_end", workspace.plot_custom_end},
+          {"auto_y", workspace.plot_auto_y},
+          {"y_min", workspace.plot_y_min},
+          {"y_max", workspace.plot_y_max},
+          {"grid", workspace.plot_grid},
+          {"legend", workspace.plot_legend},
+          {"thickness", workspace.plot_line_thickness},
+          {"markers", workspace.plot_markers},
+          {"bosch_thresholds", workspace.plot_bosch_thresholds},
+          {"bosch_critical_sections", workspace.plot_bosch_critical_sections},
+          {"bosch_deadline_misses", workspace.plot_bosch_deadline_misses},
+          {"selected_tick", workspace.plot_selected_tick}}},
+        {"theme", theme}};
     return document.dump(2) + '\n';
 }
 
@@ -440,8 +460,8 @@ ProjectWorkspace parse_project_workspace_json(std::string_view json_text) {
     }
     require_only_fields(document,
                         {"schema_version", "theme", "panels", "splitters", "active_tabs",
-                         "center_tabs", "execution", "visualizer", "event_filters",
-                         "event_columns", "selected_signals"},
+                         "center_tabs", "execution", "visualizer", "event_filters", "event_columns",
+                         "selected_signals"},
                         "workspace $");
 
     ProjectWorkspace workspace;
@@ -474,70 +494,100 @@ ProjectWorkspace parse_project_workspace_json(std::string_view json_text) {
     }
     if (const auto found = document.find("splitters");
         found != document.end() && found->is_object()) {
-        require_only_fields(*found, {"left_sidebar", "right_sidebar", "analysis_lower",
-                                     "resources_events", "center"},
-                            "workspace $.splitters");
+        require_only_fields(
+            *found,
+            {"left_sidebar", "right_sidebar", "analysis_lower", "resources_events", "center"},
+            "workspace $.splitters");
         workspace.left_sidebar_ratio =
             read_optional_float(*found, "left_sidebar", workspace.left_sidebar_ratio);
         workspace.right_sidebar_ratio =
             read_optional_float(*found, "right_sidebar", workspace.right_sidebar_ratio);
         workspace.center_split_ratio = read_optional_float(
-            *found, "center", read_optional_float(*found, "analysis_lower", workspace.center_split_ratio));
+            *found, "center",
+            read_optional_float(*found, "analysis_lower", workspace.center_split_ratio));
     }
     if (const auto found = document.find("active_tabs");
         found != document.end() && found->is_object()) {
-        require_only_fields(*found, {"analysis", "resources", "upper", "lower"}, "workspace $.active_tabs");
+        require_only_fields(*found, {"analysis", "resources", "upper", "lower"},
+                            "workspace $.active_tabs");
         const auto parse_tab = [](const std::string& value) {
-            return value == "timeline" ? GuiCenterTab::Timeline : value == "signals" ? GuiCenterTab::Signals :
-                   value == "results" ? GuiCenterTab::Results : value == "resources" ? GuiCenterTab::Resources :
-                   value == "events" ? GuiCenterTab::Events : GuiCenterTab::Architecture;
+            return value == "timeline"    ? GuiCenterTab::Timeline
+                   : value == "signals"   ? GuiCenterTab::Signals
+                   : value == "results"   ? GuiCenterTab::Results
+                   : value == "resources" ? GuiCenterTab::Resources
+                   : value == "events"    ? GuiCenterTab::Events
+                                          : GuiCenterTab::Architecture;
         };
-        if (const auto upper = found->find("upper");
-            upper != found->end() && upper->is_string()) {
+        if (const auto upper = found->find("upper"); upper != found->end() && upper->is_string()) {
             workspace.active_upper_tab = parse_tab(upper->get<std::string>());
         } else if (const auto legacy = found->find("analysis");
                    legacy != found->end() && legacy->is_string()) {
             workspace.active_upper_tab = parse_tab(legacy->get<std::string>());
         }
-        if (const auto lower = found->find("lower");
-            lower != found->end() && lower->is_string()) {
+        if (const auto lower = found->find("lower"); lower != found->end() && lower->is_string()) {
             workspace.active_lower_tab = parse_tab(lower->get<std::string>());
         }
     }
     const auto parse_tab = [](const std::string& value) -> std::optional<GuiCenterTab> {
-        if (value == "architecture") return GuiCenterTab::Architecture;
-        if (value == "timeline") return GuiCenterTab::Timeline;
-        if (value == "signals") return GuiCenterTab::Signals;
-        if (value == "results") return GuiCenterTab::Results;
-        if (value == "resources") return GuiCenterTab::Resources;
-        if (value == "events") return GuiCenterTab::Events;
+        if (value == "architecture")
+            return GuiCenterTab::Architecture;
+        if (value == "timeline")
+            return GuiCenterTab::Timeline;
+        if (value == "signals")
+            return GuiCenterTab::Signals;
+        if (value == "results")
+            return GuiCenterTab::Results;
+        if (value == "resources")
+            return GuiCenterTab::Resources;
+        if (value == "events")
+            return GuiCenterTab::Events;
         return std::nullopt;
     };
-    if (const auto groups = document.find("center_tabs"); groups != document.end() && groups->is_object()) {
+    if (const auto groups = document.find("center_tabs");
+        groups != document.end() && groups->is_object()) {
         require_only_fields(*groups, {"upper", "lower"}, "workspace $.center_tabs");
         const auto load_group = [&parse_tab](const Json& value) {
             std::vector<GuiCenterTab> result;
-            if (!value.is_array()) return result;
-            for (const auto& item : value) if (item.is_string()) if (auto tab = parse_tab(item.get<std::string>()); tab.has_value()) result.push_back(*tab);
+            if (!value.is_array())
+                return result;
+            for (const auto& item : value)
+                if (item.is_string())
+                    if (auto tab = parse_tab(item.get<std::string>()); tab.has_value())
+                        result.push_back(*tab);
             return result;
         };
-        if (const auto value = groups->find("upper"); value != groups->end()) workspace.upper_tabs = load_group(*value);
-        if (const auto value = groups->find("lower"); value != groups->end()) workspace.lower_tabs = load_group(*value);
+        if (const auto value = groups->find("upper"); value != groups->end())
+            workspace.upper_tabs = load_group(*value);
+        if (const auto value = groups->find("lower"); value != groups->end())
+            workspace.lower_tabs = load_group(*value);
     }
-    if (const auto execution = document.find("execution"); execution != document.end() && execution->is_object()) {
-        require_only_fields(*execution, {"mode", "batch_unit", "event_batch_size", "tick_batch_size"}, "workspace $.execution");
-        if (const auto value = execution->find("mode"); value != execution->end() && value->is_string()) workspace.run_mode = value->get<std::string>() == "fast" ? GuiRunMode::Fast : GuiRunMode::Live;
-        if (const auto value = execution->find("batch_unit"); value != execution->end() && value->is_string()) workspace.fast_batch_unit = value->get<std::string>() == "ticks" ? GuiFastBatchUnit::Ticks : GuiFastBatchUnit::Events;
-        if (const auto value = execution->find("event_batch_size"); value != execution->end() && value->is_number_unsigned()) workspace.fast_event_batch_size = value->get<std::uint64_t>();
-        if (const auto value = execution->find("tick_batch_size"); value != execution->end() && value->is_number_unsigned()) workspace.fast_tick_batch_size = value->get<std::uint64_t>();
+    if (const auto execution = document.find("execution");
+        execution != document.end() && execution->is_object()) {
+        require_only_fields(*execution,
+                            {"mode", "batch_unit", "event_batch_size", "tick_batch_size"},
+                            "workspace $.execution");
+        if (const auto value = execution->find("mode");
+            value != execution->end() && value->is_string())
+            workspace.run_mode =
+                value->get<std::string>() == "fast" ? GuiRunMode::Fast : GuiRunMode::Live;
+        if (const auto value = execution->find("batch_unit");
+            value != execution->end() && value->is_string())
+            workspace.fast_batch_unit = value->get<std::string>() == "ticks"
+                                            ? GuiFastBatchUnit::Ticks
+                                            : GuiFastBatchUnit::Events;
+        if (const auto value = execution->find("event_batch_size");
+            value != execution->end() && value->is_number_unsigned())
+            workspace.fast_event_batch_size = value->get<std::uint64_t>();
+        if (const auto value = execution->find("tick_batch_size");
+            value != execution->end() && value->is_number_unsigned())
+            workspace.fast_tick_batch_size = value->get<std::uint64_t>();
     }
     if (const auto visualizer = document.find("visualizer");
         visualizer != document.end() && visualizer->is_object()) {
         require_only_fields(*visualizer,
-                            {"x_axis", "range", "custom_begin", "custom_end", "auto_y",
-                             "y_min", "y_max", "grid", "legend", "thickness", "markers",
-                             "bosch_thresholds", "bosch_critical_sections",
-                             "bosch_deadline_misses", "selected_tick"},
+                            {"x_axis", "range", "custom_begin", "custom_end", "auto_y", "y_min",
+                             "y_max", "grid", "legend", "thickness", "markers", "bosch_thresholds",
+                             "bosch_critical_sections", "bosch_deadline_misses", "selected_tick"},
                             "workspace $.visualizer");
         const auto text = [&visualizer](const char* name) -> std::optional<std::string> {
             const auto value = visualizer->find(name);
@@ -546,17 +596,16 @@ ProjectWorkspace parse_project_workspace_json(std::string_view json_text) {
                        : std::nullopt;
         };
         if (const auto value = text("x_axis"); value.has_value())
-            workspace.plot_x_axis_unit = *value == "seconds" ? GuiPlotXAxisUnit::Seconds
-                                                              : GuiPlotXAxisUnit::Ticks;
+            workspace.plot_x_axis_unit =
+                *value == "seconds" ? GuiPlotXAxisUnit::Seconds : GuiPlotXAxisUnit::Ticks;
         if (const auto value = text("range"); value.has_value())
             workspace.plot_range_mode = *value == "selected" ? GuiPlotRangeMode::Selected
                                         : *value == "custom" ? GuiPlotRangeMode::Custom
-                                                              : GuiPlotRangeMode::Full;
+                                                             : GuiPlotRangeMode::Full;
         const auto read_tick = [&visualizer](const char* name, Tick fallback) {
             const auto value = visualizer->find(name);
-            return value != visualizer->end() && value->is_number_integer()
-                       ? value->get<Tick>()
-                       : fallback;
+            return value != visualizer->end() && value->is_number_integer() ? value->get<Tick>()
+                                                                            : fallback;
         };
         workspace.plot_custom_begin = read_tick("custom_begin", workspace.plot_custom_begin);
         workspace.plot_custom_end = read_tick("custom_end", workspace.plot_custom_end);
@@ -564,17 +613,23 @@ ProjectWorkspace parse_project_workspace_json(std::string_view json_text) {
         workspace.plot_grid = read_optional_bool(*visualizer, "grid", workspace.plot_grid);
         workspace.plot_legend = read_optional_bool(*visualizer, "legend", workspace.plot_legend);
         workspace.plot_markers = read_optional_bool(*visualizer, "markers", workspace.plot_markers);
-        workspace.plot_bosch_thresholds = read_optional_bool(*visualizer, "bosch_thresholds", workspace.plot_bosch_thresholds);
-        workspace.plot_bosch_critical_sections = read_optional_bool(*visualizer, "bosch_critical_sections", workspace.plot_bosch_critical_sections);
-        workspace.plot_bosch_deadline_misses = read_optional_bool(*visualizer, "bosch_deadline_misses", workspace.plot_bosch_deadline_misses);
-        workspace.plot_selected_tick = read_optional_bool(*visualizer, "selected_tick", workspace.plot_selected_tick);
+        workspace.plot_bosch_thresholds =
+            read_optional_bool(*visualizer, "bosch_thresholds", workspace.plot_bosch_thresholds);
+        workspace.plot_bosch_critical_sections = read_optional_bool(
+            *visualizer, "bosch_critical_sections", workspace.plot_bosch_critical_sections);
+        workspace.plot_bosch_deadline_misses = read_optional_bool(
+            *visualizer, "bosch_deadline_misses", workspace.plot_bosch_deadline_misses);
+        workspace.plot_selected_tick =
+            read_optional_bool(*visualizer, "selected_tick", workspace.plot_selected_tick);
         const auto read_double = [&visualizer](const char* name, double fallback) {
             const auto value = visualizer->find(name);
-            return value != visualizer->end() && value->is_number() ? value->get<double>() : fallback;
+            return value != visualizer->end() && value->is_number() ? value->get<double>()
+                                                                    : fallback;
         };
         workspace.plot_y_min = read_double("y_min", workspace.plot_y_min);
         workspace.plot_y_max = read_double("y_max", workspace.plot_y_max);
-        workspace.plot_line_thickness = read_optional_float(*visualizer, "thickness", workspace.plot_line_thickness);
+        workspace.plot_line_thickness =
+            read_optional_float(*visualizer, "thickness", workspace.plot_line_thickness);
     }
     if (const auto found = document.find("event_filters");
         found != document.end() && found->is_object()) {

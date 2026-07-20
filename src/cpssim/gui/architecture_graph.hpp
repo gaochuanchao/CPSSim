@@ -25,8 +25,16 @@ enum class GuiGraphNodeKind {
 };
 
 enum class GuiGraphEdgeKind {
+    FunctionalDependency,
     MessageRoute,
     Assignment,
+};
+
+struct GuiFunctionalDependency {
+    TaskId source_task_id;
+    TaskId destination_task_id;
+    std::string label;
+    bool operator==(const GuiFunctionalDependency&) const = default;
 };
 
 /*** Identifies one graph node without depending on labels or vector positions. ***/
@@ -81,6 +89,7 @@ struct GuiGraphEdge {
     GuiGraphNodeId source;
     GuiGraphNodeId destination;
     std::optional<GuiRouteIdentity> route_reference;
+    std::optional<GuiFunctionalDependency> functional_reference;
     std::optional<GuiTaskAssignmentPresentation> assignment_reference;
 
     bool operator==(const GuiGraphEdge&) const = default;
@@ -99,7 +108,9 @@ GuiGraphNodeId task_graph_node_id(TaskId task_id);
 GuiGraphNodeId resource_graph_node_id(ResourceId resource_id);
 
 /*** Builds canonical nodes, relations, and cycle-safe logical layout. ***/
-GuiArchitectureGraph build_architecture_graph(const ExperimentPresentationSnapshot& experiment);
+GuiArchitectureGraph
+build_architecture_graph(const ExperimentPresentationSnapshot& experiment,
+                         const std::vector<GuiFunctionalDependency>& functional_dependencies = {});
 
 const GuiGraphNode* find_graph_node(const GuiArchitectureGraph& graph, GuiGraphNodeId node_id);
 

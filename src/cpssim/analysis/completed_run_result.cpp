@@ -14,8 +14,8 @@ bool CompletedRunResultCache::publish_finished(std::uint64_t generation,
     if (completed_.has_value() && completed_->run_generation == generation) {
         return false;
     }
-    auto result = std::make_shared<const RunResult>(
-        build_run_result(snapshot, std::move(scenario_kind)));
+    auto result =
+        std::make_shared<const RunResult>(build_run_result(snapshot, std::move(scenario_kind)));
     completed_ = CompletedRunResult{generation, std::move(result), performance};
     ++build_count_;
     return true;

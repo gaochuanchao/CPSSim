@@ -81,8 +81,8 @@ ticks or canonical event ordering.
 
 ### Explorer and System Builder
 
-Generic projects place **System Builder** directly below **Experiment
-Explorer**. Select System, a section, resource, task, execution profile, or
+Generic and Bosch-compatible projects place **System Builder** directly below
+**Experiment Explorer**. Select System, a section, resource, task, execution profile, or
 message route in Explorer to open its corresponding property form. All edits
 remain detached until **Apply and restart** succeeds.
 
@@ -100,8 +100,10 @@ remain detached until **Apply and restart** succeeds.
 Apply validates the canonical configuration and run plan, constructs the full
 replacement session, and swaps only on success. **Save Project** writes only
 the applied system. Open/close/replacement with pending changes prompts for
-Apply and save, Discard, or Cancel. Bosch systems remain read-only because
-Goal 2 does not introduce Bosch-specific model editing.
+Apply and save, Discard, or Cancel. Bosch systems protect FMU task identities
+and required route endpoints while allowing timing, resources, profiles,
+assignments, route timing, stop tick, and policy edits. Canonical fingerprints
+label the applied system as a reference baseline or modified Bosch experiment.
 
 Window and table placement use a separate optional `imgui.ini` in the project
 root. The tracked [`apps/gui/imgui.ini`](imgui.ini) is the fixed default and is
@@ -126,8 +128,9 @@ file. A project without `imgui.ini` always uses the fixed default.
 +------------------------------------------------------------------+
 ```
 
-The left and right sidebars, analysis/lower area, and Resources/Canonical
-Events stack have draggable horizontal splitters with minimum heights. Their
+The left and right sidebars and upper/lower center groups have draggable
+horizontal splitters with minimum heights. Right-click a center tab to move it
+between groups; **View → Reset Panel Arrangement** restores the defaults. Their
 normalized ratios and panel visibility persist in the project workspace. Use
 **View → Theme → Light/Dark** to change both the base ImGui style and window
 background. The same menu shows the current monitor scale and provides an
@@ -220,15 +223,15 @@ used only for drawing. Visual downsampling preserves visible endpoints and
 bucket extrema; it never changes full-resolution observations.
 
 The current plot uses one shared value axis. Unit-grouped axes remain future
-work. Selected signal identities persist in workspace schema 3.
+work. Selected signal identities persist in workspace schema 4.
 
 ### Results and export
 
-The **Results** tab derives generic job, deadline, preemption, response-time,
-message, and resource metrics from the detached run. Bosch projects also show
-lateral error with +/-0.2 m bounds, critical-section context, deadline-miss
-markers, and the control signals selected in Functional Signals. Plot clicks
-publish the same exact tick selection used by Timeline and Canonical Events.
+The **Results** tab is final-run analysis. Running and Paused states show only
+lightweight progress. The first Finished transition builds one cached immutable
+result with compact run, timing, task-response, and Bosch summaries. **Open
+Plot Visualizer** opens a non-modal ImPlot window with signal search, unit-aware
+lanes, zoom/pan, tick/second ranges, shared cursor selection, and Bosch overlays.
 
 Use **File → Export Run Results** to export the complete run or the inclusive
 time range currently selected in the workbench. Raw JSON/CSV is always written;
@@ -240,9 +243,8 @@ integer/large-workbook policies.
 
 ### Resources and canonical events
 
-Resources has **Resource State** and **Utilization** tabs. State rows show the
-running job, Ready jobs, busy/idle ticks, and directly derived utilization;
-labeled bars use the same resource selection. Canonical Events is a virtualized
+Resources is one table showing the running job, Ready jobs, busy/idle ticks,
+and inline labeled utilization with an exact observed-tick tooltip. Canonical Events is a virtualized
 column table in sequence order with type/task/resource/vehicle/text filters and
 optional columns. Selecting a row opens raw JSON and typed details in Runtime
 Inspector; selecting Cause navigates to its canonical predecessor.

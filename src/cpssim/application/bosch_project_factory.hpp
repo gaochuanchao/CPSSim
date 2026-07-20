@@ -8,7 +8,9 @@
 #pragma once
 
 #include "cpssim/application/project/project.hpp"
+#include "cpssim/application/project/system_edit_policy.hpp"
 #include "cpssim/conformance/bosch_reference.hpp"
+#include "cpssim/gui/architecture_graph.hpp"
 
 #include <filesystem>
 #include <optional>
@@ -36,5 +38,8 @@ ProjectRuntimeInputs resolve_bosch_project_runtime(const std::filesystem::path& 
                                                    const ProjectMetadata& metadata,
                                                    const std::filesystem::path& reference_root,
                                                    const std::filesystem::path& shared_library);
+
+BoschExperimentStatus bosch_experiment_status(const ProjectContext& project);
+std::vector<GuiFunctionalDependency> bosch_functional_dependencies();
 
 } // namespace cpssim

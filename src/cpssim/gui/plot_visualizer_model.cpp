@@ -19,7 +19,8 @@ std::vector<const GuiSignalSeries*> search_plot_signals(const GuiSignalModel& mo
     std::vector<const GuiSignalSeries*> result;
     for (const auto& series : model.series) {
         const auto haystack = lower(series.descriptor.path + " " + series.descriptor.display_name);
-        if (needle.empty() || haystack.find(needle) != std::string::npos) result.push_back(&series);
+        if (needle.empty() || haystack.find(needle) != std::string::npos)
+            result.push_back(&series);
     }
     return result;
 }
@@ -29,13 +30,16 @@ std::vector<GuiPlotLane> build_plot_lanes(const GuiSignalModel& model,
     std::vector<GuiPlotLane> lanes;
     for (const auto& id : selected) {
         const auto* series = find_signal_series(model, id);
-        if (series == nullptr) continue;
+        if (series == nullptr)
+            continue;
         const auto digital = id.scalar_type == GuiSignalScalarType::Boolean;
         const auto found = std::find_if(lanes.begin(), lanes.end(), [&](const auto& lane) {
             return lane.unit == series->descriptor.unit && lane.digital == digital;
         });
-        if (found == lanes.end()) lanes.push_back({series->descriptor.unit, digital, {series}});
-        else found->series.push_back(series);
+        if (found == lanes.end())
+            lanes.push_back({series->descriptor.unit, digital, {series}});
+        else
+            found->series.push_back(series);
     }
     return lanes;
 }
@@ -44,9 +48,11 @@ GuiPlotRange resolve_plot_range(const RunResult& result, GuiPlotRangeMode mode,
                                 const std::optional<GuiTickRange>& selected, Tick custom_begin,
                                 Tick custom_end) {
     if (mode == GuiPlotRangeMode::Selected && selected.has_value())
-        return {std::max<Tick>(0, selected->begin_tick), std::min(result.snapshot.current_tick, selected->end_tick)};
+        return {std::max<Tick>(0, selected->begin_tick),
+                std::min(result.snapshot.current_tick, selected->end_tick)};
     if (mode == GuiPlotRangeMode::Custom && custom_begin >= 0 && custom_end >= custom_begin)
-        return {std::min(custom_begin, result.snapshot.current_tick), std::min(custom_end, result.snapshot.current_tick)};
+        return {std::min(custom_begin, result.snapshot.current_tick),
+                std::min(custom_end, result.snapshot.current_tick)};
     return {0, result.snapshot.current_tick};
 }
 

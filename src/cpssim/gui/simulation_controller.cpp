@@ -11,10 +11,10 @@
 
 #include "cpssim/gui/simulation_controller.hpp"
 
-#include <stdexcept>
 #include <algorithm>
 #include <chrono>
 #include <limits>
+#include <stdexcept>
 #include <utility>
 
 namespace cpssim {
@@ -156,8 +156,8 @@ GuiControllerUpdateResult SimulationController::update(const GuiExecutionSetting
                     result.transitions >= settings.event_batch_size) {
                     break;
                 }
-                if (settings.batch_unit == GuiFastBatchUnit::Ticks &&
-                    result.transitions > 0 && engine_->current_tick() >= target_tick) {
+                if (settings.batch_unit == GuiFastBatchUnit::Ticks && result.transitions > 0 &&
+                    engine_->current_tick() >= target_tick) {
                     break;
                 }
                 if (std::chrono::steady_clock::now() - started >= settings.wall_clock_budget) {
@@ -187,8 +187,10 @@ RunPerformanceSummary SimulationController::performance_summary() const {
                                 ? last_execution_settings_.event_batch_size
                                 : last_execution_settings_.tick_batch_size;
     return {.wall_clock_duration = running_wall_time_,
-            .events_per_second = seconds > 0.0 ? static_cast<double>(progress_value.event_count) / seconds : 0.0,
-            .ticks_per_second = seconds > 0.0 ? static_cast<double>(progress_value.current_tick) / seconds : 0.0,
+            .events_per_second =
+                seconds > 0.0 ? static_cast<double>(progress_value.event_count) / seconds : 0.0,
+            .ticks_per_second =
+                seconds > 0.0 ? static_cast<double>(progress_value.current_tick) / seconds : 0.0,
             .mode = last_execution_settings_.mode,
             .batch_unit = last_execution_settings_.batch_unit,
             .batch_size = batch_size};

@@ -130,8 +130,8 @@ RunMetrics derive_run_metrics(const SimulationSnapshot& snapshot) {
             break;
         case EventType::DeadlineMiss:
             ++result.deadline_misses;
-            if (event.entities().task_id.has_value()) {
-                ++task_deadline_misses[*event.entities().task_id];
+            if (const auto task_id = event.entities().task_id; task_id.has_value()) {
+                ++task_deadline_misses[task_id.value()];
             }
             break;
         case EventType::JobPreempt:

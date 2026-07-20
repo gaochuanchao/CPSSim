@@ -63,7 +63,8 @@ The view files are deliberately small boundaries:
 | `signal_view` | typed functional series | selected series, time viewport, shared time selection |
 | `resource_view` | copied resource/runtime rows | shared selection |
 | `event_view` | canonical event rows | shared event/time selection |
-| `results_view` | shared generic metrics and optional Bosch plots | shared resource/time selection |
+| `results_view` | compact finish-only generic and Bosch summaries | completed-result actions only |
+| `plot_visualizer` | non-modal completed functional series and Bosch overlays | shared tick selection and workspace plot settings |
 
 ### Graphics-independent GUI support
 
@@ -113,10 +114,17 @@ poll native events
     -> submit drawing
 ```
 
-`session.update()` consumes queued commands before the snapshot is copied. If
-the state remains Running, the controller processes one complete logical event
-tick. VSync or a slow frame can change only how quickly a user sees progress;
-it cannot change the sequence of simulated ticks.
+`session.update()` consumes queued commands before presentation publication.
+Live mode processes one complete logical event tick. Fast mode cooperatively
+processes event- or tick-budgeted batches for at most about 25 ms before
+returning to the GUI. Both use the same engine step, so VSync and wall-clock
+batch guards cannot change the sequence of simulated ticks.
+
+Fast Running publishes lightweight progress while heavy views retain the last
+complete detached snapshot. Pause, Finish, Reset, and switching to Live publish
+a coherent snapshot. A generation-aware cache builds `RunResult` exactly once
+after Finish and never while Running or Paused; see
+[ADR-0024](../adr/0024-use-cooperative-fast-batches-and-completed-run-implot.md).
 
 GLFW can temporarily report a zero-sized framebuffer while a window is
 minimized or crosses monitors. The frame loop does not begin an ImGui frame in
@@ -164,7 +172,7 @@ Use this table before adding a field:
 | Explorer/System Builder structural identity | `StructuralSelection` |
 | Runtime entity and inclusive tick range | `GuiSelection` |
 | Derived graph/timeline/signal data | corresponding GUI-support builder/cache |
-| Immutable run result and generic metrics | `RunResult`, derived from `SimulationSnapshot` |
+| Immutable run result and generic metrics | finish-only `CompletedRunResultCache`, derived once from a complete `SimulationSnapshot` |
 | Atomic result-directory publication | `result_export` application service |
 | Default, staged, and project-specific Dear ImGui layout text | `GuiLayoutStore` |
 | Home/Workbench and optional active project/session | `GuiApplicationState` |
@@ -407,11 +415,13 @@ scaling.
 
 ## 11. Dependencies, threading, and persistence
 
-Dear ImGui and the header-only portable-file-dialog adapter are pinned and
-built only when `CPSSIM_BUILD_GUI=ON`. Platform APIs remain behind the
-project-owned `FileDialog` interface. A new graph or
-plotting dependency needs separate evidence, a reviewed version/hash, a GUI-only
-CMake boundary, and an ADR when it materially changes architecture.
+Dear ImGui, ImPlot, and the header-only portable-file-dialog adapter are pinned
+and built only when `CPSSIM_BUILD_GUI=ON`. Platform APIs remain behind the
+project-owned `FileDialog` interface. ImPlot is pinned to v1.0 commit
+`524f9fcd48d76c13fdf94c5ffbba8787a1ff7e39`; its MIT-licensed context is owned
+beside the Dear ImGui context, and its demo sources are not built. A new graph
+or plotting dependency needs separate evidence, a reviewed version/hash, a
+GUI-only CMake boundary, and an ADR when it materially changes architecture.
 
 The application and controller are currently single-threaded. A background
 simulation would add synchronization, cancellation, shutdown, FMU ownership,
@@ -426,8 +436,9 @@ Four persistence domains remain separate:
 4. GUI workspace and user preferences.
 
 Only experiment configuration and run plan affect simulation input. Workspace
-schema 2 persists theme, panel visibility, splitters, active tabs, event
-filters/columns, and selected signals. Schema 1 migrates to defaults. Unknown
+schema 4 persists theme, panel visibility, ordered upper/lower tabs, splitters,
+Fast pacing, visualizer preferences, event filters/columns, and selected
+signals. Schemas 1-3 migrate safely. Unknown
 fields and unsupported versions reject the optional workspace and report a
 fallback diagnostic; invalid known enum/ratio values use safe defaults. The
 separate recent-project preference file is also presentation-only.

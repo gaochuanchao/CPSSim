@@ -13,6 +13,7 @@ namespace cpssim::gui {
 struct PlotVisualizerViewState {
     std::array<char, 128> search{};
     bool initialized{false};
+    bool fit_requested{false};
 };
 
 void draw_plot_visualizer(bool& open, const CompletedRunResult* completed,

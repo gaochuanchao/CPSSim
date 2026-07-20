@@ -3,8 +3,8 @@
 #pragma once
 
 #include "cpssim/analysis/run_result.hpp"
-#include "cpssim/gui/workspace_state.hpp"
 #include "cpssim/gui/selection_model.hpp"
+#include "cpssim/gui/workspace_state.hpp"
 
 #include <string_view>
 

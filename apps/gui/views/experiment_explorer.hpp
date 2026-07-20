@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include "cpssim/application/project/system_edit_policy.hpp"
 #include "cpssim/gui/presentation_model.hpp"
 #include "cpssim/gui/system_builder_interaction.hpp"
 
@@ -24,6 +25,7 @@ void draw_experiment_explorer(const ExperimentPresentationSnapshot& applied,
                               std::vector<DraftTaskAssignment>& assignments,
                               StructuralSelection& selection,
                               SystemExplorerInteraction& interaction, bool editing_enabled,
+                              ProjectSystemEditPolicy edit_policy,
                               ExperimentExplorerViewState& state);
 
 } // namespace cpssim::gui

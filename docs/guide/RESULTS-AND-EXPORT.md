@@ -1,8 +1,9 @@
 # Results and Export
 
 CPSSim derives run results from one detached, immutable simulation snapshot.
-The Results tab and every exporter consume the same `RunResult` metrics and
-typed signal model; neither path adds report-only state to the simulator.
+After a run finishes, Results, Plot Visualizer, and every exporter consume the
+same generation-scoped immutable `RunResult`. No final result is built while
+Running or Paused, and no path adds report-only state to the simulator.
 
 ## Result directory
 
@@ -76,6 +77,6 @@ by typed signal identity, show the +/-0.2 m bounds, critical intervals,
 deadline-miss markers, and any already-selected control signals. Missing
 signals produce an explicit diagnostic.
 
-Workspace schema 3 adds Results panel visibility and the active Results tab.
-Schema 1 and 2 workspaces migrate to safe defaults. Runtime traces, metrics,
+Workspace schema 4 adds ordered center groups, Fast pacing, and visualizer
+settings. Schemas 1-3 migrate to safe defaults. Runtime traces, metrics,
 ticks, export dialogs, and run results are never persisted in `workspace.json`.

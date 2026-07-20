@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include "cpssim/application/project/system_edit_policy.hpp"
 #include "cpssim/gui/selection_model.hpp"
 #include "cpssim/gui/system_builder_interaction.hpp"
 
@@ -20,6 +21,7 @@ struct SystemBuilderViewState {
 void draw_system_builder(EditableSystemDraft& draft, const SystemDraftBuildResult& validation,
                          std::vector<DraftTaskAssignment>& assignments,
                          StructuralSelection& selection, bool editing_enabled,
-                         std::string_view project_name, SystemBuilderViewState& state);
+                         ProjectSystemEditPolicy edit_policy, std::string_view project_name,
+                         SystemBuilderViewState& state);
 
 } // namespace cpssim::gui

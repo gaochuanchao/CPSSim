@@ -48,10 +48,9 @@ void normalize_workspace_state(GuiWorkspaceState& workspace) noexcept {
     if (workspace.fast_tick_batch_size == 0) {
         workspace.fast_tick_batch_size = 1000;
     }
-    workspace.plot_line_thickness =
-        std::isfinite(workspace.plot_line_thickness)
-            ? std::clamp(workspace.plot_line_thickness, 0.5F, 8.0F)
-            : 1.5F;
+    workspace.plot_line_thickness = std::isfinite(workspace.plot_line_thickness)
+                                        ? std::clamp(workspace.plot_line_thickness, 0.5F, 8.0F)
+                                        : 1.5F;
     if (!std::isfinite(workspace.plot_y_min) || !std::isfinite(workspace.plot_y_max) ||
         workspace.plot_y_min >= workspace.plot_y_max) {
         workspace.plot_y_min = -1.0;
@@ -59,8 +58,8 @@ void normalize_workspace_state(GuiWorkspaceState& workspace) noexcept {
         workspace.plot_auto_y = true;
     }
     const std::array all_tabs{GuiCenterTab::Architecture, GuiCenterTab::Timeline,
-                              GuiCenterTab::Signals, GuiCenterTab::Results,
-                              GuiCenterTab::Resources, GuiCenterTab::Events};
+                              GuiCenterTab::Signals,      GuiCenterTab::Results,
+                              GuiCenterTab::Resources,    GuiCenterTab::Events};
     std::vector<GuiCenterTab> seen;
     auto normalize_group = [&seen](std::vector<GuiCenterTab>& group) {
         std::erase_if(group, [&seen](GuiCenterTab tab) {

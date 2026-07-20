@@ -304,6 +304,7 @@ void draw_experiment_explorer(const ExperimentPresentationSnapshot& applied,
                               std::vector<DraftTaskAssignment>& assignments,
                               StructuralSelection& selection,
                               SystemExplorerInteraction& interaction, bool editing_enabled,
+                              ProjectSystemEditPolicy edit_policy,
                               ExperimentExplorerViewState& state) {
     if (draft == nullptr) {
         draw_read_only_applied(applied, selection);
@@ -327,12 +328,13 @@ void draw_experiment_explorer(const ExperimentPresentationSnapshot& applied,
                                                 interaction, editing_enabled, state);
                          }
                      });
+        const auto bosch = edit_policy == ProjectSystemEditPolicy::BoschCompatible;
         draw_section("Tasks", StructuralSection::Tasks, "Add Task", *draft, selection, interaction,
-                     editing_enabled, state, [&] {
+                     editing_enabled && !bosch, state, [&] {
                          const auto rows = draft->tasks();
                          for (const auto& task : rows) {
                              draw_task_node(task, *draft, assignments, selection, interaction,
-                                            editing_enabled, state);
+                                            editing_enabled && !bosch, state);
                          }
                      });
         draw_section("Execution Profiles", StructuralSection::ExecutionProfiles,
@@ -345,11 +347,11 @@ void draw_experiment_explorer(const ExperimentPresentationSnapshot& applied,
                          }
                      });
         draw_section("Message Routes", StructuralSection::MessageRoutes, "Add Message Route",
-                     *draft, selection, interaction, editing_enabled, state, [&] {
+                     *draft, selection, interaction, editing_enabled && !bosch, state, [&] {
                          const auto rows = draft->routes();
                          for (const auto& route : rows) {
                              draw_route_node(route, *draft, assignments, selection, interaction,
-                                             editing_enabled, state);
+                                             editing_enabled && !bosch, state);
                          }
                      });
         ImGui::TreePop();

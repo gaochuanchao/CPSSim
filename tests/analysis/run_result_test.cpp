@@ -1,7 +1,7 @@
 /*** Verify immutable generic run-result derivation and range projection. ***/
 
-#include "cpssim/analysis/run_result.hpp"
 #include "cpssim/analysis/completed_run_result.hpp"
+#include "cpssim/analysis/run_result.hpp"
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>

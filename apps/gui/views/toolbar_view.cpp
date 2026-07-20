@@ -9,9 +9,9 @@
 
 #include "imgui.h"
 
-#include <stdexcept>
 #include <algorithm>
 #include <cstdint>
+#include <stdexcept>
 
 namespace cpssim::gui {
 namespace {
@@ -81,17 +81,22 @@ void draw_toolbar(GuiSimulationSession& session, const SimulationProgress& progr
     ImGui::SetNextItemWidth(6.5F * ImGui::GetFontSize());
     const auto mode_preview = workspace.run_mode == GuiRunMode::Live ? "Live" : "Fast";
     if (ImGui::BeginCombo("Run mode", mode_preview)) {
-        if (ImGui::Selectable("Live", workspace.run_mode == GuiRunMode::Live)) workspace.run_mode = GuiRunMode::Live;
-        if (ImGui::Selectable("Fast", workspace.run_mode == GuiRunMode::Fast)) workspace.run_mode = GuiRunMode::Fast;
+        if (ImGui::Selectable("Live", workspace.run_mode == GuiRunMode::Live))
+            workspace.run_mode = GuiRunMode::Live;
+        if (ImGui::Selectable("Fast", workspace.run_mode == GuiRunMode::Fast))
+            workspace.run_mode = GuiRunMode::Fast;
         ImGui::EndCombo();
     }
     if (workspace.run_mode == GuiRunMode::Fast) {
         ImGui::SameLine();
         ImGui::SetNextItemWidth(6.5F * ImGui::GetFontSize());
-        const auto unit_preview = workspace.fast_batch_unit == GuiFastBatchUnit::Events ? "Events" : "Ticks";
+        const auto unit_preview =
+            workspace.fast_batch_unit == GuiFastBatchUnit::Events ? "Events" : "Ticks";
         if (ImGui::BeginCombo("Batch unit", unit_preview)) {
-            if (ImGui::Selectable("Events", workspace.fast_batch_unit == GuiFastBatchUnit::Events)) workspace.fast_batch_unit = GuiFastBatchUnit::Events;
-            if (ImGui::Selectable("Ticks", workspace.fast_batch_unit == GuiFastBatchUnit::Ticks)) workspace.fast_batch_unit = GuiFastBatchUnit::Ticks;
+            if (ImGui::Selectable("Events", workspace.fast_batch_unit == GuiFastBatchUnit::Events))
+                workspace.fast_batch_unit = GuiFastBatchUnit::Events;
+            if (ImGui::Selectable("Ticks", workspace.fast_batch_unit == GuiFastBatchUnit::Ticks))
+                workspace.fast_batch_unit = GuiFastBatchUnit::Ticks;
             ImGui::EndCombo();
         }
         ImGui::SameLine();

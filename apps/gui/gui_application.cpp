@@ -13,9 +13,9 @@
 #include "views/event_view.hpp"
 #include "views/experiment_explorer.hpp"
 #include "views/inspector_view.hpp"
+#include "views/plot_visualizer.hpp"
 #include "views/resource_view.hpp"
 #include "views/results_view.hpp"
-#include "views/plot_visualizer.hpp"
 #include "views/run_plan_editor.hpp"
 #include "views/signal_view.hpp"
 #include "views/system_builder.hpp"
@@ -224,6 +224,8 @@ void GuiApplication::load_workspace_state() {
     signal_view_state_.selection_initialized = !workspace_state_.selected_signals.empty();
     event_view_state_.filter_initialized = false;
     results_view_state_ = {};
+    plot_visualizer_view_state_ = {};
+    open_plot_visualizer_ = false;
     restore_center_tabs_ = true;
 }
 
@@ -242,7 +244,8 @@ void GuiApplication::initialize_system_draft() {
     system_builder_view_state_ = {};
     explorer_view_state_ = {};
     if (application_state_.has_active_project() &&
-        application_state_.active_project().metadata().scenario_kind == "generic") {
+        project_system_edit_policy(application_state_.active_project().metadata()) !=
+            ProjectSystemEditPolicy::ReadOnlyAdapter) {
         system_draft_.emplace(application_state_.active_session().config());
         system_validation_ = system_draft_->build();
         if (const auto* plan = application_state_.active_session().active_plan(); plan != nullptr) {
@@ -397,13 +400,15 @@ void GuiApplication::clear_session() {
 void GuiApplication::update_active_session() {
     if (application_state_.has_active_session()) {
         auto& session = application_state_.active_session();
-        const auto settings = GuiExecutionSettings{.mode = workspace_state_.run_mode,
-                                                   .batch_unit = workspace_state_.fast_batch_unit,
-                                                   .event_batch_size = workspace_state_.fast_event_batch_size,
-                                                   .tick_batch_size = workspace_state_.fast_tick_batch_size};
+        const auto settings =
+            GuiExecutionSettings{.mode = workspace_state_.run_mode,
+                                 .batch_unit = workspace_state_.fast_batch_unit,
+                                 .event_batch_size = workspace_state_.fast_event_batch_size,
+                                 .tick_batch_size = workspace_state_.fast_tick_batch_size};
         const auto update = session.update(settings);
         progress_ = session.progress();
-        const auto switched_to_live = last_run_mode_ == GuiRunMode::Fast && workspace_state_.run_mode == GuiRunMode::Live;
+        const auto switched_to_live =
+            last_run_mode_ == GuiRunMode::Fast && workspace_state_.run_mode == GuiRunMode::Live;
         if (workspace_state_.run_mode == GuiRunMode::Live || update.paused || update.finished ||
             update.reset || switched_to_live || !presentation_snapshot_.has_value()) {
             presentation_snapshot_ = session.snapshot();
@@ -415,9 +420,9 @@ void GuiApplication::update_active_session() {
             const auto scenario = application_state_.has_active_project()
                                       ? application_state_.active_project().metadata().scenario_kind
                                       : std::string{"generic"};
-            static_cast<void>(completed_results_.publish_finished(
-                session.run_generation(), *presentation_snapshot_, scenario,
-                session.performance_summary()));
+            static_cast<void>(completed_results_.publish_finished(session.run_generation(),
+                                                                  *presentation_snapshot_, scenario,
+                                                                  session.performance_summary()));
         }
         last_run_mode_ = workspace_state_.run_mode;
     }
@@ -649,6 +654,9 @@ void GuiApplication::open_project_dialog() {
         initialize_system_draft();
         structural_selection_.select_system();
         runtime_selection_.clear();
+        presentation_snapshot_ = application_state_.active_session().snapshot();
+        progress_ = application_state_.active_session().progress();
+        last_run_mode_ = workspace_state_.run_mode;
         set_status("Opened project '" + application_state_.active_project().metadata().name + "'.",
                    false);
         record_active_project();
@@ -1099,182 +1107,21 @@ void GuiApplication::draw_about_dialog() {
 
 /*** Draws G04/G05 analysis tabs plus the existing runtime/event stack. ***/
 void GuiApplication::draw_center_panels(const SimulationSnapshot& snapshot) {
-#if 0
-    auto& session = application_state_.active_session();
-    auto available_height = ImGui::GetContentRegionAvail().y;
-    if (workspace_state_.panels.architecture || workspace_state_.panels.timeline ||
-        workspace_state_.panels.signals || workspace_state_.panels.results) {
-        const auto has_lower_panel =
-            workspace_state_.panels.resources || workspace_state_.panels.events;
-        auto analysis_height = 0.0F;
-        if (has_lower_panel) {
-            const auto splitter_height = horizontal_splitter_height();
-            const auto split = calculate_vertical_split(
-                available_height, splitter_height, workspace_state_.analysis_lower_ratio,
-                7.0F * ImGui::GetTextLineHeightWithSpacing(),
-                7.0F * ImGui::GetTextLineHeightWithSpacing());
-            workspace_state_.analysis_lower_ratio = split.normalized_ratio;
-            analysis_height = split.first_height;
-        }
-        ImGui::BeginChild("Analysis panel", ImVec2{0.0F, analysis_height}, ImGuiChildFlags_Borders);
-        if (ImGui::BeginTabBar("Analysis views")) {
-            const auto architecture_flags =
-                restore_analysis_tab_ &&
-                        workspace_state_.active_analysis_tab == GuiAnalysisTab::Architecture
-                    ? ImGuiTabItemFlags_SetSelected
-                    : ImGuiTabItemFlags_None;
-            if (workspace_state_.panels.architecture &&
-                ImGui::BeginTabItem("Architecture", nullptr, architecture_flags)) {
-                workspace_state_.active_analysis_tab = GuiAnalysisTab::Architecture;
-                auto previewing = false;
-                const auto* experiment = &snapshot.experiment;
-                std::optional<ExperimentPresentationSnapshot> preview;
-                if (system_changes_dirty()) {
-                    system_validation_ = system_draft_->build();
-                    if (system_validation_.valid()) {
-                        const auto* active_plan = session.active_plan();
-                        auto preview_request = RunPlanRequest{
-                            .stop_tick = active_plan != nullptr ? active_plan->stop_tick() : 0,
-                            .policy_kind = active_plan != nullptr
-                                               ? active_plan->policy_kind()
-                                               : SchedulingPolicyKind::FixedPriority,
-                            .assignments = {}};
-                        for (const auto& assignment : system_run_assignments_) {
-                            if (assignment.resource_id.has_value()) {
-                                preview_request.assignments.push_back(
-                                    {.task_id = assignment.task_id,
-                                     .resource_id = *assignment.resource_id});
-                            }
-                        }
-                        const auto preview_plan =
-                            build_run_plan(*system_validation_.config, preview_request);
-                        preview =
-                            preview_plan.valid()
-                                ? build_experiment_presentation(*system_validation_.config,
-                                                                preview_plan.plan->assignments())
-                                : build_experiment_presentation(*system_validation_.config);
-                        experiment = &*preview;
-                        previewing = true;
-                        ImGui::TextColored(ImVec4{1.0F, 0.75F, 0.3F, 1.0F},
-                                           "Previewing unapplied system changes");
-                    } else {
-                        ImGui::TextDisabled(
-                            "The active architecture is shown until the system draft is valid.");
-                    }
-                }
-                const auto graph = build_architecture_graph(*experiment);
-                if (draw_architecture_view(graph, session, *experiment, runtime_selection_,
-                                           architecture_view_state_, previewing)) {
-                    workspace_state_.panels.inspector = true;
-                }
-                ImGui::EndTabItem();
-            }
-            const auto timeline_flags =
-                restore_analysis_tab_ &&
-                        workspace_state_.active_analysis_tab == GuiAnalysisTab::Timeline
-                    ? ImGuiTabItemFlags_SetSelected
-                    : ImGuiTabItemFlags_None;
-            if (workspace_state_.panels.timeline &&
-                ImGui::BeginTabItem("Scheduling timeline", nullptr, timeline_flags)) {
-                workspace_state_.active_analysis_tab = GuiAnalysisTab::Timeline;
-                if (draw_timeline_view(snapshot, runtime_selection_, timeline_view_state_)) {
-                    workspace_state_.panels.inspector = true;
-                }
-                ImGui::EndTabItem();
-            }
-            const auto signals_flags =
-                restore_analysis_tab_ &&
-                        workspace_state_.active_analysis_tab == GuiAnalysisTab::Signals
-                    ? ImGuiTabItemFlags_SetSelected
-                    : ImGuiTabItemFlags_None;
-            if (workspace_state_.panels.signals &&
-                ImGui::BeginTabItem("Functional signals", nullptr, signals_flags)) {
-                workspace_state_.active_analysis_tab = GuiAnalysisTab::Signals;
-                draw_signal_view(snapshot, runtime_selection_, signal_view_state_);
-                ImGui::EndTabItem();
-            }
-            const auto results_flags =
-                restore_analysis_tab_ &&
-                        workspace_state_.active_analysis_tab == GuiAnalysisTab::Results
-                    ? ImGuiTabItemFlags_SetSelected
-                    : ImGuiTabItemFlags_None;
-            if (workspace_state_.panels.results &&
-                ImGui::BeginTabItem("Results", nullptr, results_flags)) {
-                workspace_state_.active_analysis_tab = GuiAnalysisTab::Results;
-                const auto scenario_kind =
-                    application_state_.has_active_project()
-                        ? application_state_.active_project().metadata().scenario_kind
-                        : std::string{"generic"};
-                draw_results_view(snapshot, std::move(scenario_kind),
-                                  signal_view_state_.selected_signals, runtime_selection_,
-                                  results_view_state_);
-                ImGui::EndTabItem();
-            }
-            ImGui::EndTabBar();
-            restore_analysis_tab_ = false;
-        }
-        ImGui::EndChild();
-        if (!has_lower_panel) {
-            return;
-        }
-        const auto splitter_height = horizontal_splitter_height();
-        draw_horizontal_splitter("Analysis lower splitter", available_height, splitter_height,
-                                 workspace_state_.analysis_lower_ratio);
-        available_height = ImGui::GetContentRegionAvail().y;
-    }
-
-    if (workspace_state_.panels.resources && workspace_state_.panels.events) {
-        const auto splitter_height = horizontal_splitter_height();
-        const auto split = calculate_vertical_split(available_height, splitter_height,
-                                                    workspace_state_.resources_events_ratio,
-                                                    4.0F * ImGui::GetTextLineHeightWithSpacing(),
-                                                    4.0F * ImGui::GetTextLineHeightWithSpacing());
-        workspace_state_.resources_events_ratio = split.normalized_ratio;
-        const auto resource_height = split.first_height;
-        ImGui::BeginChild("Resource panel", ImVec2{0.0F, resource_height}, ImGuiChildFlags_Borders);
-        ImGui::TextUnformatted("Resources");
-        ImGui::Separator();
-        draw_resource_view(snapshot, runtime_selection_, workspace_state_.active_resource_tab,
-                           resource_view_state_);
-        ImGui::EndChild();
-
-        draw_horizontal_splitter("Resources events splitter", available_height, splitter_height,
-                                 workspace_state_.resources_events_ratio);
-
-        ImGui::BeginChild("Event panel", ImVec2{0.0F, 0.0F}, ImGuiChildFlags_Borders);
-        ImGui::TextUnformatted("Canonical events");
-        ImGui::Separator();
-        draw_event_view(snapshot, runtime_selection_, workspace_state_.event_filters,
-                        workspace_state_.event_columns, event_view_state_);
-        ImGui::EndChild();
-    } else if (workspace_state_.panels.resources) {
-        ImGui::BeginChild("Resource panel", ImVec2{0.0F, 0.0F}, ImGuiChildFlags_Borders);
-        ImGui::TextUnformatted("Resources");
-        ImGui::Separator();
-        draw_resource_view(snapshot, runtime_selection_, workspace_state_.active_resource_tab,
-                           resource_view_state_);
-        ImGui::EndChild();
-    } else if (workspace_state_.panels.events) {
-        ImGui::BeginChild("Event panel", ImVec2{0.0F, 0.0F}, ImGuiChildFlags_Borders);
-        ImGui::TextUnformatted("Canonical events");
-        ImGui::Separator();
-        draw_event_view(snapshot, runtime_selection_, workspace_state_.event_filters,
-                        workspace_state_.event_columns, event_view_state_);
-        ImGui::EndChild();
-    } else {
-        ImGui::TextDisabled("No panels are visible. Use the View menu to restore a panel.");
-    }
-    // Goal 3 fixed analysis/resource stack retained in history only.
-#endif
     auto& session = application_state_.active_session();
     const auto visible = [this](GuiCenterTab tab) {
         switch (tab) {
-        case GuiCenterTab::Architecture: return workspace_state_.panels.architecture;
-        case GuiCenterTab::Timeline: return workspace_state_.panels.timeline;
-        case GuiCenterTab::Signals: return workspace_state_.panels.signals;
-        case GuiCenterTab::Results: return workspace_state_.panels.results;
-        case GuiCenterTab::Resources: return workspace_state_.panels.resources;
-        case GuiCenterTab::Events: return workspace_state_.panels.events;
+        case GuiCenterTab::Architecture:
+            return workspace_state_.panels.architecture;
+        case GuiCenterTab::Timeline:
+            return workspace_state_.panels.timeline;
+        case GuiCenterTab::Signals:
+            return workspace_state_.panels.signals;
+        case GuiCenterTab::Results:
+            return workspace_state_.panels.results;
+        case GuiCenterTab::Resources:
+            return workspace_state_.panels.resources;
+        case GuiCenterTab::Events:
+            return workspace_state_.panels.events;
         }
         return false;
     };
@@ -1283,12 +1130,18 @@ void GuiApplication::draw_center_panels(const SimulationSnapshot& snapshot) {
     };
     const auto label = [](GuiCenterTab tab) {
         switch (tab) {
-        case GuiCenterTab::Architecture: return "Architecture";
-        case GuiCenterTab::Timeline: return "Scheduling Timeline";
-        case GuiCenterTab::Signals: return "Functional Signals";
-        case GuiCenterTab::Results: return "Results";
-        case GuiCenterTab::Resources: return "Resources";
-        case GuiCenterTab::Events: return "Canonical Events";
+        case GuiCenterTab::Architecture:
+            return "Architecture";
+        case GuiCenterTab::Timeline:
+            return "Scheduling Timeline";
+        case GuiCenterTab::Signals:
+            return "Functional Signals";
+        case GuiCenterTab::Results:
+            return "Results";
+        case GuiCenterTab::Resources:
+            return "Resources";
+        case GuiCenterTab::Events:
+            return "Canonical Events";
         }
         return "Unknown";
     };
@@ -1302,28 +1155,44 @@ void GuiApplication::draw_center_panels(const SimulationSnapshot& snapshot) {
                 system_validation_ = system_draft_->build();
                 if (system_validation_.valid()) {
                     const auto* active_plan = session.active_plan();
-                    auto request = RunPlanRequest{.stop_tick = active_plan != nullptr ? active_plan->stop_tick() : 0,
-                                                  .policy_kind = active_plan != nullptr ? active_plan->policy_kind() : SchedulingPolicyKind::FixedPriority,
-                                                  .assignments = {}};
+                    auto request = RunPlanRequest{
+                        .stop_tick = active_plan != nullptr ? active_plan->stop_tick() : 0,
+                        .policy_kind = active_plan != nullptr ? active_plan->policy_kind()
+                                                              : SchedulingPolicyKind::FixedPriority,
+                        .assignments = {}};
                     for (const auto& assignment : system_run_assignments_) {
-                        if (assignment.resource_id.has_value()) request.assignments.push_back({assignment.task_id, *assignment.resource_id});
+                        if (assignment.resource_id.has_value())
+                            request.assignments.push_back(
+                                {assignment.task_id, *assignment.resource_id});
                     }
                     const auto plan = build_run_plan(*system_validation_.config, request);
-                    preview = plan.valid() ? build_experiment_presentation(*system_validation_.config, plan.plan->assignments())
-                                           : build_experiment_presentation(*system_validation_.config);
+                    preview = plan.valid()
+                                  ? build_experiment_presentation(*system_validation_.config,
+                                                                  plan.plan->assignments())
+                                  : build_experiment_presentation(*system_validation_.config);
                     experiment = &*preview;
                     previewing = true;
-                    ImGui::TextColored(ImVec4{1.0F, 0.75F, 0.3F, 1.0F}, "Previewing unapplied system changes");
+                    ImGui::TextColored(ImVec4{1.0F, 0.75F, 0.3F, 1.0F},
+                                       "Previewing unapplied system changes");
                 } else {
-                    ImGui::TextDisabled("The active architecture is shown until the system draft is valid.");
+                    ImGui::TextDisabled(
+                        "The active architecture is shown until the system draft is valid.");
                 }
             }
-            const auto graph = build_architecture_graph(*experiment);
-            if (draw_architecture_view(graph, session, *experiment, runtime_selection_, architecture_view_state_, previewing)) workspace_state_.panels.inspector = true;
+            const auto functional_dependencies =
+                application_state_.has_active_project() &&
+                        application_state_.active_project().metadata().scenario_kind == "bosch"
+                    ? bosch_functional_dependencies()
+                    : std::vector<GuiFunctionalDependency>{};
+            const auto graph = build_architecture_graph(*experiment, functional_dependencies);
+            if (draw_architecture_view(graph, session, *experiment, runtime_selection_,
+                                       architecture_view_state_, previewing))
+                workspace_state_.panels.inspector = true;
             break;
         }
         case GuiCenterTab::Timeline:
-            if (draw_timeline_view(snapshot, runtime_selection_, timeline_view_state_)) workspace_state_.panels.inspector = true;
+            if (draw_timeline_view(snapshot, runtime_selection_, timeline_view_state_))
+                workspace_state_.panels.inspector = true;
             break;
         case GuiCenterTab::Signals:
             draw_signal_view(snapshot, runtime_selection_, signal_view_state_);
@@ -1337,16 +1206,20 @@ void GuiApplication::draw_center_panels(const SimulationSnapshot& snapshot) {
             draw_resource_view(snapshot, runtime_selection_);
             break;
         case GuiCenterTab::Events:
-            draw_event_view(snapshot, runtime_selection_, workspace_state_.event_filters, workspace_state_.event_columns, event_view_state_);
+            draw_event_view(snapshot, runtime_selection_, workspace_state_.event_filters,
+                            workspace_state_.event_columns, event_view_state_);
             break;
         }
     };
     const auto draw_group = [&](const char* identity, const std::vector<GuiCenterTab>& tabs,
                                 GuiCenterTab& active, bool upper) {
-        if (!ImGui::BeginTabBar(identity, ImGuiTabBarFlags_Reorderable)) return;
+        if (!ImGui::BeginTabBar(identity, ImGuiTabBarFlags_Reorderable))
+            return;
         for (const auto tab : tabs) {
-            if (!visible(tab)) continue;
-            const auto flags = restore_center_tabs_ && active == tab ? ImGuiTabItemFlags_SetSelected : ImGuiTabItemFlags_None;
+            if (!visible(tab))
+                continue;
+            const auto flags = restore_center_tabs_ && active == tab ? ImGuiTabItemFlags_SetSelected
+                                                                     : ImGuiTabItemFlags_None;
             const auto opened = ImGui::BeginTabItem(label(tab), nullptr, flags);
             ImGui::PushID(static_cast<int>(tab));
             if (ImGui::BeginPopupContextItem("Center tab menu")) {
@@ -1372,24 +1245,30 @@ void GuiApplication::draw_center_panels(const SimulationSnapshot& snapshot) {
     if (upper_visible && lower_visible) {
         const auto splitter_height = horizontal_splitter_height();
         const auto split = calculate_vertical_split(available_height, splitter_height,
-                                                     workspace_state_.center_split_ratio,
-                                                     7.0F * ImGui::GetTextLineHeightWithSpacing(),
-                                                     7.0F * ImGui::GetTextLineHeightWithSpacing());
+                                                    workspace_state_.center_split_ratio,
+                                                    7.0F * ImGui::GetTextLineHeightWithSpacing(),
+                                                    7.0F * ImGui::GetTextLineHeightWithSpacing());
         workspace_state_.center_split_ratio = split.normalized_ratio;
-        ImGui::BeginChild("Upper center panel", ImVec2{0.0F, split.first_height}, ImGuiChildFlags_Borders);
-        draw_group("Upper center tabs", workspace_state_.upper_tabs, workspace_state_.active_upper_tab, true);
+        ImGui::BeginChild("Upper center panel", ImVec2{0.0F, split.first_height},
+                          ImGuiChildFlags_Borders);
+        draw_group("Upper center tabs", workspace_state_.upper_tabs,
+                   workspace_state_.active_upper_tab, true);
         ImGui::EndChild();
-        draw_horizontal_splitter("Center panel splitter", available_height, splitter_height, workspace_state_.center_split_ratio);
+        draw_horizontal_splitter("Center panel splitter", available_height, splitter_height,
+                                 workspace_state_.center_split_ratio);
         ImGui::BeginChild("Lower center panel", ImVec2{0.0F, 0.0F}, ImGuiChildFlags_Borders);
-        draw_group("Lower center tabs", workspace_state_.lower_tabs, workspace_state_.active_lower_tab, false);
+        draw_group("Lower center tabs", workspace_state_.lower_tabs,
+                   workspace_state_.active_lower_tab, false);
         ImGui::EndChild();
     } else if (upper_visible) {
         ImGui::BeginChild("Upper center panel", ImVec2{0.0F, 0.0F}, ImGuiChildFlags_Borders);
-        draw_group("Upper center tabs", workspace_state_.upper_tabs, workspace_state_.active_upper_tab, true);
+        draw_group("Upper center tabs", workspace_state_.upper_tabs,
+                   workspace_state_.active_upper_tab, true);
         ImGui::EndChild();
     } else if (lower_visible) {
         ImGui::BeginChild("Lower center panel", ImVec2{0.0F, 0.0F}, ImGuiChildFlags_Borders);
-        draw_group("Lower center tabs", workspace_state_.lower_tabs, workspace_state_.active_lower_tab, false);
+        draw_group("Lower center tabs", workspace_state_.lower_tabs,
+                   workspace_state_.active_lower_tab, false);
         ImGui::EndChild();
     } else {
         ImGui::TextDisabled("No center panels are visible. Use View to restore a panel.");
@@ -1406,13 +1285,29 @@ void GuiApplication::draw_left_sidebar(const SimulationSnapshot& snapshot) {
         draw_experiment_explorer(
             snapshot.experiment, system_draft_.has_value() ? &*system_draft_ : nullptr,
             system_run_assignments_, structural_selection_, system_explorer_interaction_,
-            application_state_.active_session().draft_editable(), explorer_view_state_);
+            application_state_.active_session().draft_editable(),
+            application_state_.has_active_project()
+                ? project_system_edit_policy(application_state_.active_project().metadata())
+                : ProjectSystemEditPolicy::Generic,
+            explorer_view_state_);
         ImGui::EndChild();
     };
     const auto draw_builder = [&] {
         ImGui::BeginChild("System Builder panel", ImVec2{0.0F, 0.0F}, ImGuiChildFlags_Borders);
         ImGui::TextUnformatted("System Builder");
         ImGui::Separator();
+        if (application_state_.has_active_project() &&
+            project_system_edit_policy(application_state_.active_project().metadata()) ==
+                ProjectSystemEditPolicy::BoschCompatible) {
+            const auto status = bosch_experiment_status(application_state_.active_project());
+            ImGui::TextColored(status == BoschExperimentStatus::ReferenceBaseline
+                                   ? ImVec4{0.45F, 0.85F, 0.55F, 1.0F}
+                                   : ImVec4{1.0F, 0.75F, 0.3F, 1.0F},
+                               "%s",
+                               status == BoschExperimentStatus::ReferenceBaseline
+                                   ? "Bosch reference baseline"
+                                   : "Modified Bosch experiment");
+        }
         if (system_draft_.has_value()) {
             synchronize_system_assignments();
             system_validation_ = system_draft_->build();
@@ -1423,10 +1318,13 @@ void GuiApplication::draw_left_sidebar(const SimulationSnapshot& snapshot) {
             const auto project_name = application_state_.has_active_project()
                                           ? application_state_.active_project().metadata().name
                                           : std::string{"Standalone session"};
-            draw_system_builder(*system_draft_, system_validation_, system_run_assignments_,
-                                structural_selection_,
-                                application_state_.active_session().draft_editable(), project_name,
-                                system_builder_view_state_);
+            draw_system_builder(
+                *system_draft_, system_validation_, system_run_assignments_, structural_selection_,
+                application_state_.active_session().draft_editable(),
+                application_state_.has_active_project()
+                    ? project_system_edit_policy(application_state_.active_project().metadata())
+                    : ProjectSystemEditPolicy::Generic,
+                project_name, system_builder_view_state_);
         } else {
             ImGui::TextWrapped(
                 "Structural editing is available for generic projects. This adapter-owned "
@@ -1483,6 +1381,9 @@ void GuiApplication::draw_right_sidebar(const SimulationSnapshot& snapshot) {
         if (system_draft_.has_value()) {
             apply_system_draft_requested_ = true;
         } else if (application_state_.active_session().apply_draft()) {
+            completed_results_.invalidate();
+            presentation_snapshot_ = application_state_.active_session().snapshot();
+            progress_ = application_state_.active_session().progress();
             runtime_selection_.clear();
             set_status("Run configuration applied and restarted.", false);
         } else {

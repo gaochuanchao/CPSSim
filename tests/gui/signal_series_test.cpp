@@ -5,8 +5,8 @@
  * Documentation date: 2026-07-19
  ***/
 
-#include "cpssim/gui/signal_series.hpp"
 #include "cpssim/gui/plot_visualizer_model.hpp"
+#include "cpssim/gui/signal_series.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -214,10 +214,9 @@ TEST_CASE("completed plot browser searches and groups selected signals by unit",
         {{GuiSignalScalarType::Boolean, "active"}, "Plant/Active", "Active", "", "test"}};
     const auto built = build_signal_model({observation(0, 1.0, 2, true)}, registry);
     REQUIRE(search_plot_signals(*built.model, "state").size() == 1);
-    const auto lanes = build_plot_lanes(*built.model,
-                                        {{GuiSignalScalarType::Real, "state"},
-                                         {GuiSignalScalarType::Integer, "count"},
-                                         {GuiSignalScalarType::Boolean, "active"}});
+    const auto lanes = build_plot_lanes(*built.model, {{GuiSignalScalarType::Real, "state"},
+                                                       {GuiSignalScalarType::Integer, "count"},
+                                                       {GuiSignalScalarType::Boolean, "active"}});
     REQUIRE(lanes.size() == 2);
     REQUIRE(lanes[0].unit == "m");
     REQUIRE(lanes[0].series.size() == 2);
@@ -229,14 +228,18 @@ TEST_CASE("plot ranges and tick units retain exact source ticks",
     auto value = SimulationSnapshot{.run_state = GuiRunState::Finished,
                                     .current_tick = 20,
                                     .stop_tick = 20,
-                                    .experiment = {}, .event_log = {},
+                                    .experiment = {},
+                                    .event_log = {},
                                     .functional_model_attached = false,
                                     .functional_signal_registry = {},
-                                    .functional_observations = {}, .resources = {}};
+                                    .functional_observations = {},
+                                    .resources = {}};
     value.experiment.tick_period = std::chrono::milliseconds{2};
     const auto result = build_run_result(std::move(value), "generic");
-    REQUIRE(resolve_plot_range(result, GuiPlotRangeMode::Selected, GuiTickRange{3, 7}, 0, 0) == GuiPlotRange{3, 7});
-    REQUIRE(resolve_plot_range(result, GuiPlotRangeMode::Custom, std::nullopt, 4, 99) == GuiPlotRange{4, 20});
+    REQUIRE(resolve_plot_range(result, GuiPlotRangeMode::Selected, GuiTickRange{3, 7}, 0, 0) ==
+            GuiPlotRange{3, 7});
+    REQUIRE(resolve_plot_range(result, GuiPlotRangeMode::Custom, std::nullopt, 4, 99) ==
+            GuiPlotRange{4, 20});
     REQUIRE(plot_tick_coordinate(5, GuiPlotXAxisUnit::Seconds, result.metrics.tick_period) == 0.01);
 }
 

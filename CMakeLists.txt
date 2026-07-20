@@ -251,6 +251,7 @@ add_library(
     src/cpssim/application/project/project_template.cpp
     src/cpssim/application/project/project_workflow.cpp
     src/cpssim/application/project/system_builder_workflow.cpp
+    src/cpssim/application/project/system_edit_policy.cpp
     src/cpssim/application/recent_projects.cpp
     src/cpssim/gui/architecture_graph.cpp
     src/cpssim/gui/display_scale.cpp

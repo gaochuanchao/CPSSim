@@ -18,8 +18,8 @@
 #include "cpssim/policy/fixed_priority.hpp"
 #include "cpssim/policy/resource_allocator.hpp"
 
-#include <deque>
 #include <chrono>
+#include <deque>
 #include <functional>
 #include <memory>
 #include <optional>

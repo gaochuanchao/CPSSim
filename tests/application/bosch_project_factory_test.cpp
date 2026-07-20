@@ -1,6 +1,8 @@
 /*** Verify GUI Bosch project construction without running the whole simulation. ***/
 
 #include "cpssim/application/bosch_project_factory.hpp"
+#include "cpssim/application/project/system_builder_workflow.hpp"
+#include "cpssim/application/project/system_edit_policy.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -126,4 +128,69 @@ TEST_CASE("bundled FMU resolution stays beside the GUI executable", "[project][b
     const auto library = fmu_library();
     const auto executable = library.parent_path() / "cpssim_gui";
     REQUIRE((cpssim::resolve_bundled_bosch_fmu(executable) == library));
+}
+
+TEST_CASE("Bosch edit policy protects FMU identities while allowing timing changes",
+          "[project][bosch][editing]") {
+    TemporaryDirectory temporary;
+    const auto trajectory = make_trajectory(temporary.root(), "editable-trajectory");
+    auto project = cpssim::create_bosch_project(
+        {.parent_directory = temporary.root(),
+         .name = "editable",
+         .trajectory_directory = trajectory,
+         .scenario = cpssim::BoschReferenceScenario::Dedicated,
+         .stop_tick = 2,
+         .reference_root = repository_root() / "experiments/bosch_v10_reference",
+         .shared_library = fmu_library()});
+    REQUIRE(cpssim::project_system_edit_policy(project->metadata()) ==
+            cpssim::ProjectSystemEditPolicy::BoschCompatible);
+    REQUIRE(cpssim::bosch_experiment_status(*project) ==
+            cpssim::BoschExperimentStatus::ReferenceBaseline);
+    cpssim::EditableSystemDraft draft{project->session().config()};
+    const auto added_resource = draft.add_resource();
+    draft.set_resource_name(draft.resources().size() - 1, "Experimental cloud");
+    draft.set_execution_profile(cpssim::TaskId{3}, added_resource, 2);
+    const auto timing = draft.tasks()[0];
+    draft.set_task_timing(
+        0, {.period = timing.period + 1, .deadline = timing.deadline, .offset = timing.offset},
+        timing.priority);
+    auto delayed_route = draft.routes().front();
+    ++delayed_route.delay;
+    draft.set_message_route(0, delayed_route);
+    const auto replacement = cpssim::build_system_project_replacement(*project, draft);
+    REQUIRE(replacement.valid());
+    REQUIRE(cpssim::bosch_experiment_status(*replacement.replacement) ==
+            cpssim::BoschExperimentStatus::Modified);
+    cpssim::save_project(*replacement.replacement);
+    const auto reopened = cpssim::load_project(
+        replacement.replacement->root() / "project.json",
+        [](const auto& root, const auto& metadata) {
+            return cpssim::resolve_bosch_project_runtime(
+                root, metadata, repository_root() / "experiments/bosch_v10_reference",
+                fmu_library());
+        });
+    REQUIRE(cpssim::bosch_experiment_status(*reopened) == cpssim::BoschExperimentStatus::Modified);
+
+    cpssim::EditableSystemDraft corrupted{reopened->session().config()};
+    corrupted.set_task_name(0, "Not Sensor");
+    REQUIRE_FALSE(cpssim::build_system_project_replacement(*reopened, corrupted).valid());
+
+    corrupted = cpssim::EditableSystemDraft{reopened->session().config()};
+    static_cast<void>(corrupted.add_task());
+    REQUIRE_FALSE(cpssim::build_system_project_replacement(*reopened, corrupted).valid());
+
+    corrupted = cpssim::EditableSystemDraft{reopened->session().config()};
+    auto changed_endpoint = corrupted.routes().front();
+    changed_endpoint.destination_task_id = cpssim::TaskId{3};
+    corrupted.set_message_route(0, changed_endpoint);
+    REQUIRE_FALSE(cpssim::build_system_project_replacement(*reopened, corrupted).valid());
+}
+
+TEST_CASE("Bosch functional dependencies are presentation-only and deterministic",
+          "[project][bosch][architecture]") {
+    const auto dependencies = cpssim::bosch_functional_dependencies();
+    REQUIRE(dependencies == std::vector<cpssim::GuiFunctionalDependency>{
+                                {cpssim::TaskId{2}, cpssim::TaskId{3}, "Estimator to Controller"},
+                                {cpssim::TaskId{3}, cpssim::TaskId{5}, "Controller to Merger"},
+                                {cpssim::TaskId{4}, cpssim::TaskId{5}, "Feedforward to Merger"}});
 }

@@ -1,6 +1,7 @@
 /*** Implement strong-guarantee system rebuilds over Goal 1 project ownership. ***/
 
 #include "cpssim/application/project/system_builder_workflow.hpp"
+#include "cpssim/application/project/system_edit_policy.hpp"
 
 #include <algorithm>
 #include <exception>
@@ -55,6 +56,11 @@ SystemProjectRebuildResult
 build_system_project_replacement(const ProjectContext& current, const EditableSystemDraft& draft,
                                  const SystemRunConfigurationDraft* run_configuration) {
     SystemProjectRebuildResult result;
+    const auto policy_diagnostics = validate_project_system_edit_policy(current, draft);
+    if (!policy_diagnostics.empty()) {
+        result.diagnostic = policy_diagnostics.front();
+        return result;
+    }
     auto system = draft.build();
     if (!system.config.has_value()) {
         result.system_diagnostics = std::move(system.diagnostics);

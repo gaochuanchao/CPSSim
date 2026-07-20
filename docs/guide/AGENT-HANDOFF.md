@@ -142,6 +142,8 @@ these rules.
 | `RecentProjects` | normalized bounded GUI user-preference history |
 | `system_builder_workflow` | canonical config/plan validation and atomic project/session reconstruction |
 | `RunResult` | detached immutable run input, typed signal series, and deterministic generic metrics |
+| `CompletedRunResultCache` | one finish-only immutable result and performance summary per run generation |
+| `SimulationProgress` | cheap run state/tick/event count used while Fast views remain frozen |
 | `result_export` | atomic run-directory publication and raw result schemas |
 | `results_workbook` | XLSX convenience rendering and deterministic row splitting |
 | `GuiLayoutStore` | fixed default ImGui layout, disposable edit staging, and optional project layout publication |
@@ -208,6 +210,22 @@ the C++ behavior silently.
 
 Goal 4 exports one immutable run at a time. Multi-run comparison, parameter
 sweeps, plot-image export, and multi-vehicle results remain future work.
+
+## Latest Goal 5 workbench boundary
+
+Goal 5 adds explicit Generic/BoschCompatible/ReadOnlyAdapter edit policy,
+canonical Bosch baseline fingerprints, FMU-safe protected task/route fields,
+and presentation-only functional dependencies. Live and cooperative Fast modes
+share the same engine step; Fast pacing and ordered upper/lower center tabs are
+workspace schema 4 presentation state. Heavy snapshots publish at coherent
+boundaries, while final `RunResult`, Bosch analysis, export enablement, and the
+non-modal pinned ImPlot v1.0 visualizer exist only after Finish and exactly once
+per run generation. Reset and semantic/project replacement invalidate them.
+
+ImPlot is GUI-only at commit `524f9fcd48d76c13fdf94c5ffbba8787a1ff7e39`
+(MIT); demo sources are not built and the OpenGL vertex-offset flag is checked.
+Matplot++, plot-image export, background execution, comparison, sweeps, and
+multi-vehicle research remain outside this boundary.
 
 End every handoff with exact commands/results, changed documents, limitations,
 and the next permitted task. Update this page whenever the implemented project

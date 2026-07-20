@@ -156,21 +156,40 @@ TEST_CASE("Fast event and tick batches preserve deterministic final output",
     live.enqueue(GuiCommand::Run);
     events.enqueue(GuiCommand::Run);
     ticks.enqueue(GuiCommand::Run);
-    while (live.run_state() != GuiRunState::Finished) live.update();
+    std::size_t live_updates = 0;
+    while (live.run_state() != GuiRunState::Finished) {
+        live.update();
+        ++live_updates;
+    }
     const GuiExecutionSettings event_settings{.mode = GuiRunMode::Fast,
-                                               .batch_unit = GuiFastBatchUnit::Events,
-                                               .event_batch_size = 3,
-                                               .tick_batch_size = 7};
+                                              .batch_unit = GuiFastBatchUnit::Events,
+                                              .event_batch_size = 1000,
+                                              .tick_batch_size = 1000};
     const GuiExecutionSettings tick_settings{.mode = GuiRunMode::Fast,
-                                              .batch_unit = GuiFastBatchUnit::Ticks,
-                                              .event_batch_size = 3,
-                                              .tick_batch_size = 7};
-    while (events.run_state() != GuiRunState::Finished) events.update(event_settings);
-    while (ticks.run_state() != GuiRunState::Finished) ticks.update(tick_settings);
-    REQUIRE(serialize_trace(events.snapshot().event_log) == serialize_trace(live.snapshot().event_log));
-    REQUIRE(serialize_trace(ticks.snapshot().event_log) == serialize_trace(live.snapshot().event_log));
+                                             .batch_unit = GuiFastBatchUnit::Ticks,
+                                             .event_batch_size = 1000,
+                                             .tick_batch_size = 1000};
+    std::size_t event_updates = 0;
+    while (events.run_state() != GuiRunState::Finished) {
+        events.update(event_settings);
+        ++event_updates;
+    }
+    std::size_t tick_updates = 0;
+    while (ticks.run_state() != GuiRunState::Finished) {
+        ticks.update(tick_settings);
+        ++tick_updates;
+    }
+    REQUIRE(serialize_trace(events.snapshot().event_log) ==
+            serialize_trace(live.snapshot().event_log));
+    REQUIRE(serialize_trace(ticks.snapshot().event_log) ==
+            serialize_trace(live.snapshot().event_log));
     REQUIRE(events.snapshot().resources[0].busy_ticks == live.snapshot().resources[0].busy_ticks);
     REQUIRE(ticks.progress().current_tick == live.progress().current_tick);
+    CAPTURE(live_updates, event_updates, tick_updates);
+    REQUIRE(event_updates < live_updates);
+    REQUIRE(tick_updates < live_updates);
+    REQUIRE(event_updates == 1);
+    REQUIRE(tick_updates == 1);
 }
 
 TEST_CASE("Fast batching validates sizes and exposes lightweight progress",
@@ -179,9 +198,9 @@ TEST_CASE("Fast batching validates sizes and exposes lightweight progress",
     SimulationController controller{config, make_gui_test_plan(config, 100)};
     controller.enqueue(GuiCommand::Run);
     const GuiExecutionSettings settings{.mode = GuiRunMode::Fast,
-                                         .batch_unit = GuiFastBatchUnit::Events,
-                                         .event_batch_size = 2,
-                                         .tick_batch_size = 1000};
+                                        .batch_unit = GuiFastBatchUnit::Events,
+                                        .event_batch_size = 2,
+                                        .tick_batch_size = 1000};
     const auto update = controller.update(settings);
     REQUIRE(update.transitions == 2);
     REQUIRE(controller.progress().event_count > 0);

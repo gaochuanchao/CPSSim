@@ -142,7 +142,9 @@ GuiGraphNodeId resource_graph_node_id(ResourceId resource_id) {
     return {.kind = GuiGraphNodeKind::Resource, .entity_value = resource_id.value()};
 }
 
-GuiArchitectureGraph build_architecture_graph(const ExperimentPresentationSnapshot& experiment) {
+GuiArchitectureGraph
+build_architecture_graph(const ExperimentPresentationSnapshot& experiment,
+                         const std::vector<GuiFunctionalDependency>& functional_dependencies) {
     auto resources = experiment.resources;
     auto tasks = experiment.tasks;
     auto routes = experiment.routes;
@@ -218,7 +220,23 @@ GuiArchitectureGraph build_architecture_graph(const ExperimentPresentationSnapsh
     result.logical_size = {.width = resource_width + 2.0F * graph_margin,
                            .height = std::max(next_y, graph_margin + task_height) + graph_margin};
 
-    result.edges.reserve(routes.size() + assignments.size());
+    result.edges.reserve(functional_dependencies.size() + routes.size() + assignments.size());
+    for (const auto& dependency : functional_dependencies) {
+        const auto source = task_graph_node_id(dependency.source_task_id);
+        const auto destination = task_graph_node_id(dependency.destination_task_id);
+        if (find_graph_node(result, source) == nullptr ||
+            find_graph_node(result, destination) == nullptr)
+            throw std::invalid_argument{"functional dependency references an unavailable task"};
+        result.edges.push_back({.id = {.kind = GuiGraphEdgeKind::FunctionalDependency,
+                                       .source = source,
+                                       .destination = destination},
+                                .kind = GuiGraphEdgeKind::FunctionalDependency,
+                                .source = source,
+                                .destination = destination,
+                                .route_reference = std::nullopt,
+                                .functional_reference = dependency,
+                                .assignment_reference = std::nullopt});
+    }
     for (const auto& route : routes) {
         const auto source = task_graph_node_id(route.identity.source_task_id);
         const auto destination = task_graph_node_id(route.identity.destination_task_id);
@@ -244,6 +262,7 @@ GuiArchitectureGraph build_architecture_graph(const ExperimentPresentationSnapsh
                                 .source = source,
                                 .destination = destination,
                                 .route_reference = route.identity,
+                                .functional_reference = std::nullopt,
                                 .assignment_reference = std::nullopt});
     }
     for (const auto& assignment : assignments) {
@@ -267,6 +286,7 @@ GuiArchitectureGraph build_architecture_graph(const ExperimentPresentationSnapsh
                                 .source = source,
                                 .destination = destination,
                                 .route_reference = std::nullopt,
+                                .functional_reference = std::nullopt,
                                 .assignment_reference = assignment});
     }
     return result;
@@ -302,6 +322,9 @@ void select_graph_node(GuiSelection& selection, const GuiGraphNode& node) {
 
 void select_graph_edge(GuiSelection& selection, const GuiGraphEdge& edge) {
     switch (edge.kind) {
+    case GuiGraphEdgeKind::FunctionalDependency:
+        selection.select_task(TaskId{edge.destination.entity_value});
+        return;
     case GuiGraphEdgeKind::MessageRoute:
         if (!edge.route_reference.has_value()) {
             throw std::logic_error{"message-route graph edge has no route reference"};

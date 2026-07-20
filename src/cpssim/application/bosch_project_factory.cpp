@@ -4,6 +4,8 @@
 
 #include "cpssim/bosch/bosch_fmi2_functional_model.hpp"
 #include "cpssim/bosch/example_data.hpp"
+#include "cpssim/config/json_config.hpp"
+#include "cpssim/config/json_run_plan.hpp"
 
 #include <nlohmann/json.hpp>
 
@@ -17,12 +19,29 @@ namespace cpssim {
 namespace {
 
 using Json = nlohmann::json;
-constexpr std::uint32_t bosch_settings_schema_version = 1;
+constexpr std::uint32_t bosch_settings_schema_version = 2;
 
 struct BoschProjectSettings {
     std::filesystem::path trajectory_directory{"trajectory"};
     BoschReferenceScenario scenario{BoschReferenceScenario::Dedicated};
+    std::string baseline_system_fingerprint;
+    std::string baseline_run_plan_fingerprint;
 };
+
+std::string fingerprint(std::string_view text) {
+    std::uint64_t hash = 14695981039346656037ULL;
+    for (const auto character : text) {
+        hash ^= static_cast<unsigned char>(character);
+        hash *= 1099511628211ULL;
+    }
+    constexpr char digits[] = "0123456789abcdef";
+    std::string result(16, '0');
+    for (auto index = result.size(); index-- > 0;) {
+        result[index] = digits[hash & 0xFU];
+        hash >>= 4U;
+    }
+    return result;
+}
 
 Fmi2ModelInfo model_info(const std::filesystem::path& shared_library, std::string instance_name) {
     return {.shared_library = shared_library,
@@ -87,7 +106,9 @@ std::string serialize_settings(const BoschProjectSettings& settings) {
         settings.trajectory_directory.generic_string().find('\\') != std::string::npos) {
         throw std::invalid_argument{"Bosch trajectory path must stay inside the project"};
     }
-    return Json{{"schema_version", bosch_settings_schema_version},
+    return Json{{"baseline_run_plan_fingerprint", settings.baseline_run_plan_fingerprint},
+                {"baseline_system_fingerprint", settings.baseline_system_fingerprint},
+                {"schema_version", bosch_settings_schema_version},
                 {"trajectory_directory", settings.trajectory_directory.generic_string()},
                 {"scenario", bosch_reference_scenario_name(settings.scenario)}}
                .dump(2) +
@@ -105,19 +126,32 @@ BoschProjectSettings load_settings(const std::filesystem::path& path) {
     } catch (const Json::exception&) {
         throw std::invalid_argument{"Bosch project settings contain malformed JSON"};
     }
-    if (!document.is_object() || document.size() != 3 || !document.contains("schema_version") ||
+    if (!document.is_object() || !document.contains("schema_version") ||
         !document.contains("trajectory_directory") || !document.contains("scenario")) {
         throw std::invalid_argument{"Bosch project settings do not match schema version 1"};
     }
     if (!document["schema_version"].is_number_unsigned() ||
-        document["schema_version"].get<std::uint32_t>() != bosch_settings_schema_version ||
+        (document["schema_version"].get<std::uint32_t>() != 1 &&
+         document["schema_version"].get<std::uint32_t>() != bosch_settings_schema_version) ||
         !document["trajectory_directory"].is_string() || !document["scenario"].is_string()) {
         throw std::invalid_argument{"Bosch project settings contain invalid field types"};
     }
     BoschProjectSettings settings{
         .trajectory_directory = document["trajectory_directory"].get<std::string>(),
-        .scenario = parse_bosch_reference_scenario(document["scenario"].get<std::string>())};
-    static_cast<void>(serialize_settings(settings));
+        .scenario = parse_bosch_reference_scenario(document["scenario"].get<std::string>()),
+        .baseline_system_fingerprint = {},
+        .baseline_run_plan_fingerprint = {}};
+    if (document["schema_version"].get<std::uint32_t>() == bosch_settings_schema_version) {
+        if (document.size() != 5 || !document.contains("baseline_system_fingerprint") ||
+            !document.contains("baseline_run_plan_fingerprint") ||
+            !document["baseline_system_fingerprint"].is_string() ||
+            !document["baseline_run_plan_fingerprint"].is_string())
+            throw std::invalid_argument{"Bosch project settings do not match schema version 2"};
+        settings.baseline_system_fingerprint =
+            document["baseline_system_fingerprint"].get<std::string>();
+        settings.baseline_run_plan_fingerprint =
+            document["baseline_run_plan_fingerprint"].get<std::string>();
+    }
     return settings;
 }
 
@@ -191,6 +225,8 @@ std::unique_ptr<ProjectContext> create_bosch_project(const BoschProjectRequest& 
     }
     auto runtime =
         make_runtime(request.shared_library, std::move(trajectory), "cpssim_gui_" + request.name);
+    const auto baseline_system = fingerprint(serialize_experiment_config_json(inputs.config));
+    const auto baseline_plan = fingerprint(serialize_run_plan_json(inputs.config, *plan.plan));
     ProjectCreationRequest creation{.parent_directory = request.parent_directory,
                                     .name = request.name,
                                     .system = std::move(inputs.config),
@@ -198,12 +234,40 @@ std::unique_ptr<ProjectContext> create_bosch_project(const BoschProjectRequest& 
                                     .scenario_file = "bosch.json",
                                     .scenario_kind = "bosch"};
     const auto source = std::filesystem::weakly_canonical(request.trajectory_directory);
-    return create_project(creation, std::move(runtime),
-                          [source, scenario = request.scenario](const auto& root) {
-                              std::filesystem::copy(source, root / "trajectory",
-                                                    std::filesystem::copy_options::recursive);
-                              write_settings(root / "bosch.json", {.scenario = scenario});
-                          });
+    return create_project(
+        creation, std::move(runtime),
+        [source, scenario = request.scenario, baseline_system, baseline_plan](const auto& root) {
+            std::filesystem::copy(source, root / "trajectory",
+                                  std::filesystem::copy_options::recursive);
+            write_settings(root / "bosch.json", {.scenario = scenario,
+                                                 .baseline_system_fingerprint = baseline_system,
+                                                 .baseline_run_plan_fingerprint = baseline_plan});
+        });
+}
+
+BoschExperimentStatus bosch_experiment_status(const ProjectContext& project) {
+    const auto scenario_file = project.metadata().scenario_file;
+    if (project.metadata().scenario_kind != "bosch" || !scenario_file.has_value())
+        return BoschExperimentStatus::NotBosch;
+    const auto settings = load_settings(project.root() / scenario_file.value());
+    if (settings.baseline_system_fingerprint.empty() ||
+        settings.baseline_run_plan_fingerprint.empty())
+        return BoschExperimentStatus::Modified;
+    const auto* plan = project.session().active_plan();
+    if (plan == nullptr)
+        return BoschExperimentStatus::Modified;
+    return fingerprint(serialize_experiment_config_json(project.session().config())) ==
+                       settings.baseline_system_fingerprint &&
+                   fingerprint(serialize_run_plan_json(project.session().config(), *plan)) ==
+                       settings.baseline_run_plan_fingerprint
+               ? BoschExperimentStatus::ReferenceBaseline
+               : BoschExperimentStatus::Modified;
+}
+
+std::vector<GuiFunctionalDependency> bosch_functional_dependencies() {
+    return {{TaskId{2}, TaskId{3}, "Estimator to Controller"},
+            {TaskId{3}, TaskId{5}, "Controller to Merger"},
+            {TaskId{4}, TaskId{5}, "Feedforward to Merger"}};
 }
 
 ProjectRuntimeInputs resolve_bosch_project_runtime(

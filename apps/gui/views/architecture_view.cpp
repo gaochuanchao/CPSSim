@@ -108,10 +108,10 @@ float distance_to_segment(ImVec2 point, ImVec2 start, ImVec2 finish) {
     return std::hypot(point.x - (start.x + projection * dx), point.y - (start.y + projection * dy));
 }
 
-const GuiGraphEdge* hit_route(const GuiArchitectureGraph& graph, const ScreenTransform& transform,
-                              ImVec2 mouse) {
+const GuiGraphEdge* hit_relation(const GuiArchitectureGraph& graph,
+                                 const ScreenTransform& transform, ImVec2 mouse) {
     for (const auto& edge : graph.edges) {
-        if (edge.kind != GuiGraphEdgeKind::MessageRoute) {
+        if (edge.kind == GuiGraphEdgeKind::Assignment) {
             continue;
         }
         const auto [start, finish] = edge_points(graph, edge, transform);
@@ -190,6 +190,14 @@ void draw_edges(ImDrawList* draw_list, const GuiArchitectureGraph& graph,
             draw_dashed_line(draw_list, start, finish, color, thickness,
                              std::max(10.0F * transform.zoom, 4.0F),
                              std::max(6.0F * transform.zoom, 3.0F));
+            draw_arrow(draw_list, start, finish, color, std::max(transform.zoom, 0.65F));
+        } else if (edge.kind == GuiGraphEdgeKind::FunctionalDependency) {
+            const auto related = selection.task_id().has_value() &&
+                                 (edge.source.entity_value == selection.task_id()->value() ||
+                                  edge.destination.entity_value == selection.task_id()->value());
+            const auto color =
+                ImGui::GetColorU32(related ? ImGuiCol_PlotLinesHovered : ImGuiCol_PlotLines);
+            draw_list->AddLine(start, finish, color, related ? 2.5F : 1.8F);
             draw_arrow(draw_list, start, finish, color, std::max(transform.zoom, 0.65F));
         } else {
             const auto related = assignment_related_to_selected_task(edge, selection);
@@ -319,6 +327,8 @@ bool draw_architecture_view(const GuiArchitectureGraph& graph, GuiSimulationSess
                             ? "Zoom %.0f%% | wheel: zoom | middle-drag: pan | read-only preview"
                             : "Zoom %.0f%% | wheel: zoom | middle-drag: pan | drag task: draft",
                         state.zoom * 100.0F);
+    ImGui::SameLine();
+    ImGui::TextDisabled("| solid: functional | dashed: network | dim: assignment");
     if (!state.status.empty()) {
         const auto color = state.status_error ? ImVec4{1.0F, 0.48F, 0.32F, 1.0F}
                                               : ImVec4{0.45F, 0.85F, 0.55F, 1.0F};
@@ -351,7 +361,7 @@ bool draw_architecture_view(const GuiArchitectureGraph& graph, GuiSimulationSess
     if (canvas_hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
         const auto* task = hit_node(graph, transform, mouse, GuiGraphNodeKind::Task);
         const auto* resource = hit_node(graph, transform, mouse, GuiGraphNodeKind::Resource);
-        const auto* route = hit_route(graph, transform, mouse);
+        const auto* route = hit_relation(graph, transform, mouse);
         if (task != nullptr) {
             select_graph_node(selection, *task);
             if (!read_only_preview) {
@@ -360,6 +370,10 @@ bool draw_architecture_view(const GuiArchitectureGraph& graph, GuiSimulationSess
             open_inspector = ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left);
         } else if (route != nullptr) {
             select_graph_edge(selection, *route);
+            state.status = route->kind == GuiGraphEdgeKind::FunctionalDependency
+                               ? "Selected functional dependency (presentation only; no messages)"
+                               : "Selected network route (configured message delay)";
+            state.status_error = false;
             open_inspector = ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left);
         } else if (resource != nullptr) {
             select_graph_node(selection, *resource);

@@ -92,8 +92,8 @@ void draw_resource_state(const SimulationSnapshot& snapshot, GuiSelection& selec
             if (observed <= 0) {
                 ImGui::TextDisabled("No observations");
             } else {
-                const auto utilization = calculate_resource_utilization(resource.busy_ticks,
-                                                                         resource.idle_ticks);
+                const auto utilization =
+                    calculate_resource_utilization(resource.busy_ticks, resource.idle_ticks);
                 const auto overlay =
                     std::to_string(static_cast<int>(utilization * 100.0 + 0.5)) + "%";
                 ImGui::ProgressBar(static_cast<float>(utilization), ImVec2{-1.0F, 0.0F},
