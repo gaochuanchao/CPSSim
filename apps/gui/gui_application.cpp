@@ -47,11 +47,18 @@ float sidebar_top_height(float available_height, float splitter_height, float ra
     return std::clamp(usable * ratio, minimum, std::max(minimum, usable - minimum));
 }
 
+float horizontal_splitter_height() { return std::max(2.0F, ImGui::GetFrameHeight() * 0.12F); }
+
+void remove_vertical_item_spacing() {
+    ImGui::SetCursorPosY(std::max(0.0F, ImGui::GetCursorPosY() - ImGui::GetStyle().ItemSpacing.y));
+}
+
 void draw_horizontal_splitter(const char* identity, float available_height, float splitter_height,
                               float& ratio) {
     const auto usable = std::max(0.0F, available_height - splitter_height);
     const auto desired_minimum = 6.0F * ImGui::GetTextLineHeightWithSpacing();
     const auto minimum = std::min(desired_minimum, usable * 0.45F);
+    remove_vertical_item_spacing();
     ImGui::InvisibleButton(identity, ImVec2{-1.0F, splitter_height});
     if (ImGui::IsItemHovered() || ImGui::IsItemActive()) {
         ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
@@ -61,6 +68,7 @@ void draw_horizontal_splitter(const char* identity, float available_height, floa
         ratio = std::clamp((current + ImGui::GetIO().MouseDelta.y) / usable, minimum / usable,
                            (usable - minimum) / usable);
     }
+    remove_vertical_item_spacing();
 }
 
 SystemRunConfigurationDraft
@@ -839,7 +847,7 @@ void GuiApplication::draw_center_panels(const SimulationSnapshot& snapshot) {
             workspace_state_.panels.resources || workspace_state_.panels.events;
         auto analysis_height = 0.0F;
         if (has_lower_panel) {
-            const auto splitter_height = std::max(4.0F, ImGui::GetFrameHeight() * 0.22F);
+            const auto splitter_height = horizontal_splitter_height();
             const auto split = calculate_vertical_split(
                 available_height, splitter_height, workspace_state_.analysis_lower_ratio,
                 7.0F * ImGui::GetTextLineHeightWithSpacing(),
@@ -931,14 +939,14 @@ void GuiApplication::draw_center_panels(const SimulationSnapshot& snapshot) {
         if (!has_lower_panel) {
             return;
         }
-        const auto splitter_height = std::max(4.0F, ImGui::GetFrameHeight() * 0.22F);
+        const auto splitter_height = horizontal_splitter_height();
         draw_horizontal_splitter("Analysis lower splitter", available_height, splitter_height,
                                  workspace_state_.analysis_lower_ratio);
         available_height = ImGui::GetContentRegionAvail().y;
     }
 
     if (workspace_state_.panels.resources && workspace_state_.panels.events) {
-        const auto splitter_height = std::max(4.0F, ImGui::GetFrameHeight() * 0.22F);
+        const auto splitter_height = horizontal_splitter_height();
         const auto split = calculate_vertical_split(available_height, splitter_height,
                                                     workspace_state_.resources_events_ratio,
                                                     4.0F * ImGui::GetTextLineHeightWithSpacing(),
@@ -1020,7 +1028,7 @@ void GuiApplication::draw_left_sidebar(const SimulationSnapshot& snapshot) {
 
     if (workspace_state_.panels.explorer && workspace_state_.panels.system_builder) {
         const auto available_height = ImGui::GetContentRegionAvail().y;
-        const auto splitter_height = std::max(4.0F, ImGui::GetFrameHeight() * 0.22F);
+        const auto splitter_height = horizontal_splitter_height();
         const auto top_height = sidebar_top_height(available_height, splitter_height,
                                                    workspace_state_.left_sidebar_ratio);
         ImGui::BeginChild("Explorer upper", ImVec2{0.0F, top_height});
@@ -1040,7 +1048,7 @@ void GuiApplication::draw_left_sidebar(const SimulationSnapshot& snapshot) {
 
 void GuiApplication::draw_right_sidebar(const SimulationSnapshot& snapshot) {
     const auto available_height = ImGui::GetContentRegionAvail().y;
-    const auto splitter_height = std::max(4.0F, ImGui::GetFrameHeight() * 0.22F);
+    const auto splitter_height = horizontal_splitter_height();
     const auto top_height =
         sidebar_top_height(available_height, splitter_height, workspace_state_.right_sidebar_ratio);
     ImGui::BeginChild("Run Configuration upper", ImVec2{0.0F, top_height});

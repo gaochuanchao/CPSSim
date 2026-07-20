@@ -106,8 +106,8 @@ void draw_event_view(const SimulationSnapshot& snapshot, GuiSelection& selection
     const auto rows = build_event_table_rows(snapshot);
     const auto projected = filter_event_table_rows(rows, filters);
     const auto flags = ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable |
-                       ImGuiTableFlags_ScrollX | ImGuiTableFlags_ScrollY |
-                       ImGuiTableFlags_SizingFixedFit;
+                       ImGuiTableFlags_Hideable | ImGuiTableFlags_ScrollX |
+                       ImGuiTableFlags_ScrollY | ImGuiTableFlags_SizingFixedFit;
     if (!ImGui::BeginTable("Canonical event table", 11, flags, ImVec2{0.0F, 0.0F})) {
         return;
     }

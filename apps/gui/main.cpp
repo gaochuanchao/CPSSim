@@ -65,13 +65,14 @@ void apply_display_scale(const ImGuiStyle& base_style, float display_scale) {
 }
 
 ImGuiStyle make_base_style(cpssim::GuiTheme theme) {
+    ImGuiStyle base_style;
     if (theme == cpssim::GuiTheme::Light) {
-        ImGui::StyleColorsLight();
+        ImGui::StyleColorsLight(&base_style);
     } else {
-        ImGui::StyleColorsDark();
+        ImGui::StyleColorsDark(&base_style);
     }
-    ImGui::GetStyle().FontSizeBase = default_font_size;
-    return ImGui::GetStyle();
+    base_style.FontSizeBase = default_font_size;
+    return base_style;
 }
 
 /*** Owns the native window and immediate-mode render loop. ***/
