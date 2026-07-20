@@ -204,6 +204,7 @@ add_library(
     src/cpssim/application/project/project.cpp
     src/cpssim/application/project/project_template.cpp
     src/cpssim/application/project/project_workflow.cpp
+    src/cpssim/application/project/system_builder_workflow.cpp
     src/cpssim/application/recent_projects.cpp
     src/cpssim/gui/architecture_graph.cpp
     src/cpssim/gui/display_scale.cpp
@@ -300,6 +301,7 @@ if(CPSSIM_BUILD_GUI)
         apps/gui/views/resource_view.cpp
         apps/gui/views/run_plan_editor.cpp
         apps/gui/views/signal_view.cpp
+        apps/gui/views/system_builder.cpp
         apps/gui/views/timeline_view.cpp
         apps/gui/views/toolbar_view.cpp
     )
@@ -466,6 +468,7 @@ if(BUILD_TESTING)
         cpssim_project_tests
         SOURCES
             tests/application/project/project_persistence_test.cpp
+            tests/application/project/system_builder_workflow_test.cpp
             tests/application/recent_projects_test.cpp
         LIBRARIES cpssim_gui_support
         LABEL project

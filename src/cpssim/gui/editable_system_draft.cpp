@@ -286,15 +286,15 @@ void EditableSystemDraft::set_task_name(std::size_t index, std::string name) {
     tasks_[index].name = std::move(name);
 }
 
-void EditableSystemDraft::set_task_timing(std::size_t index, Tick period, Tick deadline,
-                                          Tick offset, Priority priority) {
+void EditableSystemDraft::set_task_timing(std::size_t index, PeriodicTimingSpec timing,
+                                          Priority priority) {
     if (index >= tasks_.size()) {
         throw std::out_of_range{"task draft index is out of range"};
     }
     auto& task = tasks_[index];
-    task.period = period;
-    task.deadline = deadline;
-    task.offset = offset;
+    task.period = timing.period;
+    task.deadline = timing.deadline;
+    task.offset = timing.offset;
     task.priority = priority;
 }
 

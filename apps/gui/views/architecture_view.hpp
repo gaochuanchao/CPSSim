@@ -32,7 +32,8 @@ struct ArchitectureViewState {
  * Inspector panel.
  ***/
 bool draw_architecture_view(const GuiArchitectureGraph& graph, GuiSimulationSession& session,
-                            const SimulationSnapshot& snapshot, GuiSelection& selection,
-                            ArchitectureViewState& state);
+                            const ExperimentPresentationSnapshot& experiment,
+                            GuiSelection& selection, ArchitectureViewState& state,
+                            bool read_only_preview = false);
 
 } // namespace cpssim::gui

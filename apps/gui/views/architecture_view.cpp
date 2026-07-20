@@ -232,13 +232,15 @@ void draw_task_node(ImDrawList* draw_list, const GuiGraphNode& node,
                     const ScreenTransform& transform,
                     const ExperimentPresentationSnapshot& experiment,
                     const GuiSimulationSession& session, const GuiSelection& selection,
-                    bool dragging) {
+                    bool dragging, bool read_only_preview) {
     const auto rect = node_rect(node, transform);
     const auto task_id = std::get<TaskId>(node.entity);
     const auto selected = selection.task_id() == task_id;
-    const auto draft_resource = session.draft().assignment(task_id);
-    const auto draft_valid = draft_resource.has_value() &&
-                             graph_assignment_accessible(experiment, task_id, *draft_resource);
+    const auto draft_resource =
+        read_only_preview ? std::optional<ResourceId>{} : session.draft().assignment(task_id);
+    const auto draft_valid =
+        read_only_preview || (draft_resource.has_value() &&
+                              graph_assignment_accessible(experiment, task_id, *draft_resource));
     const auto active_resource = active_assignment(experiment, task_id);
     const auto draft_changed = draft_resource != active_resource;
 
@@ -261,7 +263,7 @@ void draw_task_node(ImDrawList* draw_list, const GuiGraphNode& node,
             {rect.minimum.x + 10.0F * transform.zoom, rect.maximum.y - 21.0F * transform.zoom},
             ImGui::GetColorU32(ImGuiCol_PlotHistogram), draft_label.c_str());
     }
-    if (!draft_valid) {
+    if (!draft_valid && !read_only_preview) {
         const auto warning = ImGui::GetColorU32(ImGuiCol_PlotHistogram);
         const ImVec2 top{rect.maximum.x - 9.0F * transform.zoom,
                          rect.minimum.y + 7.0F * transform.zoom};
@@ -302,13 +304,20 @@ void reject_drop(ArchitectureViewState& state, TaskId task_id, std::string reaso
 } // namespace
 
 bool draw_architecture_view(const GuiArchitectureGraph& graph, GuiSimulationSession& session,
-                            const SimulationSnapshot& snapshot, GuiSelection& selection,
-                            ArchitectureViewState& state) {
+                            const ExperimentPresentationSnapshot& experiment,
+                            GuiSelection& selection, ArchitectureViewState& state,
+                            bool read_only_preview) {
+    if (read_only_preview) {
+        state.pressed_task.reset();
+        state.dragging_task = false;
+    }
     if (ImGui::Button("Fit to view")) {
         state.fit_requested = true;
     }
     ImGui::SameLine();
-    ImGui::TextDisabled("Zoom %.0f%% | wheel: zoom | middle-drag: pan | drag task: draft",
+    ImGui::TextDisabled(read_only_preview
+                            ? "Zoom %.0f%% | wheel: zoom | middle-drag: pan | read-only preview"
+                            : "Zoom %.0f%% | wheel: zoom | middle-drag: pan | drag task: draft",
                         state.zoom * 100.0F);
     if (!state.status.empty()) {
         const auto color = state.status_error ? ImVec4{1.0F, 0.48F, 0.32F, 1.0F}
@@ -345,7 +354,9 @@ bool draw_architecture_view(const GuiArchitectureGraph& graph, GuiSimulationSess
         const auto* route = hit_route(graph, transform, mouse);
         if (task != nullptr) {
             select_graph_node(selection, *task);
-            state.pressed_task = std::get<TaskId>(task->entity);
+            if (!read_only_preview) {
+                state.pressed_task = std::get<TaskId>(task->entity);
+            }
             open_inspector = ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left);
         } else if (route != nullptr) {
             select_graph_edge(selection, *route);
@@ -356,7 +367,8 @@ bool draw_architecture_view(const GuiArchitectureGraph& graph, GuiSimulationSess
         }
     }
 
-    if (state.pressed_task.has_value() && ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
+    if (!read_only_preview && state.pressed_task.has_value() &&
+        ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
         state.dragging_task = true;
     }
     if (state.pressed_task.has_value() && ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
@@ -370,8 +382,7 @@ bool draw_architecture_view(const GuiArchitectureGraph& graph, GuiSimulationSess
                 if (!session.draft_editable()) {
                     reject_drop(state, task_id,
                                 "the run is Running; pause it before editing the draft");
-                } else if (!graph_assignment_accessible(snapshot.experiment, task_id,
-                                                        resource_id)) {
+                } else if (!graph_assignment_accessible(experiment, task_id, resource_id)) {
                     reject_drop(state, task_id,
                                 "resource R" + std::to_string(resource_id.value()) +
                                     " has no configured execution profile for this task");
@@ -399,7 +410,7 @@ bool draw_architecture_view(const GuiArchitectureGraph& graph, GuiSimulationSess
             drag_target = std::get<ResourceId>(resource->entity);
             valid_drag_target =
                 session.draft_editable() &&
-                graph_assignment_accessible(snapshot.experiment, *state.pressed_task, *drag_target);
+                graph_assignment_accessible(experiment, *state.pressed_task, *drag_target);
         }
     }
 
@@ -415,7 +426,7 @@ bool draw_architecture_view(const GuiArchitectureGraph& graph, GuiSimulationSess
             !intersects(node_rect(node, transform), canvas_rect)) {
             continue;
         }
-        draw_resource_node(draw_list, node, transform, snapshot.experiment, selection, drag_target,
+        draw_resource_node(draw_list, node, transform, experiment, selection, drag_target,
                            valid_drag_target);
     }
     draw_edges(draw_list, graph, transform, selection);
@@ -426,8 +437,8 @@ bool draw_architecture_view(const GuiArchitectureGraph& graph, GuiSimulationSess
         }
         const auto dragging =
             state.dragging_task && state.pressed_task == std::get<TaskId>(node.entity);
-        draw_task_node(draw_list, node, transform, snapshot.experiment, session, selection,
-                       dragging);
+        draw_task_node(draw_list, node, transform, experiment, session, selection, dragging,
+                       read_only_preview);
     }
     if (state.dragging_task) {
         draw_list->AddLine(

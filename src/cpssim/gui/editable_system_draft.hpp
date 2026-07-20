@@ -149,8 +149,7 @@ class EditableSystemDraft {
     SystemDraftMutationResult remove_task(std::size_t index);
     void set_task_id(std::size_t index, TaskId id);
     void set_task_name(std::size_t index, std::string name);
-    void set_task_timing(std::size_t index, Tick period, Tick deadline, Tick offset,
-                         Priority priority);
+    void set_task_timing(std::size_t index, PeriodicTimingSpec timing, Priority priority);
 
     std::optional<Tick> execution_profile(TaskId task_id, ResourceId resource_id) const;
     void set_execution_profile(TaskId task_id, ResourceId resource_id,

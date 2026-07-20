@@ -323,7 +323,15 @@ make_project_context(const std::filesystem::path& root, ProjectMetadata metadata
         std::move(system), default_run_plan.stop_tick(), runtime_inputs.functional_model_factory,
         runtime_inputs.signal_registry);
     if (!session->replace_draft(default_run_plan) || !session->apply_draft()) {
-        throw std::runtime_error{"project default run plan could not construct a GUI session"};
+        auto message = std::string{"project default run plan could not construct a GUI session"};
+        const auto& validation = session->last_validation();
+        if (validation.has_value()) {
+            const auto& diagnostics = validation.value().diagnostics;
+            if (!diagnostics.empty()) {
+                message += ": " + diagnostics.back().message;
+            }
+        }
+        throw std::runtime_error{message};
     }
     return std::make_unique<ProjectContext>(
         std::filesystem::weakly_canonical(root), std::move(metadata), std::move(default_run_plan),

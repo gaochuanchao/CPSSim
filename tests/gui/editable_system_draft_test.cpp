@@ -73,7 +73,7 @@ TEST_CASE("resource and task edits preserve IDs while duplicates copy profiles",
     auto draft = EditableSystemDraft{make_config()};
     draft.set_resource_name(0, "renamed local");
     draft.set_task_name(0, "renamed sensor");
-    draft.set_task_timing(0, 12, 10, 2, 4);
+    draft.set_task_timing(0, {.period = 12, .deadline = 10, .offset = 2}, 4);
 
     REQUIRE((draft.resources()[0].id == ResourceId{4}));
     REQUIRE((draft.tasks()[0].id == TaskId{3}));
@@ -112,7 +112,7 @@ TEST_CASE("system draft reports field-addressed timing ID and name diagnostics",
     draft.set_resource_name(1, "local");
     draft.set_task_id(1, TaskId{3});
     draft.set_task_name(1, "sensor");
-    draft.set_task_timing(0, 0, 0, -1, -1);
+    draft.set_task_timing(0, {.period = 0, .deadline = 0, .offset = -1}, -1);
     const auto result = draft.build();
 
     REQUIRE_FALSE(result.valid());

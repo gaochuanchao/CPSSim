@@ -16,12 +16,14 @@
 #include "views/resource_view.hpp"
 #include "views/run_plan_editor.hpp"
 #include "views/signal_view.hpp"
+#include "views/system_builder.hpp"
 #include "views/timeline_view.hpp"
 #include "views/toolbar_view.hpp"
 
 #include "cpssim/application/bosch_project_factory.hpp"
 #include "cpssim/application/project/project_template.hpp"
 #include "cpssim/application/project/project_workflow.hpp"
+#include "cpssim/application/project/system_builder_workflow.hpp"
 #include "cpssim/config/json_run_plan.hpp"
 #include "cpssim/core/version.hpp"
 
@@ -76,6 +78,50 @@ void GuiApplication::initialize_presentation_state() {
             set_status(*loaded.diagnostic, true);
         }
     }
+    initialize_system_draft();
+}
+
+void GuiApplication::initialize_system_draft() {
+    system_draft_.reset();
+    system_validation_ = {};
+    system_run_assignments_.clear();
+    system_builder_view_state_ = {};
+    if (application_state_.has_active_project() &&
+        application_state_.active_project().metadata().scenario_kind == "generic") {
+        system_draft_.emplace(application_state_.active_session().config());
+        system_validation_ = system_draft_->build();
+        if (const auto* plan = application_state_.active_session().active_plan(); plan != nullptr) {
+            system_run_assignments_.reserve(plan->assignments().size());
+            for (const auto& assignment : plan->assignments()) {
+                system_run_assignments_.push_back(
+                    {.task_id = assignment.task_id, .resource_id = assignment.resource_id});
+            }
+        }
+    }
+}
+
+bool GuiApplication::system_changes_dirty() const {
+    if (!system_draft_.has_value()) {
+        return false;
+    }
+    if (system_draft_->dirty()) {
+        return true;
+    }
+    const auto* active = application_state_.active_session().active_plan();
+    if (active == nullptr || active->assignments().size() != system_run_assignments_.size()) {
+        return true;
+    }
+    for (const auto& assignment : system_run_assignments_) {
+        const auto found = std::find_if(active->assignments().begin(), active->assignments().end(),
+                                        [&assignment](const auto& candidate) {
+                                            return candidate.task_id == assignment.task_id;
+                                        });
+        if (found == active->assignments().end() || !assignment.resource_id.has_value() ||
+            found->resource_id != *assignment.resource_id) {
+            return true;
+        }
+    }
+    return false;
 }
 
 ProjectRuntimeResolver GuiApplication::project_runtime_resolver() const {
@@ -116,6 +162,7 @@ void GuiApplication::record_active_project() {
 /*** Replaces the active session only after its caller has constructed it. ***/
 void GuiApplication::replace_session(std::unique_ptr<GuiSimulationSession> session) {
     application_state_.replace_session(std::move(session));
+    initialize_system_draft();
     selection_.select_experiment();
     application_status_.clear();
 }
@@ -123,6 +170,7 @@ void GuiApplication::replace_session(std::unique_ptr<GuiSimulationSession> sessi
 /*** Activates one fully constructed project and its uniquely owned session. ***/
 void GuiApplication::replace_project(std::unique_ptr<ProjectContext> project) {
     application_state_.replace_project(std::move(project));
+    initialize_system_draft();
     selection_.select_experiment();
     application_status_.clear();
 }
@@ -140,6 +188,7 @@ void GuiApplication::save_active_project() { save_project(application_state_.act
 /*** Returns the application to Home without retaining a session reference. ***/
 void GuiApplication::clear_session() {
     application_state_.clear_session();
+    initialize_system_draft();
     selection_.select_experiment();
     application_status_.clear();
 }
@@ -154,45 +203,38 @@ void GuiApplication::update_active_session() {
 /*** Updates menu-owned visibility and opens the static About dialog. ***/
 bool GuiApplication::draw_main_menu() {
     auto& session = application_state_.active_session();
-    bool close_requested = false;
-    bool open_requested = false;
     if (!ImGui::BeginMenuBar()) {
         return true;
     }
 
     if (ImGui::BeginMenu("File")) {
         if (ImGui::MenuItem("Create New Project...")) {
-            project_dialog_kind_ = ProjectDialogKind::NewGeneric;
-            request_project_modal_ = true;
+            request_project_action(PendingProjectAction::CreateGeneric);
         }
         if (ImGui::MenuItem("Open Existing Project...")) {
-            open_requested = true;
+            request_project_action(PendingProjectAction::OpenDialog);
         }
         if (ImGui::MenuItem("Bosch Challenge Example...")) {
-            bosch_step_ = BoschWizardStep::Trajectory;
-            open_bosch_wizard_ = true;
+            request_project_action(PendingProjectAction::BoschWizard);
         }
         ImGui::Separator();
         ImGui::BeginDisabled(!application_state_.has_active_project());
         if (ImGui::MenuItem("Save Project")) {
             try {
                 save_active_project();
-                set_status("Project saved.", false);
+                set_status(system_changes_dirty()
+                               ? "Applied project saved; unapplied system changes were not saved."
+                               : "Project saved.",
+                           false);
             } catch (const std::exception& error) {
                 set_status(error.what(), true);
             }
         }
         if (ImGui::MenuItem("Save Project As...")) {
-            project_dialog_kind_ = ProjectDialogKind::SaveAs;
-            project_parent_ = paths_.projects_directory;
-            std::fill(project_name_.begin(), project_name_.end(), '\0');
-            const auto suggested = application_state_.active_project().metadata().name + "-copy";
-            std::copy_n(suggested.begin(), std::min(suggested.size(), project_name_.size() - 1),
-                        project_name_.begin());
-            request_project_modal_ = true;
+            request_project_action(PendingProjectAction::SaveAs);
         }
         if (ImGui::MenuItem("Close Project")) {
-            close_requested = true;
+            request_project_action(PendingProjectAction::Close);
         }
         ImGui::EndDisabled();
         ImGui::Separator();
@@ -206,15 +248,11 @@ bool GuiApplication::draw_main_menu() {
         }
         ImGui::EndMenu();
     }
-    if (close_requested) {
-        ImGui::EndMenuBar();
-        clear_session();
-        return false;
-    }
     if (ImGui::BeginMenu("View")) {
         ImGui::MenuItem("Experiment Explorer", nullptr, &show_explorer_);
         ImGui::MenuItem("Inspector", nullptr, &show_inspector_);
         ImGui::Separator();
+        ImGui::MenuItem("System Builder", nullptr, &show_system_builder_);
         ImGui::MenuItem("Architecture", nullptr, &show_architecture_);
         ImGui::MenuItem("Scheduling timeline", nullptr, &show_timeline_);
         ImGui::MenuItem("Functional signals", nullptr, &show_signals_);
@@ -240,9 +278,12 @@ bool GuiApplication::draw_main_menu() {
     }
 
     ImGui::EndMenuBar();
-    if (open_requested) {
-        open_project_dialog();
-        return false;
+    if (pending_project_action_ != PendingProjectAction::None) {
+        if (system_changes_dirty()) {
+            request_unapplied_modal_ = true;
+            return true;
+        }
+        return !execute_pending_project_action();
     }
     return true;
 }
@@ -295,6 +336,124 @@ void GuiApplication::save_run_plan_dialog() {
     } else if (result.status == ProjectWorkflowStatus::Failed) {
         set_status(result.diagnostic, true);
     }
+}
+
+void GuiApplication::request_project_action(PendingProjectAction action,
+                                            std::filesystem::path project_file) {
+    pending_project_action_ = action;
+    pending_project_file_ = std::move(project_file);
+}
+
+bool GuiApplication::execute_pending_project_action() {
+    const auto action = pending_project_action_;
+    const auto project_file = pending_project_file_;
+    pending_project_action_ = PendingProjectAction::None;
+    pending_project_file_.clear();
+    switch (action) {
+    case PendingProjectAction::None:
+        return false;
+    case PendingProjectAction::CreateGeneric:
+        project_dialog_kind_ = ProjectDialogKind::NewGeneric;
+        project_parent_ = paths_.projects_directory;
+        request_project_modal_ = true;
+        return false;
+    case PendingProjectAction::OpenDialog:
+        open_project_dialog();
+        return true;
+    case PendingProjectAction::OpenRecent:
+        try {
+            load_project_file(project_file);
+        } catch (const std::exception& error) {
+            set_status(error.what(), true);
+        }
+        return true;
+    case PendingProjectAction::BoschWizard:
+        bosch_step_ = BoschWizardStep::Trajectory;
+        open_bosch_wizard_ = true;
+        return false;
+    case PendingProjectAction::SaveAs: {
+        project_dialog_kind_ = ProjectDialogKind::SaveAs;
+        project_parent_ = paths_.projects_directory;
+        std::fill(project_name_.begin(), project_name_.end(), '\0');
+        const auto suggested = application_state_.active_project().metadata().name + "-copy";
+        std::copy_n(suggested.begin(), std::min(suggested.size(), project_name_.size() - 1),
+                    project_name_.begin());
+        request_project_modal_ = true;
+        return false;
+    }
+    case PendingProjectAction::Close:
+        clear_session();
+        return true;
+    }
+    return false;
+}
+
+void GuiApplication::draw_unapplied_changes_dialog() {
+    if (request_unapplied_modal_) {
+        ImGui::OpenPopup("Unapplied system changes");
+        request_unapplied_modal_ = false;
+    }
+    if (!ImGui::BeginPopupModal("Unapplied system changes", nullptr,
+                                ImGuiWindowFlags_AlwaysAutoResize)) {
+        return;
+    }
+    ImGui::TextWrapped("The System Builder has unapplied changes. Choose how to continue.");
+    if (ImGui::Button("Apply and save")) {
+        const auto result = resolve_unapplied_system_changes(
+            application_state_, system_draft_ ? &*system_draft_ : nullptr,
+            UnappliedSystemDecision::ApplyAndSave, &system_run_assignments_);
+        if (result.status == ProjectTransitionStatus::Proceed) {
+            initialize_system_draft();
+            ImGui::CloseCurrentPopup();
+            execute_pending_project_action();
+        } else if (result.status == ProjectTransitionStatus::Failed) {
+            set_status(result.diagnostic, true);
+        }
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Discard")) {
+        static_cast<void>(resolve_unapplied_system_changes(
+            application_state_, system_draft_ ? &*system_draft_ : nullptr,
+            UnappliedSystemDecision::Discard));
+        initialize_system_draft();
+        ImGui::CloseCurrentPopup();
+        execute_pending_project_action();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Cancel")) {
+        static_cast<void>(resolve_unapplied_system_changes(
+            application_state_, system_draft_ ? &*system_draft_ : nullptr,
+            UnappliedSystemDecision::Cancel));
+        pending_project_action_ = PendingProjectAction::None;
+        pending_project_file_.clear();
+        ImGui::CloseCurrentPopup();
+    }
+    if (!application_status_.empty() && application_status_error_) {
+        ImGui::TextColored(ImVec4{1.0F, 0.45F, 0.35F, 1.0F}, "%s", application_status_.c_str());
+    }
+    ImGui::EndPopup();
+}
+
+void GuiApplication::apply_system_draft() {
+    if (!system_draft_.has_value() || !application_state_.has_active_project()) {
+        set_status("System changes require an active generic project.", true);
+        return;
+    }
+    auto result =
+        apply_system_project_draft(application_state_, *system_draft_, &system_run_assignments_);
+    if (result.valid()) {
+        selection_.select_experiment();
+        initialize_system_draft();
+        set_status("System applied; the simulation session restarted paused.", false);
+        return;
+    }
+    auto message = result.diagnostic;
+    if (!result.system_diagnostics.empty()) {
+        message += ": " + result.system_diagnostics.front().message;
+    } else if (!result.run_plan_diagnostics.empty()) {
+        message += ": " + result.run_plan_diagnostics.front().message;
+    }
+    set_status(std::move(message), true);
 }
 
 void GuiApplication::draw_project_dialog() {
@@ -531,7 +690,7 @@ void GuiApplication::draw_about_dialog() {
 void GuiApplication::draw_center_panels(const SimulationSnapshot& snapshot) {
     auto& session = application_state_.active_session();
     auto available_height = ImGui::GetContentRegionAvail().y;
-    if (show_architecture_ || show_timeline_ || show_signals_) {
+    if (show_system_builder_ || show_architecture_ || show_timeline_ || show_signals_) {
         const auto has_lower_panel = show_resources_ || show_events_;
         auto analysis_height = 0.0F;
         if (has_lower_panel) {
@@ -543,10 +702,64 @@ void GuiApplication::draw_center_panels(const SimulationSnapshot& snapshot) {
         }
         ImGui::BeginChild("Analysis panel", ImVec2{0.0F, analysis_height}, ImGuiChildFlags_Borders);
         if (ImGui::BeginTabBar("Analysis views")) {
+            if (show_system_builder_ && ImGui::BeginTabItem("System Builder")) {
+                if (system_draft_.has_value()) {
+                    const auto action = draw_system_builder(
+                        *system_draft_, system_validation_, system_run_assignments_,
+                        system_changes_dirty(), application_state_.active_project().metadata().name,
+                        system_builder_view_state_);
+                    if (action == SystemBuilderAction::ApplyAndRestart) {
+                        apply_system_draft_requested_ = true;
+                    }
+                } else if (application_state_.has_active_project()) {
+                    ImGui::TextWrapped(
+                        "System Builder is available for generic projects. Bosch project "
+                        "configuration remains adapter-owned and read-only.");
+                } else {
+                    ImGui::TextWrapped("Save or open a generic project to edit its system.");
+                }
+                ImGui::EndTabItem();
+            }
             if (show_architecture_ && ImGui::BeginTabItem("Architecture")) {
-                const auto graph = build_architecture_graph(snapshot.experiment);
-                if (draw_architecture_view(graph, session, snapshot, selection_,
-                                           architecture_view_state_)) {
+                auto previewing = false;
+                const auto* experiment = &snapshot.experiment;
+                std::optional<ExperimentPresentationSnapshot> preview;
+                if (system_changes_dirty()) {
+                    system_validation_ = system_draft_->build();
+                    if (system_validation_.valid()) {
+                        const auto* active_plan = session.active_plan();
+                        auto preview_request = RunPlanRequest{
+                            .stop_tick = active_plan != nullptr ? active_plan->stop_tick() : 0,
+                            .policy_kind = active_plan != nullptr
+                                               ? active_plan->policy_kind()
+                                               : SchedulingPolicyKind::FixedPriority,
+                            .assignments = {}};
+                        for (const auto& assignment : system_run_assignments_) {
+                            if (assignment.resource_id.has_value()) {
+                                preview_request.assignments.push_back(
+                                    {.task_id = assignment.task_id,
+                                     .resource_id = *assignment.resource_id});
+                            }
+                        }
+                        const auto preview_plan =
+                            build_run_plan(*system_validation_.config, preview_request);
+                        preview =
+                            preview_plan.valid()
+                                ? build_experiment_presentation(*system_validation_.config,
+                                                                preview_plan.plan->assignments())
+                                : build_experiment_presentation(*system_validation_.config);
+                        experiment = &*preview;
+                        previewing = true;
+                        ImGui::TextColored(ImVec4{1.0F, 0.75F, 0.3F, 1.0F},
+                                           "Previewing unapplied system changes");
+                    } else {
+                        ImGui::TextDisabled(
+                            "The active architecture is shown until the system draft is valid.");
+                    }
+                }
+                const auto graph = build_architecture_graph(*experiment);
+                if (draw_architecture_view(graph, session, *experiment, selection_,
+                                           architecture_view_state_, previewing)) {
                     show_inspector_ = true;
                 }
                 ImGui::EndTabItem();
@@ -799,8 +1012,13 @@ void GuiApplication::draw_frame() {
     if (application_state_.has_active_session()) {
         draw_about_dialog();
     }
+    draw_unapplied_changes_dialog();
     draw_project_dialog();
     draw_bosch_wizard();
+    if (apply_system_draft_requested_) {
+        apply_system_draft_requested_ = false;
+        apply_system_draft();
+    }
 }
 
 } // namespace cpssim::gui

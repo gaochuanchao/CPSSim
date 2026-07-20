@@ -4,6 +4,7 @@
 
 #include "views/architecture_view.hpp"
 #include "views/signal_view.hpp"
+#include "views/system_builder.hpp"
 #include "views/timeline_view.hpp"
 
 #include "cpssim/application/file_dialog.hpp"
@@ -14,6 +15,7 @@
 #include <array>
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <string>
 
 namespace cpssim::gui {
@@ -48,8 +50,19 @@ class GuiApplication {
   private:
     enum class ProjectDialogKind { None, NewGeneric, SaveAs };
     enum class BoschWizardStep { Trajectory, Scenario, Horizon, Project, Review };
+    enum class PendingProjectAction {
+        None,
+        CreateGeneric,
+        OpenDialog,
+        OpenRecent,
+        BoschWizard,
+        SaveAs,
+        Close,
+    };
 
     void initialize_presentation_state();
+    void initialize_system_draft();
+    bool system_changes_dirty() const;
     ProjectRuntimeResolver project_runtime_resolver() const;
     void record_active_project();
     void persist_recents();
@@ -57,6 +70,11 @@ class GuiApplication {
     void open_project_dialog();
     void load_run_plan_dialog();
     void save_run_plan_dialog();
+    void request_project_action(PendingProjectAction action,
+                                std::filesystem::path project_file = {});
+    bool execute_pending_project_action();
+    void draw_unapplied_changes_dialog();
+    void apply_system_draft();
 
     bool draw_main_menu();
     void draw_home_screen();
@@ -74,6 +92,7 @@ class GuiApplication {
     bool show_explorer_{true};
     bool show_inspector_{true};
     bool show_architecture_{true};
+    bool show_system_builder_{true};
     bool show_timeline_{true};
     bool show_signals_{true};
     bool show_resources_{true};
@@ -94,6 +113,14 @@ class GuiApplication {
     std::filesystem::path bosch_parent_;
     std::string application_status_;
     bool application_status_error_{false};
+    std::optional<EditableSystemDraft> system_draft_;
+    SystemDraftBuildResult system_validation_;
+    std::vector<DraftTaskAssignment> system_run_assignments_;
+    SystemBuilderViewState system_builder_view_state_;
+    bool apply_system_draft_requested_{false};
+    PendingProjectAction pending_project_action_{PendingProjectAction::None};
+    std::filesystem::path pending_project_file_;
+    bool request_unapplied_modal_{false};
     ArchitectureViewState architecture_view_state_;
     TimelineViewState timeline_view_state_;
     SignalViewState signal_view_state_;
