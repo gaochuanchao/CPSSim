@@ -182,16 +182,17 @@ the C++ behavior silently.
   in [ADR-0011](../adr/0011-plan-user-configured-task-channels.md);
 - multiple servers/scheduling domains, resource capacity sharing, migration,
   richer networks, and richer GUI analysis need explicit designs;
-- the current fixed GUI workbench has no docking, saved layout,
+- the current fixed GUI workbench has no docking,
   unit-grouped/multiple signal axes, or background thread; timeline and
-  signal viewport/filter preferences are not persisted; run-plan fields may be
+  signal viewports and text scale are not persisted; run-plan fields may be
   edited or loaded only while no run exists or the active run is
   Paused/Finished;
 - architecture layout is deliberately simple and workspace pan/zoom is not
   persisted; graph task drops edit the pending plan and never migrate active
   jobs;
-- current-monitor display scale updates automatically; persisted text
-  preferences remain future presentation work;
+- current-monitor display scale updates automatically; theme changes rebuild
+  an unscaled base style before that scale is applied once; workspace schema 2
+  persists panel/splitter/tab/event-filter/selected-signal presentation state;
 - Bosch example execution currently uses one functional model and one of the
   validated single-vehicle `dedicated`/`shared_cloud` run plans; multi-vehicle,
   probabilistic timing, and three-core cloud experiments remain future work;
@@ -200,6 +201,24 @@ the C++ behavior silently.
 End every handoff with exact commands/results, changed documents, limitations,
 and the next permitted task. Update this page whenever the implemented project
 boundary changes.
+
+## Latest Goal 3 workbench validation
+
+The completed Goal 3 refinement was validated on 2026-07-20 with:
+
+- `cmake --build build/make-dev --target cpssim_gui_tests cpssim_project_tests cpssim_gui -j2`:
+  passed;
+- focused GUI/project CTest selection: 100/100 passed;
+- `./scripts/verify.sh full`: formatting plus Debug, ASan/UBSan, Release, and
+  Clang profiles passed all 237 tests; the initial clang-tidy pass identified
+  three new API/copy warnings, which were corrected;
+- the corrected clang-tidy build and its 237/237 tests passed; and
+- `cpssim_gui --help`, final formatting check, and `git diff --check` passed.
+
+The automated environment has no usable X11 display, so narrow/wide window,
+splitter reachability, theme switching, mixed-DPI monitor movement, native
+dialog appearance, and large Bosch trace scrolling still require a manual
+desktop smoke test. No additional package is required for those checks.
 
 ## Latest Extended Goal 2 System Builder validation
 

@@ -231,7 +231,7 @@ ProjectContext::ProjectContext(std::filesystem::path root, ProjectMetadata metad
                                ProjectRuntimeInputs runtime_inputs,
                                std::optional<std::string> workspace_diagnostic)
     : root_{std::move(root)}, metadata_{std::move(metadata)},
-      default_run_plan_{std::move(default_run_plan)}, workspace_{workspace},
+      default_run_plan_{std::move(default_run_plan)}, workspace_{std::move(workspace)},
       session_{std::move(session)}, runtime_inputs_{std::move(runtime_inputs)},
       workspace_diagnostic_{std::move(workspace_diagnostic)} {
     if (session_ == nullptr) {
@@ -583,7 +583,8 @@ make_project_context(const std::filesystem::path& root, ProjectMetadata metadata
     }
     return std::make_unique<ProjectContext>(
         std::filesystem::weakly_canonical(root), std::move(metadata), std::move(default_run_plan),
-        workspace, std::move(session), std::move(runtime_inputs), std::move(workspace_diagnostic));
+        std::move(workspace), std::move(session), std::move(runtime_inputs),
+        std::move(workspace_diagnostic));
 }
 
 std::unique_ptr<ProjectContext> create_project(const ProjectCreationRequest& request,

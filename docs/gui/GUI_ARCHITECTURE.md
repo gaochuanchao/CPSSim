@@ -79,14 +79,18 @@ The view files are deliberately small boundaries:
 | [`architecture_graph.*`](../../src/cpssim/gui/architecture_graph.hpp) | deterministic graph records and logical layout | [`architecture_graph_test.cpp`](../../tests/gui/architecture_graph_test.cpp) |
 | [`timeline_model.*`](../../src/cpssim/gui/timeline_model.hpp) | strict event-to-interval derivation and incremental cache | [`timeline_model_test.cpp`](../../tests/gui/timeline_model_test.cpp) |
 | [`signal_series.*`](../../src/cpssim/gui/signal_series.hpp) | typed scalar extraction, diagnostics, cache, and visual downsampling | [`signal_series_test.cpp`](../../tests/gui/signal_series_test.cpp) |
+| [`workspace_state.*`](../../src/cpssim/gui/workspace_state.hpp) | versioned presentation preferences and normalized splitter geometry | [`workspace_state_test.cpp`](../../tests/gui/workspace_state_test.cpp) |
+| [`resource_presentation.*`](../../src/cpssim/gui/resource_presentation.hpp) | utilization derived from detached resource counters | [`resource_presentation_test.cpp`](../../tests/gui/resource_presentation_test.cpp) |
+| [`event_table_model.*`](../../src/cpssim/gui/event_table_model.hpp) | canonical event-row projection, filtering, and cause lookup | [`event_table_model_test.cpp`](../../tests/gui/event_table_model_test.cpp) |
 
 If logic can be tested without opening a window, it normally belongs in
 `cpssim_gui_support`, not in an ImGui draw function.
 
 The fixed workbench composes `Explorer / System Builder` on the left and `Run
-Configuration / Runtime Inspector` on the right. Each pair uses a font-scaled
-minimum height and an in-memory normalized horizontal-split ratio. No docking
-or Goal 3 workspace persistence is involved.
+Configuration / Runtime Inspector` on the right. The sidebars, analysis/lower
+area, and Resources/Canonical Events stack use font-scaled minimum heights and
+normalized horizontal-split ratios. The ratios are project workspace state;
+no docking geometry is involved.
 
 ## 3. One frame and one command
 
@@ -159,7 +163,8 @@ Use this table before adding a field:
 | Project specifications, workspace metadata, and sole session | `ProjectContext` |
 | Atomic system/project/session reconstruction | `system_builder_workflow` application service |
 | Recent-project history | GUI user-preference file through `RecentProjects` |
-| Panel visibility, viewport, filters, text scale | `GuiApplication` or view-state struct |
+| Theme, panel visibility, splitter ratios, tabs, event filters, and selected signals | `GuiWorkspaceState`, mirrored by `GuiApplication` and persisted by `ProjectContext` |
+| Non-persisted canvas viewport and text scale | corresponding view-state struct or `GuiApplication` |
 | Current monitor scale, base style, last valid framebuffer density | native loop in `main.cpp` |
 
 Moving a value into a view merely because a widget displays it creates two
@@ -187,7 +192,7 @@ run intact. Editing is disabled while the controller is Running.
 Reset is different from Apply:
 
 - **Reset** reconstructs from the already accepted active plan.
-- **Apply and reset** validates the current draft and replaces the active plan
+- **Apply and restart** validates the current draft and replaces the active plan
   and controller on success.
 - Loading a JSON plan replaces only the draft.
 
@@ -405,10 +410,12 @@ Four persistence domains remain separate:
 3. run plan; and
 4. GUI workspace and user preferences.
 
-Only experiment configuration and run plan affect simulation input. The
-minimal versioned workspace and the separate recent-project preference file
-are presentation-only. Invalid workspace content uses safe defaults with a
-diagnostic and must not silently become run semantics.
+Only experiment configuration and run plan affect simulation input. Workspace
+schema 2 persists theme, panel visibility, splitters, active tabs, event
+filters/columns, and selected signals. Schema 1 migrates to defaults. Unknown
+fields and unsupported versions reject the optional workspace and report a
+fallback diagnostic; invalid known enum/ratio values use safe defaults. The
+separate recent-project preference file is also presentation-only.
 
 ## 12. Testing strategy
 

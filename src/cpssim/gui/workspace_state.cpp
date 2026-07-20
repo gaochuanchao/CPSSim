@@ -12,6 +12,7 @@ float normalize_splitter_ratio(float ratio, float fallback) noexcept {
     return std::isfinite(ratio) ? std::clamp(ratio, 0.05F, 0.95F) : safe_fallback;
 }
 
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters) -- named declaration documents layout units.
 GuiVerticalSplit calculate_vertical_split(float available_height, float splitter_height,
                                           float desired_ratio, float minimum_first,
                                           float minimum_second) noexcept {

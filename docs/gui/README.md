@@ -60,8 +60,8 @@ active run. To change its run plan:
 1. In **Experiment Explorer**, expand Tasks and Resources to inspect the input.
 2. In **Run Configuration**, choose one accessible resource for every task.
 3. Set the draft stop tick.
-4. Select **Validate**. Any problem appears beside the relevant task or field.
-5. Select **Apply and reset**. This creates a new paused simulation.
+4. Select **Validate changes**. Any problem appears beside the relevant task or field.
+5. Select **Apply and restart**. This creates a new paused simulation.
 6. Use **Next event** to study one complete logical event tick, or **Run** to
    continue automatically.
 7. Use **Pause** before editing the draft. **Reset** recreates the active run
@@ -119,12 +119,13 @@ Goal 2 does not introduce Bosch-specific model editing.
 +------------------------------------------------------------------+
 ```
 
-The left and right sidebars have draggable horizontal splitters with minimum
-heights. Their normalized ratios are in-memory presentation state and are not
-persisted. Other panel boundaries remain resizable. Use the **View** menu to
-hide or restore a panel. The same menu shows the current monitor scale and
-provides an adjustable text-size slider. The slider is an additional
-multiplier on top of automatic DPI scaling.
+The left and right sidebars, analysis/lower area, and Resources/Canonical
+Events stack have draggable horizontal splitters with minimum heights. Their
+normalized ratios and panel visibility persist in the project workspace. Use
+**View → Theme → Light/Dark** to change both the base ImGui style and window
+background. The same menu shows the current monitor scale and provides an
+adjustable text-size slider, which remains an in-memory multiplier on top of
+automatic DPI scaling.
 
 ### Structural and runtime selection
 
@@ -147,7 +148,7 @@ profile appear in a task's list.
 The draft and active plan are intentionally separate:
 
 ```text
-edit draft -> validate -> Apply and reset -> new active controller
+edit draft -> validate -> Apply and restart -> new active controller
 ```
 
 Load and save versioned JSON plans through the **File** menu. Loading replaces
@@ -170,7 +171,7 @@ It supports:
 - dragging a task to an accessible resource to edit the pending draft.
 
 A drag changes only the draft. The applied assignment remains visible until
-**Apply and reset** succeeds. Dashed message routes describe configured causal
+**Apply and restart** succeeds. Dashed message routes describe configured causal
 communication; they do not imply typed Simulink-style signal ports.
 At extreme fit/zoom levels, canvas labels retain a safe minimum font-bake size;
 zoom in to make their content readable.
@@ -207,16 +208,17 @@ Cursor text retains the original scalar type. Floating-point conversion is
 used only for drawing. Visual downsampling preserves visible endpoints and
 bucket extrema; it never changes full-resolution observations.
 
-The current plot uses one shared value axis. Unit-grouped axes and saved signal
-choices are future work. Goal 1 persists only the minimal versioned workspace
-schema; it does not yet persist plot choices or other Goal 3 settings.
+The current plot uses one shared value axis. Unit-grouped axes remain future
+work. Selected signal identities persist in workspace schema 2.
 
 ### Resources and canonical events
 
-Resource rows show the running job, Ready jobs, and busy/idle ticks copied from
-the active engine. The event table shows accepted canonical events in their
-original order. Selecting an event opens its identifiers, phase, causality,
-and exact tick in the Inspector.
+Resources has **Resource State** and **Utilization** tabs. State rows show the
+running job, Ready jobs, busy/idle ticks, and directly derived utilization;
+labeled bars use the same resource selection. Canonical Events is a virtualized
+column table in sequence order with type/task/resource/vehicle/text filters and
+optional columns. Selecting a row opens raw JSON and typed details in Runtime
+Inspector; selecting Cause navigates to its canonical predecessor.
 
 ## 4. Learn the code from one frame
 
@@ -398,8 +400,8 @@ explains how to choose broader checks.
 - Labels, row positions, and colors are presentation—not identity or semantics.
 - The current workbench is single-threaded and uses a fixed resizable layout,
   not docking.
-- Layout, filters, text size, graph viewport, and signal choices are not
-  persisted.
+- Theme, panel visibility, splitters, active tabs, event filters/columns, and
+  selected signals are persisted; text size and canvas viewports remain local.
 
 Unimplemented improvements and their design gates are kept in
 [Future improvements](../guide/FUTURE-WORK.md#f3-gui-usability-and-workspace-features),

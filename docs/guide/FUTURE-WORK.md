@@ -141,28 +141,29 @@ the implemented workflow; the
 [GUI architecture guide](../gui/GUI_ARCHITECTURE.md) records its ownership and
 test boundaries.
 
-Remaining improvements should be selected as separate small tasks:
+Workspace schema 2 now persists theme, panel visibility, normalized splitters,
+active tabs, event filters/columns, and selected signals without changing
+semantic files. Resources have labeled utilization and Canonical Events uses a
+virtualized structured table. Remaining improvements should be selected as
+separate small tasks:
 
-1. Persist presentation-only workspace preferences such as panel visibility,
-   text size, graph/timeline viewport, filters, and selected signals. Define a
-   versioned workspace format that cannot silently become simulation input.
-2. Add navigation actions such as jump from a deadline miss to the timeline
+1. Add navigation actions such as jump from a deadline miss to the timeline
    and signal cursor, saved filter presets, and keyboard shortcuts through the
    existing `GuiSelection` boundary.
-3. Export a selected timeline/signal range from full-resolution detached data.
+2. Export a selected timeline/signal range from full-resolution detached data.
    Visual downsampling must never affect exported values.
-4. Add wall-clock playback pacing that only determines when the existing
+3. Add wall-clock playback pacing that only determines when the existing
    event-tick command is requested. It must not pass elapsed time into the
    engine.
-5. Measure large-trace snapshot copying, cache updates, table rendering, and
+4. Measure large-trace snapshot copying, cache updates, table rendering, and
    canvas transforms before changing the current clarity-first design.
-6. Improve accessibility without relying on color alone, and validate the GUI
+5. Improve accessibility without relying on color alone, and validate the GUI
    on Windows and macOS before claiming those platforms.
-7. Add adapter-specific launch wiring and signal metadata only in an
+6. Add adapter-specific launch wiring and signal metadata only in an
    application/adapter layer; generic GUI support must remain independent of
    Bosch and FMI value references.
 
-Docking, a native file dialog, unit-grouped signal axes, and multiple plot
+Docking, unit-grouped signal axes, and multiple plot
 panels are presentation candidates. A new GUI dependency must be pinned behind
 `CPSSIM_BUILD_GUI` and justified separately.
 
