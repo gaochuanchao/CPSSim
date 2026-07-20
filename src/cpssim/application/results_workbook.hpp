@@ -32,7 +32,7 @@ struct WorkbookControlMetric {
     bool operator==(const WorkbookControlMetric&) const = default;
 };
 
-std::vector<WorkbookDetailSheet> plan_workbook_detail_sheets(std::string base_name,
+std::vector<WorkbookDetailSheet> plan_workbook_detail_sheets(const std::string& base_name,
                                                              std::uint64_t source_rows);
 
 void write_results_workbook(const std::filesystem::path& path, const ProjectContext& project,

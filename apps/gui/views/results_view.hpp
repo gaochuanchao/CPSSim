@@ -21,7 +21,7 @@ struct ResultsViewState {
 };
 
 void draw_results_view(const SimulationSnapshot& snapshot, std::string scenario_kind,
-                       const std::vector<GuiSignalId>& selected_signals,
-                       GuiSelection& selection, ResultsViewState& state);
+                       const std::vector<GuiSignalId>& selected_signals, GuiSelection& selection,
+                       ResultsViewState& state);
 
 } // namespace cpssim::gui

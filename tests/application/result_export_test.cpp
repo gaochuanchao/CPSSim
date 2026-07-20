@@ -117,6 +117,8 @@ TEST_CASE("raw export publishes complete stable files and rejects duplicate run 
     }
     REQUIRE(read_text(exported.run_directory / "metrics.json").find("9007199254740995") !=
             std::string::npos);
+    REQUIRE(read_text(exported.run_directory / "metrics.json").find("mean_seconds") !=
+            std::string::npos);
     REQUIRE(
         read_text(exported.run_directory / "signals.csv").find("\"Value, quoted \"\"name\"\"\"") !=
         std::string::npos);

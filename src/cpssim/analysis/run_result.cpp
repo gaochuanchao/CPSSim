@@ -93,6 +93,7 @@ std::string_view canonical_event_phase_name(EventPhase phase) {
 RunMetrics derive_run_metrics(const SimulationSnapshot& snapshot) {
     RunMetrics result;
     result.event_count = snapshot.event_log.size();
+    result.tick_period = snapshot.experiment.tick_period;
     result.horizon_tick = snapshot.current_tick;
     try {
         result.horizon_time =
@@ -132,14 +133,14 @@ RunMetrics derive_run_metrics(const SimulationSnapshot& snapshot) {
             break;
         case EventType::MessageSend:
             ++result.messages.sent;
-            if (event.entities().message_id.has_value()) {
-                sends.try_emplace(*event.entities().message_id, event.tick());
+            if (const auto message_id = event.entities().message_id; message_id.has_value()) {
+                sends.try_emplace(message_id.value(), event.tick());
             }
             break;
         case EventType::MessageDelivery:
             ++result.messages.delivered;
-            if (event.entities().message_id.has_value()) {
-                if (const auto send = sends.find(*event.entities().message_id);
+            if (const auto message_id = event.entities().message_id; message_id.has_value()) {
+                if (const auto send = sends.find(message_id.value());
                     send != sends.end() && event.tick() >= send->second) {
                     add_sample(message_delays, event.tick() - send->second);
                 }

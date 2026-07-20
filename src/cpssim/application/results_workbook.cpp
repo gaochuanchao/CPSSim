@@ -66,6 +66,10 @@ double seconds(Tick tick, PhysicalDuration period) {
     return static_cast<double>(tick) * static_cast<double>(period.count()) / 1.0e9;
 }
 
+double seconds(double ticks, PhysicalDuration period) {
+    return ticks * static_cast<double>(period.count()) / 1.0e9;
+}
+
 bool selected(Tick tick, const std::optional<GuiTickRange>& range) {
     return !range.has_value() || range->contains(tick);
 }
@@ -88,11 +92,12 @@ struct SignalRow {
 
 std::vector<SignalRow> selected_signals(const RunResult& result,
                                         const std::optional<GuiTickRange>& range) {
-    if (!result.signals.valid()) {
+    if (!result.signals.model.has_value() || !result.signals.diagnostics.empty()) {
         throw std::invalid_argument{"functional signals are invalid and cannot be exported"};
     }
+    const auto& model = result.signals.model.value();
     std::vector<SignalRow> rows;
-    for (const auto& series : result.signals.model->series) {
+    for (const auto& series : model.series) {
         for (const auto& sample : series.samples) {
             if (selected(sample.tick, range)) {
                 rows.push_back({&series, &sample});
@@ -195,8 +200,8 @@ void write_events(lxw_workbook* workbook, const RunResult& result,
                 exact_integer(sheet, row, 8, entities.message_id->value());
             if (entities.vehicle_id)
                 exact_integer(sheet, row, 9, entities.vehicle_id->value());
-            if (event.cause_sequence())
-                exact_integer(sheet, row, 10, event.cause_sequence()->value());
+            if (const auto cause = event.cause_sequence(); cause.has_value())
+                exact_integer(sheet, row, 10, cause.value().value());
         }
     }
 }
@@ -245,7 +250,7 @@ void write_metrics(lxw_workbook* workbook, const RunMetrics& metrics, lxw_format
     auto* sheet = workbook_add_worksheet(workbook, "Scheduling Metrics");
     header(sheet,
            {"Category", "ID", "Name", "Metric", "Count", "Minimum ticks", "Mean ticks",
-            "Maximum ticks", "Value"},
+            "Maximum ticks", "Minimum (s)", "Mean (s)", "Maximum (s)", "Value"},
            bold);
     lxw_row_t row = 1;
     for (const auto& task : metrics.task_responses) {
@@ -258,8 +263,11 @@ void write_metrics(lxw_workbook* workbook, const RunMetrics& metrics, lxw_format
             exact_integer(sheet, row, 5, task.response_time->minimum);
             number(sheet, row, 6, task.response_time->mean());
             exact_integer(sheet, row, 7, task.response_time->maximum);
+            number(sheet, row, 8, seconds(task.response_time->minimum, metrics.tick_period));
+            number(sheet, row, 9, seconds(task.response_time->mean(), metrics.tick_period));
+            number(sheet, row, 10, seconds(task.response_time->maximum, metrics.tick_period));
         } else {
-            text(sheet, row, 8, "Unavailable");
+            text(sheet, row, 11, "Unavailable");
         }
         ++row;
     }
@@ -270,8 +278,14 @@ void write_metrics(lxw_workbook* workbook, const RunMetrics& metrics, lxw_format
         exact_integer(sheet, row, 5, metrics.messages.delivery_delay->minimum);
         number(sheet, row, 6, metrics.messages.delivery_delay->mean());
         exact_integer(sheet, row, 7, metrics.messages.delivery_delay->maximum);
+        number(sheet, row, 8,
+               seconds(metrics.messages.delivery_delay->minimum, metrics.tick_period));
+        number(sheet, row, 9,
+               seconds(metrics.messages.delivery_delay->mean(), metrics.tick_period));
+        number(sheet, row, 10,
+               seconds(metrics.messages.delivery_delay->maximum, metrics.tick_period));
     } else {
-        text(sheet, row, 8, "Unavailable");
+        text(sheet, row, 11, "Unavailable");
     }
 }
 
@@ -285,15 +299,15 @@ void write_control_metrics(lxw_workbook* workbook,
     for (std::size_t index = 0; index < metrics.size(); ++index) {
         const auto row = static_cast<lxw_row_t>(index + 1);
         text(sheet, row, 0, metrics[index].metric);
-        if (metrics[index].tick)
-            exact_integer(sheet, row, 1, *metrics[index].tick);
+        if (const auto tick = metrics[index].tick; tick.has_value())
+            exact_integer(sheet, row, 1, tick.value());
         text(sheet, row, 2, metrics[index].value);
     }
 }
 
 } // namespace
 
-std::vector<WorkbookDetailSheet> plan_workbook_detail_sheets(std::string base_name,
+std::vector<WorkbookDetailSheet> plan_workbook_detail_sheets(const std::string& base_name,
                                                              std::uint64_t source_rows) {
     constexpr auto rows_per_sheet = excel_maximum_rows - 1;
     const auto sheet_count =

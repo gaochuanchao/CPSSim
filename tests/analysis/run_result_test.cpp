@@ -60,6 +60,7 @@ TEST_CASE("run metrics derive exact paired timing and explicit unavailable value
           "[analysis][metrics]") {
     const auto metrics = derive_run_metrics(snapshot());
     REQUIRE(metrics.event_count == 7);
+    REQUIRE(metrics.tick_period == 2ms);
     REQUIRE(metrics.horizon_tick == 12);
     REQUIRE(metrics.horizon_time == 24ms);
     REQUIRE(metrics.completed_jobs == 2);

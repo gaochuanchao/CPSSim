@@ -100,6 +100,11 @@ void draw_response_times(const RunMetrics& metrics) {
         ImGui::Text("%lld", static_cast<long long>(value.minimum));
         ImGui::TableNextColumn();
         ImGui::Text("%.3f", value.mean());
+        if (metrics.tick_period.count() > 0 && ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("%.9g seconds", value.mean() *
+                                                  static_cast<double>(metrics.tick_period.count()) /
+                                                  1.0e9);
+        }
         ImGui::TableNextColumn();
         ImGui::Text("%lld", static_cast<long long>(value.maximum));
         ImGui::TableNextColumn();
@@ -150,15 +155,14 @@ void draw_resources(const RunMetrics& metrics, GuiSelection& selection) {
 }
 
 std::optional<Tick> selected_tick(const RunResult& result, const GuiSelection& selection) {
-    if (const auto range = selection.tick_range(); range.has_value() &&
-                                                    range->begin_tick == range->end_tick) {
+    if (const auto range = selection.tick_range();
+        range.has_value() && range->begin_tick == range->end_tick) {
         return range->begin_tick;
     }
     if (const auto sequence = selection.event_sequence(); sequence.has_value()) {
-        const auto found = std::find_if(result.snapshot.event_log.begin(),
-                                        result.snapshot.event_log.end(), [&](const Event& event) {
-                                            return event.sequence() == *sequence;
-                                        });
+        const auto found =
+            std::find_if(result.snapshot.event_log.begin(), result.snapshot.event_log.end(),
+                         [&](const Event& event) { return event.sequence() == *sequence; });
         if (found != result.snapshot.event_log.end()) {
             return found->tick();
         }
@@ -200,8 +204,10 @@ void draw_series_plot(const char* identity, const GuiSignalSeries& series, GuiSe
         maximum += 0.5;
     }
     const auto tick_x = [&](Tick tick) {
-        return left + static_cast<float>(static_cast<double>(tick) /
-                                         static_cast<double>(end_tick)) * width;
+        const auto bounded = std::clamp<Tick>(tick, 0, end_tick);
+        return left +
+               static_cast<float>(static_cast<double>(bounded) / static_cast<double>(end_tick)) *
+                   width;
     };
     const auto value_y = [&](double value) {
         return bottom - static_cast<float>((value - minimum) / (maximum - minimum)) * height;
@@ -222,15 +228,18 @@ void draw_series_plot(const char* identity, const GuiSignalSeries& series, GuiSe
         }
         for (const auto tick : bosch->deadline_miss_ticks) {
             draw->AddTriangleFilled({tick_x(tick), top}, {tick_x(tick) - 4.0F, top + 8.0F},
-                                    {tick_x(tick) + 4.0F, top + 8.0F},
-                                    IM_COL32(240, 70, 70, 255));
+                                    {tick_x(tick) + 4.0F, top + 8.0F}, IM_COL32(240, 70, 70, 255));
         }
+    }
+    if (const auto range = selection.tick_range();
+        range.has_value() && range->begin_tick != range->end_tick) {
+        draw->AddRectFilled({tick_x(range->begin_tick), top}, {tick_x(range->end_tick), bottom},
+                            ImGui::GetColorU32(ImGuiCol_Header, 0.16F));
     }
     const auto downsampled = downsample_signal(
         series, {.begin_tick = 0,
                  .end_tick = end_tick,
-                 .maximum_points =
-                     std::max<std::size_t>(static_cast<std::size_t>(width) * 2, 4)});
+                 .maximum_points = std::max<std::size_t>(static_cast<std::size_t>(width) * 2, 4)});
     for (std::size_t index = 1; index < downsampled.size(); ++index) {
         draw->AddLine({tick_x(downsampled[index - 1].tick),
                        value_y(gui_scalar_as_double(downsampled[index - 1].value))},
@@ -253,9 +262,9 @@ void draw_series_plot(const char* identity, const GuiSignalSeries& series, GuiSe
                   series.descriptor.display_name.c_str());
     if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
         const auto mouse_x = std::clamp(ImGui::GetIO().MousePos.x, left, right);
-        const auto tick = static_cast<Tick>(std::llround(
-            static_cast<double>(mouse_x - left) / static_cast<double>(width) *
-            static_cast<double>(end_tick)));
+        const auto tick = static_cast<Tick>(
+            std::llround(static_cast<double>(mouse_x - left) / static_cast<double>(width) *
+                         static_cast<double>(end_tick)));
         selection.select_tick(tick);
     }
 }
@@ -265,10 +274,12 @@ void draw_bosch_results(const RunResult& result, const std::vector<GuiSignalId>&
     const auto bosch = derive_bosch_result_analysis(result);
     ImGui::SeparatorText("Bosch control results");
     if (bosch.lateral_error == nullptr) {
-        ImGui::TextDisabled("%s", bosch.diagnostic.value_or("Lateral error is unavailable.").c_str());
+        ImGui::TextDisabled("%s",
+                            bosch.diagnostic.value_or("Lateral error is unavailable.").c_str());
         return;
     }
-    ImGui::TextDisabled("Blue band: critical section | dashed bounds: +/-0.2 m | red marker: deadline miss");
+    ImGui::TextDisabled(
+        "Shaded band: critical section | bounds: +/-0.2 m | red marker: deadline miss");
     draw_series_plot("Bosch lateral result plot", *bosch.lateral_error, selection, result, &bosch,
                      230.0F);
     for (const auto& id : selected_signals) {
@@ -287,8 +298,8 @@ void draw_bosch_results(const RunResult& result, const std::vector<GuiSignalId>&
 } // namespace
 
 void draw_results_view(const SimulationSnapshot& snapshot, std::string scenario_kind,
-                       const std::vector<GuiSignalId>& selected_signals,
-                       GuiSelection& selection, ResultsViewState& state) {
+                       const std::vector<GuiSignalId>& selected_signals, GuiSelection& selection,
+                       ResultsViewState& state) {
     update_result(snapshot, scenario_kind, state);
     const auto& result = *state.result;
     draw_summary(result.metrics);

@@ -127,15 +127,24 @@ std::filesystem::path unique_temporary_directory(const std::filesystem::path& de
     throw std::runtime_error{"cannot allocate a temporary result directory"};
 }
 
-Json tick_statistics_json(const std::optional<TickStatistics>& statistics) {
+double metric_seconds(double ticks, PhysicalDuration tick_period) {
+    return ticks * static_cast<double>(tick_period.count()) / 1.0e9;
+}
+
+Json tick_statistics_json(const std::optional<TickStatistics>& statistics,
+                          PhysicalDuration tick_period) {
     if (!statistics.has_value()) {
         return nullptr;
     }
-    return {{"count", statistics->count},
-            {"maximum_ticks", statistics->maximum},
-            {"mean_ticks", statistics->mean()},
-            {"minimum_ticks", statistics->minimum},
-            {"total_ticks", statistics->total}};
+    return {
+        {"count", statistics->count},
+        {"maximum_seconds", metric_seconds(static_cast<double>(statistics->maximum), tick_period)},
+        {"maximum_ticks", statistics->maximum},
+        {"mean_seconds", metric_seconds(statistics->mean(), tick_period)},
+        {"mean_ticks", statistics->mean()},
+        {"minimum_seconds", metric_seconds(static_cast<double>(statistics->minimum), tick_period)},
+        {"minimum_ticks", statistics->minimum},
+        {"total_ticks", statistics->total}};
 }
 
 std::optional<GuiTickRange> export_range(const RunExportOptions& options) {
@@ -157,11 +166,12 @@ std::uint64_t count_events(const SimulationSnapshot& snapshot,
 }
 
 std::uint64_t count_signals(const RunResult& result, const std::optional<GuiTickRange>& range) {
-    if (!result.signals.valid()) {
+    if (!result.signals.model.has_value() || !result.signals.diagnostics.empty()) {
         throw std::invalid_argument{"functional signals are invalid and cannot be exported"};
     }
+    const auto& model = result.signals.model.value();
     std::uint64_t count = 0;
-    for (const auto& series : result.signals.model->series) {
+    for (const auto& series : model.series) {
         count += static_cast<std::uint64_t>(std::count_if(
             series.samples.begin(), series.samples.end(),
             [&range](const GuiScalarSample& sample) { return selected(sample.tick, range); }));
@@ -250,9 +260,10 @@ RunManifest parse_run_manifest_json(std::string_view json_text) {
 std::string serialize_run_metrics_json(const RunMetrics& metrics) {
     Json tasks = Json::array();
     for (const auto& task : metrics.task_responses) {
-        tasks.push_back({{"response_time", tick_statistics_json(task.response_time)},
-                         {"task_id", task.task_id.value()},
-                         {"task_name", task.task_name}});
+        tasks.push_back(
+            {{"response_time", tick_statistics_json(task.response_time, metrics.tick_period)},
+             {"task_id", task.task_id.value()},
+             {"task_name", task.task_name}});
     }
     Json resources = Json::array();
     for (const auto& resource : metrics.resources) {
@@ -273,11 +284,13 @@ std::string serialize_run_metrics_json(const RunMetrics& metrics) {
                                         : Json{nullptr}},
                 {"messages",
                  {{"delivered", metrics.messages.delivered},
-                  {"delivery_delay", tick_statistics_json(metrics.messages.delivery_delay)},
+                  {"delivery_delay",
+                   tick_statistics_json(metrics.messages.delivery_delay, metrics.tick_period)},
                   {"sent", metrics.messages.sent}}},
                 {"preemptions", metrics.preemptions},
                 {"resources", std::move(resources)},
                 {"schema_version", 1},
+                {"tick_period_ns", metrics.tick_period.count()},
                 {"task_response_times", std::move(tasks)}}
                .dump(2) +
            '\n';
@@ -290,6 +303,7 @@ std::string serialize_run_metrics_csv(const RunMetrics& metrics) {
               "value\n";
     output << "run,,,event_count,,,,,," << metrics.event_count << '\n';
     output << "run,,,horizon_tick,,,,,," << metrics.horizon_tick << '\n';
+    output << "run,,,tick_period_ns,,,,,," << metrics.tick_period.count() << '\n';
     output << "run,,,completed_jobs,,,,,," << metrics.completed_jobs << '\n';
     output << "run,,,deadline_misses,,,,,," << metrics.deadline_misses << '\n';
     output << "run,,,preemptions,,,,,," << metrics.preemptions << '\n';
@@ -356,13 +370,14 @@ std::string serialize_events_csv(const SimulationSnapshot& snapshot,
 }
 
 std::string serialize_signals_csv(const RunResult& result, std::optional<GuiTickRange> range) {
-    if (!result.signals.valid()) {
+    if (!result.signals.model.has_value() || !result.signals.diagnostics.empty()) {
         throw std::invalid_argument{"functional signals are invalid and cannot be exported"};
     }
+    const auto& model = result.signals.model.value();
     std::ostringstream output;
     output.imbue(std::locale::classic());
     output << "tick,time_seconds,type,source_name,path,display_name,unit,value\n";
-    for (const auto& series : result.signals.model->series) {
+    for (const auto& series : model.series) {
         const auto type = series.descriptor.id.scalar_type == GuiSignalScalarType::Real ? "real"
                           : series.descriptor.id.scalar_type == GuiSignalScalarType::Integer
                               ? "integer"

@@ -29,16 +29,15 @@ GuiSignalId bosch_critical_section_signal_id() {
 
 BoschResultAnalysis derive_bosch_result_analysis(const RunResult& result) {
     BoschResultAnalysis analysis;
-    if (!result.signals.valid()) {
+    if (!result.signals.model.has_value() || !result.signals.diagnostics.empty()) {
         analysis.diagnostic = result.signals.diagnostics.empty()
                                   ? "Bosch signals are unavailable."
                                   : result.signals.diagnostics.front().message;
         return analysis;
     }
-    analysis.lateral_error =
-        find_signal_series(*result.signals.model, bosch_lateral_error_signal_id());
-    analysis.critical_section =
-        find_signal_series(*result.signals.model, bosch_critical_section_signal_id());
+    const auto& model = result.signals.model.value();
+    analysis.lateral_error = find_signal_series(model, bosch_lateral_error_signal_id());
+    analysis.critical_section = find_signal_series(model, bosch_critical_section_signal_id());
     if (analysis.lateral_error == nullptr) {
         analysis.diagnostic = "Lateral error signal is unavailable for this Bosch run.";
     } else {
@@ -76,6 +75,7 @@ BoschResultAnalysis derive_bosch_result_analysis(const RunResult& result) {
 std::vector<WorkbookControlMetric> bosch_workbook_control_metrics(const RunResult& result) {
     const auto analysis = derive_bosch_result_analysis(result);
     std::vector<WorkbookControlMetric> metrics;
+    metrics.reserve(analysis.threshold_crossings.size() + analysis.critical_intervals.size());
     for (const auto& crossing : analysis.threshold_crossings) {
         metrics.push_back({.metric = "lateral_error_threshold_crossing",
                            .tick = crossing.tick,

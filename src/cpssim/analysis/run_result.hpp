@@ -52,6 +52,7 @@ struct MessageRunMetrics {
 
 struct RunMetrics {
     std::uint64_t event_count{};
+    PhysicalDuration tick_period{};
     Tick horizon_tick{};
     std::optional<PhysicalDuration> horizon_time;
     std::uint64_t completed_jobs{};
