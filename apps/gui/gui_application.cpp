@@ -22,9 +22,11 @@
 #include "views/toolbar_view.hpp"
 
 #include "cpssim/application/bosch_project_factory.hpp"
+#include "cpssim/application/bosch_result_analysis.hpp"
 #include "cpssim/application/project/project_template.hpp"
 #include "cpssim/application/project/project_workflow.hpp"
 #include "cpssim/application/project/system_builder_workflow.hpp"
+#include "cpssim/application/result_export.hpp"
 #include "cpssim/config/json_run_plan.hpp"
 #include "cpssim/core/version.hpp"
 
@@ -32,9 +34,13 @@
 
 #include <algorithm>
 #include <charconv>
+#include <chrono>
+#include <ctime>
 #include <filesystem>
+#include <iomanip>
 #include <limits>
 #include <optional>
+#include <sstream>
 #include <stdexcept>
 #include <string_view>
 
@@ -78,6 +84,19 @@ system_run_configuration(const GuiSimulationSession& session,
     return {.stop_tick = session.draft().stop_tick(),
             .policy_kind = session.draft().policy_kind(),
             .assignments = assignments};
+}
+
+std::string default_export_run_id() {
+    const auto time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+    std::tm utc{};
+#if defined(_WIN32)
+    gmtime_s(&utc, &time);
+#else
+    gmtime_r(&time, &utc);
+#endif
+    std::ostringstream result;
+    result << "run-" << std::put_time(&utc, "%Y%m%d-%H%M%S");
+    return result.str();
 }
 
 } // namespace
@@ -330,6 +349,16 @@ bool GuiApplication::draw_main_menu() {
         if (ImGui::MenuItem("Save Project As...")) {
             request_project_action(PendingProjectAction::SaveAs);
         }
+        if (ImGui::MenuItem("Export Run Results...")) {
+            const auto run_id = default_export_run_id();
+            export_run_id_.fill('\0');
+            std::copy_n(run_id.begin(), std::min(run_id.size(), export_run_id_.size() - 1),
+                        export_run_id_.begin());
+            export_destination_ = application_state_.active_project().root() / "results";
+            export_scope_ = 0;
+            export_diagnostic_.clear();
+            open_export_dialog_ = true;
+        }
         if (ImGui::MenuItem("Close Project")) {
             request_project_action(PendingProjectAction::Close);
         }
@@ -393,6 +422,96 @@ bool GuiApplication::draw_main_menu() {
         return !execute_pending_project_action();
     }
     return true;
+}
+
+void GuiApplication::draw_export_dialog() {
+    if (open_export_dialog_) {
+        ImGui::OpenPopup("Export Run Results");
+        open_export_dialog_ = false;
+    }
+    if (!ImGui::BeginPopupModal("Export Run Results", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        return;
+    }
+    if (!application_state_.has_active_project()) {
+        ImGui::TextDisabled("Open a project before exporting results.");
+        if (ImGui::Button("Close")) {
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+        return;
+    }
+    ImGui::InputText("Run ID", export_run_id_.data(), export_run_id_.size());
+    ImGui::TextUnformatted("Destination");
+    ImGui::SameLine();
+    ImGui::TextWrapped("%s", export_destination_.string().c_str());
+    ImGui::SameLine();
+    if (ImGui::Button("Browse...")) {
+        if (dialogs_ == nullptr) {
+            export_diagnostic_ = "File dialogs are unavailable.";
+        } else {
+            const auto choice = dialogs_->choose_results_directory(export_destination_);
+            if (choice.status == FileDialogStatus::Selected) {
+                export_destination_ = choice.path;
+                export_diagnostic_.clear();
+            } else if (choice.status == FileDialogStatus::Failed) {
+                export_diagnostic_ = choice.diagnostic;
+            }
+        }
+    }
+    const auto range = runtime_selection_.tick_range();
+    ImGui::RadioButton("Complete run", &export_scope_, 0);
+    ImGui::BeginDisabled(!range.has_value());
+    ImGui::RadioButton("Selected time range", &export_scope_, 1);
+    ImGui::EndDisabled();
+    if (export_scope_ == 1 && range.has_value()) {
+        ImGui::SameLine();
+        ImGui::TextDisabled("[%lld, %lld]", static_cast<long long>(range->begin_tick),
+                            static_cast<long long>(range->end_tick));
+    }
+    auto raw_enabled = true;
+    ImGui::BeginDisabled();
+    ImGui::Checkbox("Raw JSON/CSV (authoritative)", &raw_enabled);
+    ImGui::EndDisabled();
+    ImGui::Checkbox("Excel workbook", &export_excel_);
+    if (!export_diagnostic_.empty()) {
+        ImGui::TextColored(ImVec4{1.0F, 0.45F, 0.35F, 1.0F}, "%s", export_diagnostic_.c_str());
+    }
+    if (ImGui::Button("Export")) {
+        try {
+            const auto& project = application_state_.active_project();
+            auto result = build_run_result(application_state_.active_session().snapshot(),
+                                           project.metadata().scenario_kind);
+            RunScenarioMetadata scenario;
+            std::vector<WorkbookControlMetric> control_metrics;
+            if (project.metadata().scenario_kind == "bosch") {
+                scenario.bosch_trajectory = "trajectory";
+                scenario.fmu_identity = "LateralMotionControl";
+                scenario.fmu_path = paths_.bosch_fmu_library;
+                control_metrics = bosch_workbook_control_metrics(result);
+            }
+            const RunExportOptions options{
+                .destination_directory = export_destination_,
+                .run_id = export_run_id_.data(),
+                .scope =
+                    export_scope_ == 1 ? RunExportScope::SelectedRange : RunExportScope::Complete,
+                .selected_range = export_scope_ == 1 ? range : std::nullopt,
+                .include_excel = export_excel_,
+                .scenario = std::move(scenario),
+                .control_metrics = std::move(control_metrics),
+                .created_at_utc = {}};
+            const auto exported = export_run_result(project, result, options);
+            set_status("Run results exported to " + exported.run_directory.string(), false);
+            ImGui::CloseCurrentPopup();
+        } catch (const std::exception& error) {
+            export_diagnostic_ = error.what();
+        }
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Cancel")) {
+        export_diagnostic_.clear();
+        ImGui::CloseCurrentPopup();
+    }
+    ImGui::EndPopup();
 }
 
 void GuiApplication::open_project_dialog() {
@@ -943,11 +1062,10 @@ void GuiApplication::draw_center_panels(const SimulationSnapshot& snapshot) {
             if (workspace_state_.panels.results &&
                 ImGui::BeginTabItem("Results", nullptr, results_flags)) {
                 workspace_state_.active_analysis_tab = GuiAnalysisTab::Results;
-                const auto scenario_kind = application_state_.has_active_project()
-                                               ? application_state_.active_project()
-                                                     .metadata()
-                                                     .scenario_kind
-                                               : std::string{"generic"};
+                const auto scenario_kind =
+                    application_state_.has_active_project()
+                        ? application_state_.active_project().metadata().scenario_kind
+                        : std::string{"generic"};
                 draw_results_view(snapshot, std::move(scenario_kind),
                                   signal_view_state_.selected_signals, runtime_selection_,
                                   results_view_state_);
@@ -1303,6 +1421,7 @@ void GuiApplication::draw_frame() {
     draw_unapplied_changes_dialog();
     draw_project_dialog();
     draw_bosch_wizard();
+    draw_export_dialog();
     if (validate_system_draft_requested_) {
         validate_system_draft_requested_ = false;
         validate_system_draft();

@@ -45,6 +45,8 @@ class FileDialog {
     choose_trajectory_directory(const std::filesystem::path& initial_directory) = 0;
     virtual FileDialogResult open_run_plan(const std::filesystem::path& initial_directory) = 0;
     virtual FileDialogResult save_run_plan(const std::filesystem::path& suggested_path) = 0;
+    virtual FileDialogResult
+    choose_results_directory(const std::filesystem::path& initial_directory) = 0;
 };
 
 } // namespace cpssim

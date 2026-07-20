@@ -21,9 +21,7 @@ void add_crossings(const GuiSignalSeries& series, double threshold,
 
 } // namespace
 
-GuiSignalId bosch_lateral_error_signal_id() {
-    return {GuiSignalScalarType::Real, "lateral_error"};
-}
+GuiSignalId bosch_lateral_error_signal_id() { return {GuiSignalScalarType::Real, "lateral_error"}; }
 
 GuiSignalId bosch_critical_section_signal_id() {
     return {GuiSignalScalarType::Boolean, "critical_section"};
@@ -73,6 +71,22 @@ BoschResultAnalysis derive_bosch_result_analysis(const RunResult& result) {
         }
     }
     return analysis;
+}
+
+std::vector<WorkbookControlMetric> bosch_workbook_control_metrics(const RunResult& result) {
+    const auto analysis = derive_bosch_result_analysis(result);
+    std::vector<WorkbookControlMetric> metrics;
+    for (const auto& crossing : analysis.threshold_crossings) {
+        metrics.push_back({.metric = "lateral_error_threshold_crossing",
+                           .tick = crossing.tick,
+                           .value = std::to_string(crossing.threshold) + " m"});
+    }
+    for (const auto& interval : analysis.critical_intervals) {
+        metrics.push_back({.metric = "critical_section_interval",
+                           .tick = interval.begin_tick,
+                           .value = "through tick " + std::to_string(interval.end_tick)});
+    }
+    return metrics;
 }
 
 } // namespace cpssim

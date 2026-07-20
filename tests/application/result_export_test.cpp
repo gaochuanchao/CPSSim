@@ -23,8 +23,8 @@ class TemporaryDirectory {
         static std::atomic_uint64_t sequence{0};
         root_ = std::filesystem::temp_directory_path() /
                 ("cpssim-result-export-" +
-                 std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) +
-                 '-' + std::to_string(sequence.fetch_add(1)));
+                 std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + '-' +
+                 std::to_string(sequence.fetch_add(1)));
         std::filesystem::create_directory(root_);
     }
     ~TemporaryDirectory() {
@@ -54,26 +54,23 @@ EventEntityRefs task_job(TaskId task, JobId job) {
 RunResult result_for(const ProjectContext& project) {
     auto snapshot = project.session().snapshot();
     snapshot.current_tick = 9'007'199'254'740'995LL;
-    snapshot.event_log = {
-        Event{1, EventPhase::JobRelease, EventSequence{0}, EventType::JobRelease,
-              task_job(TaskId{1}, JobId{0})},
-        Event{3, EventPhase::ExecutionCompletion, EventSequence{1}, EventType::JobFinish,
-              task_job(TaskId{1}, JobId{0})}};
-    snapshot.functional_signal_registry = {
-        {.id = {GuiSignalScalarType::Real, "value"},
-         .path = "Generic/Value",
-         .display_name = "Value, quoted \"name\"",
-         .unit = "m",
-         .source = "test"}};
-    snapshot.functional_observations = {
-        {.tick = 0,
-         .real_signals = {{.name = "value", .value = 1.25}},
-         .integer_signals = {},
-         .boolean_signals = {}},
-        {.tick = 1,
-         .real_signals = {{.name = "value", .value = 2.5}},
-         .integer_signals = {},
-         .boolean_signals = {}}};
+    snapshot.event_log = {Event{1, EventPhase::JobRelease, EventSequence{0}, EventType::JobRelease,
+                                task_job(TaskId{1}, JobId{0})},
+                          Event{3, EventPhase::ExecutionCompletion, EventSequence{1},
+                                EventType::JobFinish, task_job(TaskId{1}, JobId{0})}};
+    snapshot.functional_signal_registry = {{.id = {GuiSignalScalarType::Real, "value"},
+                                            .path = "Generic/Value",
+                                            .display_name = "Value, quoted \"name\"",
+                                            .unit = "m",
+                                            .source = "test"}};
+    snapshot.functional_observations = {{.tick = 0,
+                                         .real_signals = {{.name = "value", .value = 1.25}},
+                                         .integer_signals = {},
+                                         .boolean_signals = {}},
+                                        {.tick = 1,
+                                         .real_signals = {{.name = "value", .value = 2.5}},
+                                         .integer_signals = {},
+                                         .boolean_signals = {}}};
     return build_run_result(std::move(snapshot), "generic");
 }
 
@@ -108,6 +105,7 @@ TEST_CASE("raw export publishes complete stable files and rejects duplicate run 
                                    .selected_range = std::nullopt,
                                    .include_excel = false,
                                    .scenario = {},
+                                   .control_metrics = {},
                                    .created_at_utc = "2026-07-20T10:00:00Z"};
     const auto exported = export_run_result(*project, result, options);
 
@@ -119,8 +117,9 @@ TEST_CASE("raw export publishes complete stable files and rejects duplicate run 
     }
     REQUIRE(read_text(exported.run_directory / "metrics.json").find("9007199254740995") !=
             std::string::npos);
-    REQUIRE(read_text(exported.run_directory / "signals.csv")
-                .find("\"Value, quoted \"\"name\"\"\"") != std::string::npos);
+    REQUIRE(
+        read_text(exported.run_directory / "signals.csv").find("\"Value, quoted \"\"name\"\"\"") !=
+        std::string::npos);
     REQUIRE(read_text(exported.run_directory / "events.jsonl").find("\"sequence\":0") !=
             std::string::npos);
     REQUIRE(exported.manifest.system_checksum.starts_with("fnv1a64:"));
@@ -138,6 +137,7 @@ TEST_CASE("selected ranges are inclusive and failed export removes its temporary
                                     .selected_range = GuiTickRange{1, 1},
                                     .include_excel = false,
                                     .scenario = {},
+                                    .control_metrics = {},
                                     .created_at_utc = "2026-07-20T10:00:00Z"};
     const auto selected = export_run_result(*project, result, options);
     REQUIRE(selected.event_rows == 1);
@@ -155,6 +155,34 @@ TEST_CASE("selected ranges are inclusive and failed export removes its temporary
     for (const auto& entry : std::filesystem::directory_iterator(options.destination_directory)) {
         REQUIRE(entry.path().filename().string().find(".failed.tmp-") == std::string::npos);
     }
+}
+
+TEST_CASE("Excel export creates a workbook and large detail tables split deterministically",
+          "[project][result][excel]") {
+    const auto empty = plan_workbook_detail_sheets("Events", 0);
+    REQUIRE(empty == std::vector<WorkbookDetailSheet>{{"Events", 0, 0}});
+    const auto split = plan_workbook_detail_sheets("Events", excel_maximum_rows + 5);
+    REQUIRE(split == std::vector<WorkbookDetailSheet>{{"Events", 0, excel_maximum_rows - 1},
+                                                      {"Events 2", excel_maximum_rows - 1, 6}});
+
+    TemporaryDirectory temporary;
+    auto project = create_project(make_generic_project_template(temporary.root(), "excel"));
+    const auto result = result_for(*project);
+    const RunExportOptions options{
+        .destination_directory = project->root() / "results",
+        .run_id = "workbook",
+        .scope = RunExportScope::Complete,
+        .selected_range = std::nullopt,
+        .include_excel = true,
+        .scenario = {},
+        .control_metrics = {{.metric = "threshold", .tick = 3, .value = "0.2 m"}},
+        .created_at_utc = "2026-07-20T10:00:00Z"};
+    const auto exported = export_run_result(*project, result, options);
+    const auto workbook = read_text(exported.run_directory / "results.xlsx");
+    REQUIRE(workbook.size() > 4);
+    REQUIRE(workbook.substr(0, 2) == "PK");
+    REQUIRE(exported.event_rows == 2);
+    REQUIRE(exported.signal_rows == 2);
 }
 
 } // namespace

@@ -3,6 +3,7 @@
 #pragma once
 
 #include "cpssim/analysis/run_result.hpp"
+#include "cpssim/application/results_workbook.hpp"
 
 #include <optional>
 #include <string>
@@ -36,5 +37,6 @@ struct BoschResultAnalysis {
 GuiSignalId bosch_lateral_error_signal_id();
 GuiSignalId bosch_critical_section_signal_id();
 BoschResultAnalysis derive_bosch_result_analysis(const RunResult& result);
+std::vector<WorkbookControlMetric> bosch_workbook_control_metrics(const RunResult& result);
 
 } // namespace cpssim

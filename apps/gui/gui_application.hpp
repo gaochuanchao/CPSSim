@@ -92,6 +92,7 @@ class GuiApplication {
     void draw_about_dialog();
     void draw_project_dialog();
     void draw_bosch_wizard();
+    void draw_export_dialog();
     void draw_center_panels(const SimulationSnapshot& snapshot);
     void draw_left_sidebar(const SimulationSnapshot& snapshot);
     void draw_right_sidebar(const SimulationSnapshot& snapshot);
@@ -111,6 +112,12 @@ class GuiApplication {
     std::array<char, 256> project_name_{};
     std::filesystem::path project_parent_;
     bool open_bosch_wizard_{false};
+    bool open_export_dialog_{false};
+    std::array<char, 128> export_run_id_{};
+    std::filesystem::path export_destination_;
+    int export_scope_{0};
+    bool export_excel_{true};
+    std::string export_diagnostic_;
     BoschWizardStep bosch_step_{BoschWizardStep::Trajectory};
     int bosch_trajectory_{0};
     std::filesystem::path bosch_custom_trajectory_;

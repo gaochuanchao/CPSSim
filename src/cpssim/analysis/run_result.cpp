@@ -12,7 +12,8 @@
 namespace cpssim {
 namespace {
 
-template <typename Key> void add_sample(std::map<Key, TickStatistics>& statistics, Key key, Tick value) {
+template <typename Key>
+void add_sample(std::map<Key, TickStatistics>& statistics, Key key, Tick value) {
     auto [found, inserted] = statistics.try_emplace(key, TickStatistics{1, value, value, value});
     if (!inserted) {
         ++found->second.count;
@@ -94,7 +95,8 @@ RunMetrics derive_run_metrics(const SimulationSnapshot& snapshot) {
     result.event_count = snapshot.event_log.size();
     result.horizon_tick = snapshot.current_tick;
     try {
-        result.horizon_time = ticks_to_duration(snapshot.current_tick, snapshot.experiment.tick_period);
+        result.horizon_time =
+            ticks_to_duration(snapshot.current_tick, snapshot.experiment.tick_period);
     } catch (const std::invalid_argument&) {
         result.horizon_time = std::nullopt;
     } catch (const std::overflow_error&) {
@@ -175,16 +177,15 @@ RunMetrics derive_run_metrics(const SimulationSnapshot& snapshot) {
                                                         static_cast<double>(observed)}
                                 : std::nullopt});
     }
-    std::sort(result.resources.begin(), result.resources.end(),
-              [](const auto& left, const auto& right) {
-                  return left.resource_id < right.resource_id;
-              });
+    std::sort(
+        result.resources.begin(), result.resources.end(),
+        [](const auto& left, const auto& right) { return left.resource_id < right.resource_id; });
     return result;
 }
 
 RunResult build_run_result(SimulationSnapshot snapshot, std::string scenario_kind) {
-    auto signals = build_signal_model(snapshot.functional_observations,
-                                      snapshot.functional_signal_registry);
+    auto signals =
+        build_signal_model(snapshot.functional_observations, snapshot.functional_signal_registry);
     auto metrics = derive_run_metrics(snapshot);
     return {.scenario_kind = std::move(scenario_kind),
             .snapshot = std::move(snapshot),
@@ -206,6 +207,10 @@ SimulationSnapshot select_run_result_range(const SimulationSnapshot& snapshot, T
                       return observation.tick < begin_tick || observation.tick > end_tick;
                   });
     result.current_tick = std::min(snapshot.current_tick, end_tick);
+    for (auto& resource : result.resources) {
+        resource.busy_ticks = 0;
+        resource.idle_ticks = 0;
+    }
     return result;
 }
 

@@ -41,6 +41,47 @@ if(NOT nlohmann_json_FOUND)
     FetchContent_MakeAvailable(nlohmann_json)
 endif()
 
+if(NOT TARGET xlsxwriter)
+    include(FetchContent)
+    FetchContent_Declare(
+        zlib
+        GIT_REPOSITORY https://github.com/madler/zlib.git
+        GIT_TAG 925af44f3cde53c6b076611c297850091b5dc7bb
+        GIT_SHALLOW FALSE
+    )
+    set(ZLIB_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    FetchContent_MakeAvailable(zlib)
+    FetchContent_Declare(
+        libxlsxwriter
+        GIT_REPOSITORY https://github.com/jmcnamara/libxlsxwriter.git
+        GIT_TAG 2894634d65cee6021901a165bfc2bb0fad6da193
+        GIT_SHALLOW FALSE
+        SOURCE_SUBDIR dependency-populated-without-upstream-build
+    )
+    FetchContent_MakeAvailable(libxlsxwriter)
+    file(GLOB CPSSIM_XLSXWRITER_SOURCES "${libxlsxwriter_SOURCE_DIR}/src/*.c")
+    add_library(
+        xlsxwriter STATIC
+        ${CPSSIM_XLSXWRITER_SOURCES}
+        "${libxlsxwriter_SOURCE_DIR}/third_party/minizip/ioapi.c"
+        "${libxlsxwriter_SOURCE_DIR}/third_party/minizip/zip.c"
+        "${libxlsxwriter_SOURCE_DIR}/third_party/tmpfileplus/tmpfileplus.c"
+        "${libxlsxwriter_SOURCE_DIR}/third_party/md5/md5.c"
+    )
+    target_include_directories(
+        xlsxwriter
+        SYSTEM PUBLIC
+            "${libxlsxwriter_SOURCE_DIR}/include"
+            "${libxlsxwriter_SOURCE_DIR}/include/xlsxwriter"
+        PRIVATE
+            "${libxlsxwriter_SOURCE_DIR}/third_party/minizip"
+            "${libxlsxwriter_SOURCE_DIR}/third_party/tmpfileplus"
+            "${libxlsxwriter_SOURCE_DIR}/third_party/md5"
+    )
+    target_compile_definitions(xlsxwriter PRIVATE NOCRYPT NOUNCRYPT)
+    target_link_libraries(xlsxwriter PRIVATE zlibstatic)
+endif()
+
 add_library(
     cpssim_core STATIC
     src/cpssim/config/json_config.cpp
@@ -203,6 +244,7 @@ add_library(
     cpssim_gui_support STATIC
     src/cpssim/analysis/run_result.cpp
     src/cpssim/application/result_export.cpp
+    src/cpssim/application/results_workbook.cpp
     src/cpssim/application/project/project.cpp
     src/cpssim/application/project/project_template.cpp
     src/cpssim/application/project/project_workflow.cpp
@@ -228,7 +270,7 @@ target_include_directories(
     cpssim_gui_support
     SYSTEM PRIVATE ${CPSSIM_NLOHMANN_INCLUDE_DIRECTORIES}
 )
-target_link_libraries(cpssim_gui_support PRIVATE nlohmann_json::nlohmann_json)
+target_link_libraries(cpssim_gui_support PRIVATE nlohmann_json::nlohmann_json xlsxwriter)
 
 cpssim_set_project_warnings(cpssim_gui_support)
 cpssim_enable_sanitizers(cpssim_gui_support)

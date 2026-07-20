@@ -151,9 +151,9 @@ std::optional<GuiTickRange> export_range(const RunExportOptions& options) {
 
 std::uint64_t count_events(const SimulationSnapshot& snapshot,
                            const std::optional<GuiTickRange>& range) {
-    return static_cast<std::uint64_t>(std::count_if(
-        snapshot.event_log.begin(), snapshot.event_log.end(),
-        [&range](const Event& event) { return selected(event.tick(), range); }));
+    return static_cast<std::uint64_t>(
+        std::count_if(snapshot.event_log.begin(), snapshot.event_log.end(),
+                      [&range](const Event& event) { return selected(event.tick(), range); }));
 }
 
 std::uint64_t count_signals(const RunResult& result, const std::optional<GuiTickRange>& range) {
@@ -193,19 +193,20 @@ std::string serialize_run_manifest_json(const RunManifest& manifest) {
     if (manifest.scenario.fmu_path.has_value()) {
         scenario["fmu_path"] = manifest.scenario.fmu_path->generic_string();
     }
-    return Json{{"created_at_utc", manifest.created_at_utc},
-                {"cpssim_version", manifest.cpssim_version},
-                {"policy", manifest.policy},
-                {"project_name", manifest.project_name},
-                {"run_id", manifest.run_id},
-                {"run_plan", {{"checksum", manifest.run_plan_checksum},
-                               {"file", manifest.run_plan_file}}},
-                {"scenario", std::move(scenario)},
-                {"schema_version", manifest.schema_version},
-                {"stop_tick", manifest.stop_tick},
-                {"system", {{"checksum", manifest.system_checksum},
-                             {"file", manifest.system_file}}}}
-        .dump(2) + '\n';
+    return Json{
+               {"created_at_utc", manifest.created_at_utc},
+               {"cpssim_version", manifest.cpssim_version},
+               {"policy", manifest.policy},
+               {"project_name", manifest.project_name},
+               {"run_id", manifest.run_id},
+               {"run_plan",
+                {{"checksum", manifest.run_plan_checksum}, {"file", manifest.run_plan_file}}},
+               {"scenario", std::move(scenario)},
+               {"schema_version", manifest.schema_version},
+               {"stop_tick", manifest.stop_tick},
+               {"system", {{"checksum", manifest.system_checksum}, {"file", manifest.system_file}}}}
+               .dump(2) +
+           '\n';
 }
 
 RunManifest parse_run_manifest_json(std::string_view json_text) {
@@ -216,25 +217,22 @@ RunManifest parse_run_manifest_json(std::string_view json_text) {
             throw std::invalid_argument{"unsupported run manifest schema"};
         }
         const auto& scenario = document.at("scenario");
-        RunManifest manifest{.schema_version = document.at("schema_version").get<std::uint32_t>(),
-                             .cpssim_version = document.at("cpssim_version").get<std::string>(),
-                             .project_name = document.at("project_name").get<std::string>(),
-                             .run_id = document.at("run_id").get<std::string>(),
-                             .created_at_utc = document.at("created_at_utc").get<std::string>(),
-                             .system_file = document.at("system").at("file").get<std::string>(),
-                             .run_plan_file =
-                                 document.at("run_plan").at("file").get<std::string>(),
-                             .system_checksum =
-                                 document.at("system").at("checksum").get<std::string>(),
-                             .run_plan_checksum =
-                                 document.at("run_plan").at("checksum").get<std::string>(),
-                             .policy = document.at("policy").get<std::string>(),
-                             .stop_tick = document.at("stop_tick").get<Tick>(),
-                             .scenario_kind = scenario.at("kind").get<std::string>(),
-                             .scenario = {}};
+        RunManifest manifest{
+            .schema_version = document.at("schema_version").get<std::uint32_t>(),
+            .cpssim_version = document.at("cpssim_version").get<std::string>(),
+            .project_name = document.at("project_name").get<std::string>(),
+            .run_id = document.at("run_id").get<std::string>(),
+            .created_at_utc = document.at("created_at_utc").get<std::string>(),
+            .system_file = document.at("system").at("file").get<std::string>(),
+            .run_plan_file = document.at("run_plan").at("file").get<std::string>(),
+            .system_checksum = document.at("system").at("checksum").get<std::string>(),
+            .run_plan_checksum = document.at("run_plan").at("checksum").get<std::string>(),
+            .policy = document.at("policy").get<std::string>(),
+            .stop_tick = document.at("stop_tick").get<Tick>(),
+            .scenario_kind = scenario.at("kind").get<std::string>(),
+            .scenario = {}};
         if (scenario.contains("bosch_trajectory")) {
-            manifest.scenario.bosch_trajectory =
-                scenario.at("bosch_trajectory").get<std::string>();
+            manifest.scenario.bosch_trajectory = scenario.at("bosch_trajectory").get<std::string>();
         }
         if (scenario.contains("fmu_identity")) {
             manifest.scenario.fmu_identity = scenario.at("fmu_identity").get<std::string>();
@@ -258,13 +256,13 @@ std::string serialize_run_metrics_json(const RunMetrics& metrics) {
     }
     Json resources = Json::array();
     for (const auto& resource : metrics.resources) {
-        resources.push_back({{"busy_ticks", resource.busy_ticks},
-                             {"idle_ticks", resource.idle_ticks},
-                             {"resource_id", resource.resource_id.value()},
-                             {"resource_name", resource.resource_name},
-                             {"utilization", resource.utilization.has_value()
-                                                 ? Json{*resource.utilization}
-                                                 : Json{nullptr}}});
+        resources.push_back(
+            {{"busy_ticks", resource.busy_ticks},
+             {"idle_ticks", resource.idle_ticks},
+             {"resource_id", resource.resource_id.value()},
+             {"resource_name", resource.resource_name},
+             {"utilization",
+              resource.utilization.has_value() ? Json{*resource.utilization} : Json{nullptr}}});
     }
     return Json{{"completed_jobs", metrics.completed_jobs},
                 {"deadline_misses", metrics.deadline_misses},
@@ -273,20 +271,23 @@ std::string serialize_run_metrics_json(const RunMetrics& metrics) {
                 {"horizon_time_ns", metrics.horizon_time.has_value()
                                         ? Json{metrics.horizon_time->count()}
                                         : Json{nullptr}},
-                {"messages", {{"delivered", metrics.messages.delivered},
-                               {"delivery_delay", tick_statistics_json(metrics.messages.delivery_delay)},
-                               {"sent", metrics.messages.sent}}},
+                {"messages",
+                 {{"delivered", metrics.messages.delivered},
+                  {"delivery_delay", tick_statistics_json(metrics.messages.delivery_delay)},
+                  {"sent", metrics.messages.sent}}},
                 {"preemptions", metrics.preemptions},
                 {"resources", std::move(resources)},
                 {"schema_version", 1},
                 {"task_response_times", std::move(tasks)}}
-        .dump(2) + '\n';
+               .dump(2) +
+           '\n';
 }
 
 std::string serialize_run_metrics_csv(const RunMetrics& metrics) {
     std::ostringstream output;
     output.imbue(std::locale::classic());
-    output << "category,id,name,metric,count,minimum_ticks,maximum_ticks,total_ticks,mean_ticks,value\n";
+    output << "category,id,name,metric,count,minimum_ticks,maximum_ticks,total_ticks,mean_ticks,"
+              "value\n";
     output << "run,,,event_count,,,,,," << metrics.event_count << '\n';
     output << "run,,,horizon_tick,,,,,," << metrics.horizon_tick << '\n';
     output << "run,,,completed_jobs,,,,,," << metrics.completed_jobs << '\n';
@@ -336,7 +337,8 @@ std::string serialize_events_csv(const SimulationSnapshot& snapshot,
                                  std::optional<GuiTickRange> range) {
     std::ostringstream output;
     output.imbue(std::locale::classic());
-    output << "sequence,tick,time_seconds,type,phase,task_id,job_id,resource_id,message_id,vehicle_id,cause_sequence\n";
+    output << "sequence,tick,time_seconds,type,phase,task_id,job_id,resource_id,message_id,vehicle_"
+              "id,cause_sequence\n";
     for (const auto& event : snapshot.event_log) {
         if (!selected(event.tick(), range)) {
             continue;
@@ -361,9 +363,10 @@ std::string serialize_signals_csv(const RunResult& result, std::optional<GuiTick
     output.imbue(std::locale::classic());
     output << "tick,time_seconds,type,source_name,path,display_name,unit,value\n";
     for (const auto& series : result.signals.model->series) {
-        const auto type = series.descriptor.id.scalar_type == GuiSignalScalarType::Real      ? "real"
-                          : series.descriptor.id.scalar_type == GuiSignalScalarType::Integer ? "integer"
-                                                                                             : "boolean";
+        const auto type = series.descriptor.id.scalar_type == GuiSignalScalarType::Real ? "real"
+                          : series.descriptor.id.scalar_type == GuiSignalScalarType::Integer
+                              ? "integer"
+                              : "boolean";
         for (const auto& sample : series.samples) {
             if (!selected(sample.tick, range)) {
                 continue;
@@ -397,7 +400,7 @@ RunExportArtifacts export_run_result(const ProjectContext& project, const RunRes
     validate_run_id(options.run_id);
     const auto range = export_range(options);
     auto destination = options.destination_directory.empty() ? project.root() / "results"
-                                                              : options.destination_directory;
+                                                             : options.destination_directory;
     std::filesystem::create_directories(destination);
     const auto target = destination / options.run_id;
     if (std::filesystem::exists(target)) {
@@ -423,11 +426,10 @@ RunExportArtifacts export_run_result(const ProjectContext& project, const RunRes
             .stop_tick = plan.stop_tick(),
             .scenario_kind = project.metadata().scenario_kind,
             .scenario = options.scenario};
-        const auto exported_metrics = range.has_value()
-                                          ? derive_run_metrics(select_run_result_range(
-                                                result.snapshot, range->begin_tick,
-                                                range->end_tick))
-                                          : result.metrics;
+        const auto exported_metrics =
+            range.has_value() ? derive_run_metrics(select_run_result_range(
+                                    result.snapshot, range->begin_tick, range->end_tick))
+                              : result.metrics;
 
         write_file(temporary / "system.json", system_json);
         write_file(temporary / "run-plan.json", plan_json);
@@ -437,7 +439,10 @@ RunExportArtifacts export_run_result(const ProjectContext& project, const RunRes
         write_file(temporary / "metrics.json", serialize_run_metrics_json(exported_metrics));
         write_file(temporary / "metrics.csv", serialize_run_metrics_csv(exported_metrics));
         if (options.include_excel) {
-            throw std::runtime_error{"Excel export is not configured"};
+            auto workbook_result = result;
+            workbook_result.metrics = exported_metrics;
+            write_results_workbook(temporary / "results.xlsx", project, workbook_result, range,
+                                   options.control_metrics);
         }
         write_file(temporary / "manifest.json", serialize_run_manifest_json(manifest));
         std::filesystem::rename(temporary, target);

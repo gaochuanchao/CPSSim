@@ -64,6 +64,11 @@ FileDialogResult NativeFileDialog::save_run_plan(const std::filesystem::path& su
     }
 }
 
+FileDialogResult
+NativeFileDialog::choose_results_directory(const std::filesystem::path& initial_directory) {
+    return select_folder("Choose Run Results Directory", initial_directory);
+}
+
 FileDialogResult NativeFileDialog::select_folder(std::string title,
                                                  const std::filesystem::path& initial_directory) {
     if (!pfd::settings::available()) {

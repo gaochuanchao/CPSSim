@@ -4,6 +4,7 @@
 
 #include "cpssim/analysis/run_result.hpp"
 #include "cpssim/application/project/project.hpp"
+#include "cpssim/application/results_workbook.hpp"
 #include "cpssim/gui/selection_model.hpp"
 
 #include <cstdint>
@@ -51,6 +52,7 @@ struct RunExportOptions {
     std::optional<GuiTickRange> selected_range;
     bool include_excel{false};
     RunScenarioMetadata scenario;
+    std::vector<WorkbookControlMetric> control_metrics;
     // Empty means the exporter records the current UTC time.
     std::string created_at_utc;
 };

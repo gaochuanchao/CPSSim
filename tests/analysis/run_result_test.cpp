@@ -94,8 +94,7 @@ TEST_CASE("empty and incomplete traces remain deterministic", "[analysis][metric
     REQUIRE_FALSE(first.messages.delivery_delay.has_value());
 }
 
-TEST_CASE("selected result range is inclusive and preserves source data",
-          "[analysis][range]") {
+TEST_CASE("selected result range is inclusive and preserves source data", "[analysis][range]") {
     const auto source = snapshot();
     const auto selected = select_run_result_range(source, 4, 7);
     REQUIRE(selected.event_log.size() == 3);

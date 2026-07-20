@@ -58,6 +58,7 @@ class TemporaryDirectory {
 class StubFileDialog final : public FileDialog {
   public:
     FileDialogResult project_result;
+    FileDialogResult results_result;
 
     FileDialogResult open_project(const std::filesystem::path&) override { return project_result; }
     FileDialogResult choose_project_parent(const std::filesystem::path&) override {
@@ -71,6 +72,9 @@ class StubFileDialog final : public FileDialog {
     }
     FileDialogResult save_run_plan(const std::filesystem::path&) override {
         return FileDialogResult::cancelled();
+    }
+    FileDialogResult choose_results_directory(const std::filesystem::path&) override {
+        return results_result;
     }
 };
 
@@ -139,6 +143,16 @@ std::string project_document(std::string_view system_file, std::string_view work
              << "  \"scenario\": {\"kind\": \"generic\"}\n"
              << "}\n";
     return document.str();
+}
+
+TEST_CASE("result-directory dialog preserves selection and cancellation", "[project][dialog]") {
+    StubFileDialog dialogs;
+    dialogs.results_result = FileDialogResult::cancelled();
+    REQUIRE(dialogs.choose_results_directory("projects").status == FileDialogStatus::Cancelled);
+    dialogs.results_result = FileDialogResult::selected("exports");
+    const auto selected = dialogs.choose_results_directory("projects");
+    REQUIRE(selected.status == FileDialogStatus::Selected);
+    REQUIRE(selected.path == std::filesystem::path{"exports"});
 }
 
 TEST_CASE("project creation writes and reloads the complete directory convention",
