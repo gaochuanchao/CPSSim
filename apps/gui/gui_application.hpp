@@ -14,6 +14,7 @@
 #include "cpssim/application/file_dialog.hpp"
 #include "cpssim/application/gui_layout_store.hpp"
 #include "cpssim/application/recent_projects.hpp"
+#include "cpssim/analysis/completed_run_result.hpp"
 #include "cpssim/gui/application_state.hpp"
 #include "cpssim/gui/selection_model.hpp"
 #include "cpssim/gui/workspace_state.hpp"
@@ -120,6 +121,7 @@ class GuiApplication {
     std::optional<SimulationSnapshot> presentation_snapshot_;
     SimulationProgress progress_;
     GuiRunMode last_run_mode_{GuiRunMode::Live};
+    CompletedRunResultCache completed_results_;
     bool open_about_{false};
     bool request_project_modal_{false};
     ProjectDialogKind project_dialog_kind_{ProjectDialogKind::None};
@@ -127,6 +129,8 @@ class GuiApplication {
     std::filesystem::path project_parent_;
     bool open_bosch_wizard_{false};
     bool open_export_dialog_{false};
+    bool request_completed_export_{false};
+    bool open_plot_visualizer_{false};
     std::array<char, 128> export_run_id_{};
     std::filesystem::path export_destination_;
     int export_scope_{0};

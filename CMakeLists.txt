@@ -242,6 +242,7 @@ cpssim_enable_sanitizers(cpssim_cli)
 
 add_library(
     cpssim_gui_support STATIC
+    src/cpssim/analysis/completed_run_result.cpp
     src/cpssim/analysis/run_result.cpp
     src/cpssim/application/gui_layout_store.cpp
     src/cpssim/application/result_export.cpp

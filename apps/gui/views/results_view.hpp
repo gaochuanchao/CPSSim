@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "cpssim/analysis/run_result.hpp"
+#include "cpssim/analysis/completed_run_result.hpp"
 #include "cpssim/gui/selection_model.hpp"
 
 #include <optional>
@@ -11,17 +11,9 @@
 
 namespace cpssim::gui {
 
-struct ResultsViewState {
-    std::optional<RunResult> result;
-    std::size_t event_count{};
-    std::size_t observation_count{};
-    Tick current_tick{-1};
-    GuiRunState run_state{GuiRunState::NotConfigured};
-    std::string scenario_kind;
-};
+struct ResultsViewState {};
 
-void draw_results_view(const SimulationSnapshot& snapshot, std::string scenario_kind,
-                       const std::vector<GuiSignalId>& selected_signals, GuiSelection& selection,
-                       ResultsViewState& state);
+void draw_results_view(const SimulationProgress& progress, const CompletedRunResult* completed,
+                       bool& open_visualizer, bool& open_export, ResultsViewState& state);
 
 } // namespace cpssim::gui

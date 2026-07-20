@@ -27,6 +27,9 @@ struct TickStatistics {
 struct TaskResponseMetrics {
     TaskId task_id;
     std::string task_name;
+    Tick deadline{};
+    std::uint64_t completed_jobs{};
+    std::uint64_t deadline_misses{};
     std::optional<TickStatistics> response_time;
 
     bool operator==(const TaskResponseMetrics&) const = default;

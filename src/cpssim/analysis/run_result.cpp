@@ -106,6 +106,8 @@ RunMetrics derive_run_metrics(const SimulationSnapshot& snapshot) {
 
     std::map<JobIdentity, Tick> releases;
     std::map<TaskId, TickStatistics> responses;
+    std::map<TaskId, std::uint64_t> task_completions;
+    std::map<TaskId, std::uint64_t> task_deadline_misses;
     std::map<MessageId, Tick> sends;
     TickStatistics message_delays;
 
@@ -119,6 +121,7 @@ RunMetrics derive_run_metrics(const SimulationSnapshot& snapshot) {
         case EventType::JobFinish:
             ++result.completed_jobs;
             if (const auto job = event_job(event); job.has_value()) {
+                ++task_completions[job->task_id()];
                 if (const auto release = releases.find(*job);
                     release != releases.end() && event.tick() >= release->second) {
                     add_sample(responses, job->task_id(), event.tick() - release->second);
@@ -127,6 +130,9 @@ RunMetrics derive_run_metrics(const SimulationSnapshot& snapshot) {
             break;
         case EventType::DeadlineMiss:
             ++result.deadline_misses;
+            if (event.entities().task_id.has_value()) {
+                ++task_deadline_misses[*event.entities().task_id];
+            }
             break;
         case EventType::JobPreempt:
             ++result.preemptions;
@@ -161,6 +167,9 @@ RunMetrics derive_run_metrics(const SimulationSnapshot& snapshot) {
         result.task_responses.push_back(
             {.task_id = task.id,
              .task_name = task.name,
+             .deadline = task.deadline,
+             .completed_jobs = task_completions[task.id],
+             .deadline_misses = task_deadline_misses[task.id],
              .response_time = found == responses.end()
                                   ? std::optional<TickStatistics>{}
                                   : std::optional<TickStatistics>{found->second}});

@@ -336,6 +336,7 @@ void GuiApplication::record_active_project() {
 
 /*** Replaces the active session only after its caller has constructed it. ***/
 void GuiApplication::replace_session(std::unique_ptr<GuiSimulationSession> session) {
+    completed_results_.invalidate();
     application_state_.replace_session(std::move(session));
     load_workspace_state();
     initialize_system_draft();
@@ -350,6 +351,7 @@ void GuiApplication::replace_session(std::unique_ptr<GuiSimulationSession> sessi
 
 /*** Activates one fully constructed project and its uniquely owned session. ***/
 void GuiApplication::replace_project(std::unique_ptr<ProjectContext> project) {
+    completed_results_.invalidate();
     application_state_.replace_project(std::move(project));
     load_workspace_state();
     initialize_system_draft();
@@ -378,6 +380,7 @@ void GuiApplication::save_active_project() {
 
 /*** Returns the application to Home without retaining a session reference. ***/
 void GuiApplication::clear_session() {
+    completed_results_.invalidate();
     application_state_.clear_session();
     load_workspace_state();
     initialize_system_draft();
@@ -403,6 +406,17 @@ void GuiApplication::update_active_session() {
         if (workspace_state_.run_mode == GuiRunMode::Live || update.paused || update.finished ||
             update.reset || switched_to_live || !presentation_snapshot_.has_value()) {
             presentation_snapshot_ = session.snapshot();
+        }
+        if (update.reset) {
+            completed_results_.invalidate();
+        }
+        if (update.finished && presentation_snapshot_.has_value()) {
+            const auto scenario = application_state_.has_active_project()
+                                      ? application_state_.active_project().metadata().scenario_kind
+                                      : std::string{"generic"};
+            static_cast<void>(completed_results_.publish_finished(
+                session.run_generation(), *presentation_snapshot_, scenario,
+                session.performance_summary()));
         }
         last_run_mode_ = workspace_state_.run_mode;
     }
@@ -447,7 +461,8 @@ bool GuiApplication::draw_main_menu() {
         if (ImGui::MenuItem("Save Project As...")) {
             request_project_action(PendingProjectAction::SaveAs);
         }
-        if (ImGui::MenuItem("Export Run Results...")) {
+        ImGui::BeginDisabled(completed_results_.get() == nullptr);
+        if (ImGui::MenuItem("Export Completed Results...")) {
             const auto run_id = default_export_run_id();
             export_run_id_.fill('\0');
             std::copy_n(run_id.begin(), std::min(run_id.size(), export_run_id_.size() - 1),
@@ -457,6 +472,7 @@ bool GuiApplication::draw_main_menu() {
             export_diagnostic_.clear();
             open_export_dialog_ = true;
         }
+        ImGui::EndDisabled();
         if (ImGui::MenuItem("Close Project")) {
             request_project_action(PendingProjectAction::Close);
         }
@@ -538,8 +554,8 @@ void GuiApplication::draw_export_dialog() {
     if (!ImGui::BeginPopupModal("Export Run Results", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
         return;
     }
-    if (!application_state_.has_active_project()) {
-        ImGui::TextDisabled("Open a project before exporting results.");
+    if (!application_state_.has_active_project() || completed_results_.get() == nullptr) {
+        ImGui::TextDisabled("Finish a project run before exporting completed results.");
         if (ImGui::Button("Close")) {
             ImGui::CloseCurrentPopup();
         }
@@ -585,8 +601,7 @@ void GuiApplication::draw_export_dialog() {
     if (ImGui::Button("Export")) {
         try {
             const auto& project = application_state_.active_project();
-            auto result = build_run_result(application_state_.active_session().snapshot(),
-                                           project.metadata().scenario_kind);
+            const auto& result = *completed_results_.get()->result;
             RunScenarioMetadata scenario;
             std::vector<WorkbookControlMetric> control_metrics;
             if (project.metadata().scenario_kind == "bosch") {
@@ -628,6 +643,7 @@ void GuiApplication::open_project_dialog() {
     const auto result = open_project_from_dialog(
         application_state_, *dialogs_, paths_.projects_directory, project_runtime_resolver());
     if (result.status == ProjectWorkflowStatus::Applied) {
+        completed_results_.invalidate();
         load_workspace_state();
         initialize_system_draft();
         structural_selection_.select_system();
@@ -816,6 +832,9 @@ void GuiApplication::apply_system_draft() {
     auto result =
         apply_system_project_draft(application_state_, *system_draft_, &run_configuration);
     if (result.valid()) {
+        completed_results_.invalidate();
+        presentation_snapshot_ = application_state_.active_session().snapshot();
+        progress_ = application_state_.active_session().progress();
         structural_selection_.select_system();
         runtime_selection_.clear();
         initialize_system_draft();
@@ -1309,8 +1328,8 @@ void GuiApplication::draw_center_panels(const SimulationSnapshot& snapshot) {
             draw_signal_view(snapshot, runtime_selection_, signal_view_state_);
             break;
         case GuiCenterTab::Results: {
-            const auto scenario = application_state_.has_active_project() ? application_state_.active_project().metadata().scenario_kind : std::string{"generic"};
-            draw_results_view(snapshot, scenario, signal_view_state_.selected_signals, runtime_selection_, results_view_state_);
+            draw_results_view(progress_, completed_results_.get(), open_plot_visualizer_,
+                              request_completed_export_, results_view_state_);
             break;
         }
         case GuiCenterTab::Resources:
@@ -1682,6 +1701,17 @@ void GuiApplication::draw_frame() {
     if (apply_system_draft_requested_) {
         apply_system_draft_requested_ = false;
         apply_system_draft();
+    }
+    if (request_completed_export_) {
+        request_completed_export_ = false;
+        const auto run_id = default_export_run_id();
+        export_run_id_.fill('\0');
+        std::copy_n(run_id.begin(), std::min(run_id.size(), export_run_id_.size() - 1),
+                    export_run_id_.begin());
+        export_destination_ = application_state_.active_project().root() / "results";
+        export_scope_ = 0;
+        export_diagnostic_.clear();
+        open_export_dialog_ = true;
     }
 }
 

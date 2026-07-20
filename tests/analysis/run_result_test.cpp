@@ -1,6 +1,7 @@
 /*** Verify immutable generic run-result derivation and range projection. ***/
 
 #include "cpssim/analysis/run_result.hpp"
+#include "cpssim/analysis/completed_run_result.hpp"
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -103,6 +104,26 @@ TEST_CASE("selected result range is inclusive and preserves source data", "[anal
     REQUIRE(selected.event_log.back().tick() == 7);
     REQUIRE(source.event_log.size() == 7);
     REQUIRE_THROWS_AS(select_run_result_range(source, -1, 2), std::invalid_argument);
+}
+
+TEST_CASE("completed results build once only after finish and invalidate explicitly",
+          "[analysis][result][lifecycle]") {
+    CompletedRunResultCache cache;
+    auto value = snapshot();
+    value.run_state = GuiRunState::Running;
+    REQUIRE_FALSE(cache.publish_finished(1, value, "generic", {}));
+    value.run_state = GuiRunState::Paused;
+    REQUIRE_FALSE(cache.publish_finished(1, value, "generic", {}));
+    REQUIRE(cache.build_count() == 0);
+    value.run_state = GuiRunState::Finished;
+    REQUIRE(cache.publish_finished(1, value, "generic", {}));
+    REQUIRE_FALSE(cache.publish_finished(1, value, "generic", {}));
+    REQUIRE(cache.build_count() == 1);
+    REQUIRE(cache.get() != nullptr);
+    cache.invalidate();
+    REQUIRE(cache.get() == nullptr);
+    REQUIRE(cache.publish_finished(2, value, "generic", {}));
+    REQUIRE(cache.build_count() == 2);
 }
 
 } // namespace
