@@ -57,7 +57,10 @@ bool RunPlanDraft::dirty(const ExperimentConfig& config, const RunPlan* active_p
         return true;
     }
     const auto result = build(config);
-    return !result.valid() || *result.plan != *active_plan;
+    if (!result.plan.has_value() || !result.diagnostics.empty()) {
+        return true;
+    }
+    return result.plan.value() != *active_plan;
 }
 
 } // namespace cpssim

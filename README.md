@@ -52,6 +52,8 @@ The project currently provides:
   documented numerical tolerances;
 - a strict Bosch example loader and executable that run the supplied 10, 12.5,
   and 15 m/s trajectory formats through the normal engine and real FMU;
+- a persistent, extensible terminal interface with interactive and direct
+  Bosch execution over one shared application service;
 - resumable next-event-tick engine progression plus a GUI-neutral FIFO command
   and detached snapshot boundary;
 - an optional DPI-aware Dear ImGui/GLFW/OpenGL workbench with a validated
@@ -67,20 +69,25 @@ random delay), broader FMI packaging, workspace persistence, and advanced
 visualization remain later roadmap work. Resources currently behave as
 independent exclusive uniprocessors without global scheduling or migration.
 
-## Build and test
+## Quick start
 
 On the supported Ubuntu development environment:
 
 ```bash
-make test
+make
+make run-cli
 ```
 
-Useful completion checks are:
+Use the graphical workbench instead with:
 
 ```bash
-make release
-make asan
-make format-check
+make run-gui
+```
+
+Open the verification menu with:
+
+```bash
+make test
 ```
 
 See the [command handbook](docs/COMMANDS.md) for the complete terminal

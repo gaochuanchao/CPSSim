@@ -22,10 +22,16 @@ RunPlan validate_controller_plan(const ExperimentConfig& config, const RunPlan& 
     const auto result = build_run_plan(config, RunPlanRequest{.stop_tick = plan.stop_tick(),
                                                               .policy_kind = plan.policy_kind(),
                                                               .assignments = plan.assignments()});
-    if (!result.valid()) {
+    if (!result.plan.has_value()) {
+        if (result.diagnostics.empty()) {
+            throw std::invalid_argument{"run-plan validation failed without a diagnostic"};
+        }
         throw std::invalid_argument{result.diagnostics.front().message};
     }
-    return *result.plan;
+    if (!result.diagnostics.empty()) {
+        throw std::invalid_argument{result.diagnostics.front().message};
+    }
+    return result.plan.value();
 }
 
 } // namespace
@@ -45,7 +51,8 @@ std::optional<GuiCommand> GuiCommandQueue::pop() {
 
 /*** Captures input and allocation, then builds the first clean runtime. ***/
 SimulationController::SimulationController(
-    ExperimentConfig config, RunPlan run_plan, GuiFunctionalModelFactory functional_model_factory,
+    ExperimentConfig config, const RunPlan& run_plan,
+    GuiFunctionalModelFactory functional_model_factory,
     std::vector<GuiSignalDescriptor> functional_signal_registry)
     : config_{std::move(config)}, run_plan_{validate_controller_plan(config_, run_plan)},
       allocator_{run_plan_.assignments()},

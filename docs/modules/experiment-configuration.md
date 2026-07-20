@@ -53,6 +53,9 @@ configuration/runtime access.
 - Every task has at least one accessible resource.
 - Every route refers to known tasks, uses positive timing, and has a unique
   endpoint pair.
+- Located run-plan errors validate the identifier payload required by each
+  diagnostic code before converting it to a JSON path; accepted build results
+  likewise prove that a plan is present before returning it.
 - Public collection views are read-only.
 
 ## JSON contract
@@ -104,4 +107,5 @@ checks shared validation and canonicalization;
 explicit drafts, atomic Apply, Reset ownership, dirty state, and the Running
 edit gate. [json_run_plan_test.cpp](../../tests/config/json_run_plan_test.cpp)
 checks byte-deterministic round trips, declaration-order independence, exact
-error locations, structural association, and file I/O.
+error locations (including unknown-task and inaccessible-resource
+diagnostics), structural association, and file I/O.

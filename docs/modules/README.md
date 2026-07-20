@@ -18,6 +18,7 @@ Module notes are concise maintenance contracts. Use the
 | Bosch trigger projection | [Bosch trigger adapter](bosch-trigger-adapter.md) |
 | FMI loading | [FMI 2.0 Co-Simulation](fmi2-co-simulation.md) |
 | Online physical behavior | [Online functional interaction](online-functional-interaction.md) |
+| CLI and shared run services | [Application interfaces](application-interfaces.md) |
 
 Each page identifies responsibility, public interface, state ownership,
 invariants, dependencies, failures, tests, and deeper references. Add or update

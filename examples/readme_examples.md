@@ -47,26 +47,29 @@ For each vehicle considered in the simulation:
 On the supported Ubuntu development environment, CPSSim can load and execute
 each supplied dataset through its normal scheduling, fixed-delay network,
 Bosch-trigger, and FMI functional path. From the repository root, run the
-default `example_v_10` dataset with the validated shared-cloud baseline:
+interactive wizard:
 
 ```bash
-make bosch-example
+make run-cli
+# then enter: run bosch
 ```
 
 Select another dataset, baseline, or shorter inclusive integer-tick horizon:
 
 ```bash
-make bosch-example \
-  BOSCH_EXAMPLE_DIR=examples/example_v_15 \
-  BOSCH_SCENARIO=dedicated \
-  BOSCH_STOP_TICK=150000
+./build/make-dev/cpssim_cli run bosch \
+  --example examples/example_v_15 \
+  --scenario dedicated \
+  --stop-tick 150000
 ```
 
-Run all three datasets through their full supplied horizon (ticks `0` through
-`1499999`, ending at `149.9999` seconds):
+Omit `--stop-tick` to run the selected dataset through its full supplied
+horizon (ticks `0` through `1499999`, ending at `149.9999` seconds):
 
 ```bash
-make bosch-examples
+./build/make-dev/cpssim_cli run bosch \
+  --example examples/example_v_10 \
+  --scenario shared_cloud
 ```
 
 The loader requires all six CSV files, checks equal row counts and finite

@@ -7,9 +7,8 @@
  * Notes: CTest supplies the build-tree Bosch Linux shared-library path.
  ***/
 
-#include "cpssim/bosch/bosch_fmi2_functional_model.hpp"
+#include "cpssim/application/bosch_run_service.hpp"
 #include "cpssim/bosch/example_data.hpp"
-#include "cpssim/conformance/bosch_reference.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -17,9 +16,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <stdexcept>
-#include <string>
 #include <string_view>
-#include <utility>
 
 namespace {
 
@@ -27,16 +24,12 @@ std::filesystem::path repository_root() {
     return std::filesystem::path{__FILE__}.parent_path().parent_path().parent_path();
 }
 
-cpssim::Fmi2ModelInfo model_info(std::string instance_name) {
+std::filesystem::path fmu_library() {
     const char* path = std::getenv("CPSSIM_T16_BOSCH_FMU_LIBRARY");
-    if (path == nullptr || std::string{path}.empty()) {
+    if (path == nullptr || std::string_view{path}.empty()) {
         throw std::runtime_error{"CPSSIM_T16_BOSCH_FMU_LIBRARY is not set"};
     }
-    return {.shared_library = path,
-            .model_identifier = "LateralMotionControl",
-            .guid = "{ec101913-52ec-40d8-afe6-5fbb52430f74}",
-            .resource_uri = "",
-            .instance_name = std::move(instance_name)};
+    return path;
 }
 
 struct ExampleExpectation {
@@ -71,20 +64,21 @@ TEST_CASE("all supplied Bosch examples execute through the normal engine and rea
         "example_v_15",
     };
 
-    std::size_t instance = 0;
+    const cpssim::DefaultBoschRunService service;
     for (const auto directory : directories) {
         CAPTURE(directory);
-        auto trajectory =
-            cpssim::load_bosch_example_trajectory(repository_root() / "examples" / directory);
-        cpssim::BoschFmi2FunctionalModel model{
-            model_info("bosch_example_" + std::to_string(instance++)), std::move(trajectory)};
-        const auto run = cpssim::run_bosch_reference_online(
-            repository_root() / "experiments/bosch_v10_reference",
-            cpssim::BoschReferenceScenario::SharedCloud, model, 2);
+        const auto result =
+            service.run({.example_directory = repository_root() / "examples" / directory,
+                         .shared_library = fmu_library(),
+                         .scenario = cpssim::BoschReferenceScenario::SharedCloud,
+                         .stop_tick = 2,
+                         .reference_root = repository_root() / "experiments/bosch_v10_reference",
+                         .instance_name = std::string{"bosch_example_"} + std::string{directory}});
 
-        REQUIRE(run.functional_trace.size() == 3);
-        REQUIRE(run.functional_trace.back().tick == 2);
-        REQUIRE_FALSE(run.canonical_trace.empty());
+        REQUIRE(result.functional_observation_count == 3);
+        REQUIRE(result.final_observation.has_value());
+        REQUIRE(result.final_observation->tick == 2);
+        REQUIRE(result.canonical_event_count > 0);
     }
 }
 

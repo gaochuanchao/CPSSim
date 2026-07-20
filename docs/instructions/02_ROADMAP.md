@@ -13,6 +13,9 @@ independent exclusive resources, causal fixed-delay messages, captured Bosch
 timing/trigger conformance, FMI 2.0 Co-Simulation loading, online functional
 interaction, and an optional snapshot-based GUI with an explicit run plan,
 architecture graph, scheduling timeline, and functional plots.
+The terminal interface now provides registered interactive/direct commands and
+a shared application service for supplied Bosch trajectories; F1 still owns
+general JSON experiment execution and trace/manifest output.
 
 The exact behavioral contract is in
 [Simulation semantics](../guide/SIMULATION-SEMANTICS.md). Current module

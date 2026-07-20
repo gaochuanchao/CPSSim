@@ -36,6 +36,7 @@ and queues are mutable runtime state.
 | `src/cpssim/policy/` | Replaceable placement and job-ordering decisions | [scheduling_policy.hpp](../../src/cpssim/policy/scheduling_policy.hpp) |
 | `src/cpssim/network/` | Current fixed-delay communication mechanism | [fixed_delay_network.hpp](../../src/cpssim/network/fixed_delay_network.hpp) |
 | `src/cpssim/functional/` | Generic physical/functional model boundary | [functional_model.hpp](../../src/cpssim/functional/functional_model.hpp) |
+| `src/cpssim/application/` | Reusable user-interface orchestration above adapters | [bosch_run_service.hpp](../../src/cpssim/application/bosch_run_service.hpp) |
 | `src/cpssim/trace/` | Stable event serialization | [event_json.hpp](../../src/cpssim/trace/event_json.hpp) |
 | `src/cpssim/fmi/` | Generic FMI 2.0 loader; not a core dependency | [fmi2_importer.hpp](../../src/cpssim/fmi/fmi2_importer.hpp) |
 | `src/cpssim/bosch/` | Bosch-specific translation and FMI orchestration | [trigger_encoder.hpp](../../src/cpssim/bosch/trigger_encoder.hpp) |
@@ -109,6 +110,8 @@ ranking, own Ready queues, or perform a resource's execution accounting.
 | Current tick and accepted event trace | `SimulationEngine` |
 | Physical state and functional observations | `FunctionalModel` / `FunctionalRuntime` |
 | GUI commands and detached display copy | `SimulationController` |
+| CLI command discovery and dispatch | `CommandRegistry` / `CliApplication` |
+| Supplied Bosch run orchestration | `DefaultBoschRunService` |
 
 This table is a change-scope test: modify the owner of the state, and communicate
 through its public interface. Do not reach into another module's container.
@@ -117,10 +120,14 @@ through its public interface. Do not reach into another module's container.
 
 ```mermaid
 flowchart BT
-    CLI[CLI] --> Core[Generic core]
+    CLI[CLI] --> App[Bosch application service]
+    CLI --> Core[Generic core]
     GUI[GUI] --> Core
     Bosch[Bosch adapter] --> Core
     FMI[FMI adapter] --> Core
+    App --> Bosch
+    App --> FMI
+    App --> Core
     Bosch --> FMI
     Core -. must not depend on .-> Forbidden[GUI / FMI / Bosch / MATLAB]
 ```

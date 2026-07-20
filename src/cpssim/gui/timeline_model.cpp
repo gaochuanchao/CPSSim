@@ -122,10 +122,11 @@ GuiTimelineBuildResult fail_current_tick(std::size_t event_count, Tick current_t
 }
 
 std::optional<JobIdentity> event_job(const Event& event) {
-    if (!event.entities().task_id.has_value() || !event.entities().job_id.has_value()) {
+    const auto& entities = event.entities();
+    if (!entities.task_id.has_value() || !entities.job_id.has_value()) {
         return std::nullopt;
     }
-    return JobIdentity{*event.entities().task_id, *event.entities().job_id};
+    return JobIdentity{entities.task_id.value(), entities.job_id.value()};
 }
 
 GuiTimelineRow* find_row(std::vector<GuiTimelineRow>& rows, ResourceId resource_id) {
@@ -149,9 +150,10 @@ GuiTimelineBuildResult validate_known_entities(std::size_t index, const Event& e
     if (!entities.task_id.has_value()) {
         return missing_entity(index, event, "task_id");
     }
-    if (find_task(experiment, *entities.task_id) == nullptr) {
+    if (find_task(experiment, entities.task_id.value()) == nullptr) {
         return fail(GuiTimelineDiagnosticCode::UnknownEntity, index, event,
-                    "task T" + std::to_string(entities.task_id->value()) + " is unavailable");
+                    "task T" + std::to_string(entities.task_id.value().value()) +
+                        " is unavailable");
     }
     if (require_job && !entities.job_id.has_value()) {
         return missing_entity(index, event, "job_id");
@@ -160,9 +162,9 @@ GuiTimelineBuildResult validate_known_entities(std::size_t index, const Event& e
         return missing_entity(index, event, "resource_id");
     }
     if (entities.resource_id.has_value() &&
-        find_resource(experiment, *entities.resource_id) == nullptr) {
+        find_resource(experiment, entities.resource_id.value()) == nullptr) {
         return fail(GuiTimelineDiagnosticCode::UnknownEntity, index, event,
-                    "resource R" + std::to_string(entities.resource_id->value()) +
+                    "resource R" + std::to_string(entities.resource_id.value().value()) +
                         " is unavailable");
     }
     if (require_message && !entities.message_id.has_value()) {
@@ -274,37 +276,46 @@ class TimelineDerivation {
             return fail(GuiTimelineDiagnosticCode::InvalidCurrentTick, index, event,
                         "event tick is later than current_tick " + std::to_string(current_tick));
         }
-        if (previous_tick_.has_value() &&
-            (event.tick() < *previous_tick_ ||
-             (event.tick() == *previous_tick_ &&
-              phase_precedence(event.phase()) < phase_precedence(*previous_phase_)))) {
-            return fail(GuiTimelineDiagnosticCode::InvalidTraceOrder, index, event,
-                        "phase " + std::string{phase_name(event.phase())} +
-                            " is out of canonical tick/phase order");
+        if (previous_tick_.has_value()) {
+            if (!previous_phase_.has_value()) {
+                throw std::logic_error{"timeline previous tick has no phase"};
+            }
+            const auto previous_tick = previous_tick_.value();
+            if (event.tick() < previous_tick ||
+                (event.tick() == previous_tick &&
+                 phase_precedence(event.phase()) < phase_precedence(previous_phase_.value()))) {
+                return fail(GuiTimelineDiagnosticCode::InvalidTraceOrder, index, event,
+                            "phase " + std::string{phase_name(event.phase())} +
+                                " is out of canonical tick/phase order");
+            }
         }
         if (!observed_sequences_.insert(event.sequence()).second) {
             return fail(GuiTimelineDiagnosticCode::DuplicateEventSequence, index, event,
                         "event sequence is duplicated");
         }
-        if (event.cause_sequence().has_value() &&
-            !observed_sequences_.contains(*event.cause_sequence())) {
+        const auto cause_sequence = event.cause_sequence();
+        if (cause_sequence.has_value() && !observed_sequences_.contains(cause_sequence.value())) {
             return fail(GuiTimelineDiagnosticCode::UnobservedCause, index, event,
-                        "cause sequence " + std::to_string(event.cause_sequence()->value()) +
+                        "cause sequence " + std::to_string(cause_sequence.value().value()) +
                             " has not appeared earlier in the canonical trace");
         }
         const auto expected_phase = required_phase(event.type());
-        if (!expected_phase.has_value() || event.phase() != *expected_phase) {
+        if (!expected_phase.has_value()) {
+            return fail(GuiTimelineDiagnosticCode::WrongEventPhase, index, event,
+                        "event type requires phase unknown, found " +
+                            std::string{phase_name(event.phase())});
+        }
+        if (event.phase() != expected_phase.value()) {
             return fail(GuiTimelineDiagnosticCode::WrongEventPhase, index, event,
                         "event type requires phase " +
-                            std::string{expected_phase.has_value() ? phase_name(*expected_phase)
-                                                                   : "unknown"} +
-                            ", found " + phase_name(event.phase()));
+                            std::string{phase_name(expected_phase.value())} + ", found " +
+                            phase_name(event.phase()));
         }
 
         const auto requires_job = event.type() != EventType::MessageDelivery;
         const auto requires_resource =
             event.type() != EventType::MessageDelivery && event.type() != EventType::MessageSend;
-        const auto shape = validate_known_entities(
+        auto shape = validate_known_entities(
             index, event, experiment_, requires_job, requires_resource,
             event.type() == EventType::MessageSend || event.type() == EventType::MessageDelivery);
         if (!shape.diagnostics.empty()) {
@@ -322,7 +333,7 @@ class TimelineDerivation {
         timeline_.marker_index.push_back(
             {.sequence = event.sequence(), .marker_index = timeline_.markers.size() - 1});
 
-        const auto failure = update_lifecycle(event, index);
+        auto failure = update_lifecycle(event, index);
         if (!failure.diagnostics.empty()) {
             return failure;
         }
@@ -361,21 +372,29 @@ class TimelineDerivation {
 
   private:
     GuiTimelineBuildResult update_lifecycle(const Event& event, std::size_t index) {
-        if (event.type() == EventType::MessageSend) {
-            const auto source_job = *event_job(event);
-            const auto source = jobs_.find(source_job);
-            if (source == jobs_.end() || source->second.state != DerivedJobState::Completed) {
-                return fail(GuiTimelineDiagnosticCode::InvalidJobTransition, index, event,
-                            "MessageSend requires completed source " + job_name(source_job));
-            }
-            return {};
-        }
         if (event.type() == EventType::MessageDelivery) {
             return {};
         }
 
-        const auto job = *event_job(event);
-        const auto resource_id = *event.entities().resource_id;
+        const auto event_job_value = event_job(event);
+        if (!event_job_value.has_value()) {
+            throw std::logic_error{"validated timeline event has no job identity"};
+        }
+        const auto job = event_job_value.value();
+        if (event.type() == EventType::MessageSend) {
+            const auto source = jobs_.find(job);
+            if (source == jobs_.end() || source->second.state != DerivedJobState::Completed) {
+                return fail(GuiTimelineDiagnosticCode::InvalidJobTransition, index, event,
+                            "MessageSend requires completed source " + job_name(job));
+            }
+            return {};
+        }
+
+        const auto resource = event.entities().resource_id;
+        if (!resource.has_value()) {
+            throw std::logic_error{"validated timeline event has no resource identity"};
+        }
+        const auto resource_id = resource.value();
         auto found = jobs_.find(job);
         if (event.type() == EventType::JobRelease) {
             if (found != jobs_.end()) {
@@ -410,7 +429,7 @@ class TimelineDerivation {
             if (running.has_value()) {
                 return fail(GuiTimelineDiagnosticCode::OverlappingRunningIntervals, index, event,
                             "R" + std::to_string(resource_id.value()) + " already runs " +
-                                job_name(*running) + " when " + job_name(job) + " starts");
+                                job_name(running.value()) + " when " + job_name(job) + " starts");
             }
             const auto closed = append_interval(timeline_.rows, GuiTimelineIntervalKind::Ready, job,
                                                 state, event.tick(), event.sequence());
@@ -446,7 +465,7 @@ class TimelineDerivation {
             if (running.has_value()) {
                 return fail(GuiTimelineDiagnosticCode::OverlappingRunningIntervals, index, event,
                             "R" + std::to_string(resource_id.value()) + " already runs " +
-                                job_name(*running) + " when " + job_name(job) + " resumes");
+                                job_name(running.value()) + " when " + job_name(job) + " resumes");
             }
             const auto closed = append_interval(timeline_.rows, GuiTimelineIntervalKind::Ready, job,
                                                 state, event.tick(), event.sequence());
@@ -486,6 +505,13 @@ class TimelineDerivation {
     std::optional<Tick> previous_tick_;
     std::optional<EventPhase> previous_phase_;
 };
+
+TimelineDerivation& require_derivation(std::optional<TimelineDerivation>& derivation) {
+    if (!derivation.has_value()) {
+        throw std::logic_error{"compatible timeline cache has no derivation"};
+    }
+    return derivation.value();
+}
 
 } // namespace
 
@@ -529,18 +555,31 @@ GuiTimelineCache::update(const std::vector<Event>& events,
         state_->result = fail_current_tick(events.size(), current_tick, "must not be negative");
         return state_->result;
     }
-    const auto prefix_compatible =
-        state_->experiment.has_value() && *state_->experiment == experiment &&
-        events.size() >= state_->event_count &&
-        (state_->event_count == 0 ||
-         same_event(events[state_->event_count - 1], *state_->boundary_event));
+    const auto& cached_experiment = state_->experiment;
+    const auto& boundary_event = state_->boundary_event;
+    auto prefix_compatible = cached_experiment.has_value() && state_->derivation.has_value() &&
+                             events.size() >= state_->event_count;
+    if (prefix_compatible) {
+        if (cached_experiment.has_value()) {
+            prefix_compatible = cached_experiment.value() == experiment;
+        } else {
+            prefix_compatible = false;
+        }
+    }
+    if (prefix_compatible && state_->event_count > 0) {
+        if (boundary_event.has_value()) {
+            prefix_compatible = same_event(events[state_->event_count - 1], boundary_event.value());
+        } else {
+            prefix_compatible = false;
+        }
+    }
 
     if (!prefix_compatible) {
         auto rebuilt = std::make_unique<State>();
         rebuilt->experiment = experiment;
-        rebuilt->derivation.emplace(experiment);
+        TimelineDerivation derivation{experiment};
         for (std::size_t index = 0; index < events.size(); ++index) {
-            const auto appended = rebuilt->derivation->append(events[index], index, current_tick);
+            const auto appended = derivation.append(events[index], index, current_tick);
             if (!appended.diagnostics.empty()) {
                 state_->result = appended;
                 return state_->result;
@@ -550,13 +589,15 @@ GuiTimelineCache::update(const std::vector<Event>& events,
         if (!events.empty()) {
             rebuilt->boundary_event = events.back();
         }
-        rebuilt->result = rebuilt->derivation->snapshot(current_tick, events.size());
+        rebuilt->result = derivation.snapshot(current_tick, events.size());
+        rebuilt->derivation = std::move(derivation);
         state_ = std::move(rebuilt);
         return state_->result;
     }
 
+    auto& derivation = require_derivation(state_->derivation);
     if (events.size() > state_->event_count) {
-        auto candidate = *state_->derivation;
+        auto candidate = derivation;
         for (auto index = state_->event_count; index < events.size(); ++index) {
             const auto appended = candidate.append(events[index], index, current_tick);
             if (!appended.diagnostics.empty()) {
@@ -576,14 +617,18 @@ GuiTimelineCache::update(const std::vector<Event>& events,
         return state_->result;
     }
 
-    const auto current_tick_valid =
-        current_tick >= 0 &&
-        (!state_->boundary_event.has_value() || current_tick >= state_->boundary_event->tick());
-    if (current_tick_valid && state_->result.timeline.has_value()) {
-        state_->result.timeline->current_tick = current_tick;
+    auto current_tick_valid = current_tick >= 0;
+    if (current_tick_valid) {
+        if (boundary_event.has_value()) {
+            current_tick_valid = current_tick >= boundary_event.value().tick();
+        }
+    }
+    auto& timeline = state_->result.timeline;
+    if (current_tick_valid && timeline.has_value()) {
+        timeline.value().current_tick = current_tick;
         state_->result.diagnostics.clear();
     } else {
-        state_->result = state_->derivation->snapshot(current_tick, state_->event_count);
+        state_->result = derivation.snapshot(current_tick, state_->event_count);
     }
     return state_->result;
 }

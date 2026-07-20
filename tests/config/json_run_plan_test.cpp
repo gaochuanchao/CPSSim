@@ -135,6 +135,20 @@ TEST_CASE("run-plan JSON locates assignment validation failures",
     serialized.replace(second_task, 12, "\"task_id\": 1");
     REQUIRE((invalid_message(serialized, config).find("$.task_assignments[1].task_id") !=
              std::string::npos));
+
+    serialized = serialize_run_plan_json(config, make_plan(config));
+    const auto unknown_task =
+        serialized.find("\"task_id\": 2", serialized.find("\"task_assignments\""));
+    serialized.replace(unknown_task, 12, "\"task_id\": 99");
+    REQUIRE((invalid_message(serialized, config).find("$.task_assignments[1].task_id") !=
+             std::string::npos));
+
+    serialized = serialize_run_plan_json(config, make_plan(config));
+    const auto inaccessible_resource =
+        serialized.find("\"resource_id\": 1", serialized.find("\"task_assignments\""));
+    serialized.replace(inaccessible_resource, 16, "\"resource_id\": 2");
+    REQUIRE((invalid_message(serialized, config).find("$.task_assignments[1].resource_id") !=
+             std::string::npos));
 }
 
 TEST_CASE("run-plan files use the same validated persistence boundary",

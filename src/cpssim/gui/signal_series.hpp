@@ -104,12 +104,19 @@ double gui_scalar_as_double(const GuiScalarValue& value);
 /*** Finds one series by stable identity in logarithmic time. ***/
 const GuiSignalSeries* find_signal_series(const GuiSignalModel& model, const GuiSignalId& id);
 
+/*** Names the viewport and rendering budget used for one downsampling request. ***/
+struct GuiSignalDownsampleRequest {
+    Tick begin_tick;
+    Tick end_tick;
+    std::size_t maximum_points;
+};
+
 /***
  * Returns deterministic visible samples, preserving endpoints and per-bucket
  * extrema. The source series is never modified.
  ***/
-std::vector<GuiScalarSample> downsample_signal(const GuiSignalSeries& series, Tick begin_tick,
-                                               Tick end_tick, std::size_t maximum_points);
+std::vector<GuiScalarSample> downsample_signal(const GuiSignalSeries& series,
+                                               GuiSignalDownsampleRequest request);
 
 /*** Retains validated schema and appends only unseen observation rows. ***/
 class GuiSignalCache {

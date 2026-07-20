@@ -11,6 +11,7 @@
 #include <cmath>
 #include <map>
 #include <set>
+#include <stdexcept>
 #include <string>
 #include <utility>
 
@@ -243,10 +244,17 @@ class SignalAccumulator {
     GuiSignalModel model_;
 };
 
+SignalAccumulator& require_accumulator(std::optional<SignalAccumulator>& accumulator) {
+    if (!accumulator.has_value()) {
+        throw std::logic_error{"compatible signal cache has no accumulator"};
+    }
+    return accumulator.value();
+}
+
 GuiSignalBuildResult build_with_accumulator(const std::vector<FunctionalObservation>& observations,
                                             const std::vector<GuiSignalDescriptor>& registry,
                                             std::optional<SignalAccumulator>& accumulator) {
-    const auto registry_validation = validate_registry(registry);
+    auto registry_validation = validate_registry(registry);
     if (!registry_validation.valid()) {
         return registry_validation;
     }
@@ -293,8 +301,10 @@ const GuiSignalSeries* find_signal_series(const GuiSignalModel& model, const Gui
     return found != model.series.end() && found->descriptor.id == id ? &*found : nullptr;
 }
 
-std::vector<GuiScalarSample> downsample_signal(const GuiSignalSeries& series, Tick begin_tick,
-                                               Tick end_tick, std::size_t maximum_points) {
+std::vector<GuiScalarSample> downsample_signal(const GuiSignalSeries& series,
+                                               GuiSignalDownsampleRequest request) {
+    auto begin_tick = request.begin_tick;
+    auto end_tick = request.end_tick;
     if (end_tick < begin_tick) {
         std::swap(begin_tick, end_tick);
     }
@@ -305,24 +315,24 @@ std::vector<GuiScalarSample> downsample_signal(const GuiSignalSeries& series, Ti
         begin, series.samples.end(), end_tick,
         [](Tick tick, const GuiScalarSample& sample) { return tick < sample.tick; });
     const auto count = static_cast<std::size_t>(std::distance(begin, end));
-    if (count == 0 || maximum_points == 0) {
+    if (count == 0 || request.maximum_points == 0) {
         return {};
     }
-    if (count <= maximum_points) {
+    if (count <= request.maximum_points) {
         return {begin, end};
     }
-    if (maximum_points == 1) {
+    if (request.maximum_points == 1) {
         return {*begin};
     }
-    if (maximum_points < 4) {
+    if (request.maximum_points < 4) {
         return {*begin, *std::prev(end)};
     }
 
     std::vector<GuiScalarSample> result;
-    result.reserve(maximum_points);
+    result.reserve(request.maximum_points);
     result.push_back(*begin);
     const auto interior_count = count - 2;
-    const auto bucket_count = std::max<std::size_t>((maximum_points - 2) / 2, 1);
+    const auto bucket_count = std::max<std::size_t>((request.maximum_points - 2) / 2, 1);
     for (std::size_t bucket = 0; bucket < bucket_count; ++bucket) {
         const auto bucket_begin_offset = 1 + (interior_count * bucket) / bucket_count;
         const auto bucket_end_offset = 1 + (interior_count * (bucket + 1)) / bucket_count;
@@ -374,11 +384,18 @@ void GuiSignalCache::clear() { state_ = std::make_unique<State>(); }
 const GuiSignalBuildResult&
 GuiSignalCache::update(const std::vector<FunctionalObservation>& observations,
                        const std::vector<GuiSignalDescriptor>& registry) {
-    const auto prefix_compatible =
-        state_->accumulator.has_value() && state_->registry == registry &&
-        observations.size() >= state_->observation_count && state_->observation_count > 0 &&
-        same_observation(observations[state_->observation_count - 1],
-                         *state_->boundary_observation);
+    const auto& boundary_observation = state_->boundary_observation;
+    auto prefix_compatible = state_->accumulator.has_value() && state_->registry == registry &&
+                             observations.size() >= state_->observation_count &&
+                             state_->observation_count > 0 && boundary_observation.has_value();
+    if (prefix_compatible) {
+        if (boundary_observation.has_value()) {
+            prefix_compatible = same_observation(observations[state_->observation_count - 1],
+                                                 boundary_observation.value());
+        } else {
+            prefix_compatible = false;
+        }
+    }
     if (!prefix_compatible || state_->observation_count == 0) {
         auto rebuilt = std::make_unique<State>();
         rebuilt->registry = registry;
@@ -395,14 +412,15 @@ GuiSignalCache::update(const std::vector<FunctionalObservation>& observations,
         return state_->result;
     }
 
+    auto& accumulator = require_accumulator(state_->accumulator);
     if (observations.size() == state_->observation_count) {
         if (!state_->result.valid()) {
-            state_->result = state_->accumulator->snapshot();
+            state_->result = accumulator.snapshot();
         }
         return state_->result;
     }
 
-    auto candidate = *state_->accumulator;
+    auto candidate = accumulator;
     for (auto index = state_->observation_count; index < observations.size(); ++index) {
         const auto appended = candidate.append(observations[index], index);
         if (!appended.diagnostics.empty()) {
@@ -410,10 +428,10 @@ GuiSignalCache::update(const std::vector<FunctionalObservation>& observations,
             return state_->result;
         }
     }
+    state_->result = candidate.snapshot();
     state_->accumulator = std::move(candidate);
     state_->observation_count = observations.size();
     state_->boundary_observation = observations.back();
-    state_->result = state_->accumulator->snapshot();
     return state_->result;
 }
 

@@ -54,4 +54,4 @@ as unsuccessful.
 - [fmi2_importer_test.cpp](../../tests/fmi/fmi2_importer_test.cpp)
 - [FMI selection ADR](../adr/0016-use-a-small-fmi2-co-simulation-loader.md)
 - [ADR-0016](../adr/0016-use-a-small-fmi2-co-simulation-loader.md)
-- `make fmi-test`
+- `./scripts/verify.sh module fmi`

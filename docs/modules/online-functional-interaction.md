@@ -52,11 +52,12 @@ finite position/feedforward/velocity values and positive velocity, and retains
 only the three FMI environment inputs. The position vectors are reference
 data, not v10 FMU inputs.
 
-The `cpssim_bosch_example` application combines that loader with either
-validated single-vehicle reference allocation (`dedicated` or
-`shared_cloud`). The example package does not define deadlines, offsets,
-priorities, or one required allocation, so the application names this run plan
-explicitly rather than treating it as a Bosch-mandated configuration.
+`DefaultBoschRunService` combines that loader with either validated
+single-vehicle reference allocation (`dedicated` or `shared_cloud`). Both the
+CLI and internal `cpssim_bosch_example` compatibility executable call this
+service. The example package does not define deadlines, offsets, priorities,
+or one required allocation, so the request names this run plan explicitly
+rather than treating it as a Bosch-mandated configuration.
 
 ## Verification
 
@@ -69,6 +70,5 @@ explicitly rather than treating it as a Bosch-mandated configuration.
 - [simulation_controller_test.cpp](../../tests/gui/simulation_controller_test.cpp)
 - [Simulation semantics](../guide/SIMULATION-SEMANTICS.md#functional-model-order)
 - [ADR-0017](../adr/0017-order-online-functional-observation-before-same-tick-actions.md)
-- `make functional-test`
-- `make bosch-example`
-- `make bosch-examples`
+- `./scripts/verify.sh module functional`
+- `cpssim_cli run bosch --example examples/example_v_10 --scenario shared_cloud`

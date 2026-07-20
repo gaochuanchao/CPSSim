@@ -27,7 +27,15 @@ flowchart LR
 
     Controller[GUI controller] -. FIFO commands / copied snapshots .-> Engine
     Adapter[FMI or Bosch adapter] -. external translation .-> Functional
+    CLI[CLI registry / wizard] --> Request[BoschRunRequest]
+    Request --> Service[DefaultBoschRunService]
+    Service --> Adapter
+    Service --> Engine
 ```
+
+The CLI converts direct arguments or interactive answers into one typed
+request. The application service invokes existing adapters and engine paths;
+terminal code does not reimplement the runtime cycle.
 
 ## Initialization
 

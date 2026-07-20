@@ -70,9 +70,12 @@
     },
     {
       "name": "make-dev",
-      "displayName": "GCC development with Unix Makefiles",
+      "displayName": "GCC development applications with Unix Makefiles",
       "inherits": "dev",
-      "generator": "Unix Makefiles"
+      "generator": "Unix Makefiles",
+      "cacheVariables": {
+        "CPSSIM_BUILD_GUI": "ON"
+      }
     },
     {
       "name": "make-release",

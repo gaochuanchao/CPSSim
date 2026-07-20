@@ -280,7 +280,9 @@ returns no model on the first impossible event and reports its exact location.
 
 `GuiTimelineCache` applies only an unseen append-only suffix. Trace shrink,
 experiment change, or boundary replacement causes a rebuild. An invalid suffix
-does not corrupt the accepted prefix.
+does not corrupt the accepted prefix. Cached experiment, boundary-event, and
+derivation optionals are validated before access; an impossible internal cache
+shape fails explicitly instead of relying on an unchecked invariant.
 
 ### Functional signal series
 
@@ -299,13 +301,15 @@ struct GuiScalarSample {
 
 `GuiSignalCache` validates tick order and a stable schema, then appends unseen
 rows transactionally. Reset, trace shrink, registry change, or boundary
-replacement causes a rebuild. Diagnostics identify the registry entry or
+replacement causes a rebuild. Cached boundary and accumulator optionals are
+validated before access. Diagnostics identify the registry entry or
 observation index, tick, and signal.
 
 The draw view converts values and ticks to floating-point screen coordinates.
-Deterministic min/max bucket downsampling preserves visible endpoints and
-extrema without modifying the stored series. Functional-model recreation and
-snapshot ownership are specified by
+The downsampling call groups its begin tick, end tick, and point budget in a
+named request value. Deterministic min/max bucket downsampling preserves
+visible endpoints and extrema without modifying the stored series.
+Functional-model recreation and snapshot ownership are specified by
 [ADR-0021](../adr/0021-recreate-functional-models-and-copy-observations-for-gui-runs.md).
 
 ## 9. Immediate-mode rendering

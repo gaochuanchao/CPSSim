@@ -303,10 +303,16 @@ void select_graph_node(GuiSelection& selection, const GuiGraphNode& node) {
 void select_graph_edge(GuiSelection& selection, const GuiGraphEdge& edge) {
     switch (edge.kind) {
     case GuiGraphEdgeKind::MessageRoute:
-        selection.select_route(*edge.route_reference);
+        if (!edge.route_reference.has_value()) {
+            throw std::logic_error{"message-route graph edge has no route reference"};
+        }
+        selection.select_route(edge.route_reference.value());
         return;
     case GuiGraphEdgeKind::Assignment:
-        selection.select_task(edge.assignment_reference->task_id);
+        if (!edge.assignment_reference.has_value()) {
+            throw std::logic_error{"assignment graph edge has no assignment reference"};
+        }
+        selection.select_task(edge.assignment_reference.value().task_id);
         return;
     }
 }

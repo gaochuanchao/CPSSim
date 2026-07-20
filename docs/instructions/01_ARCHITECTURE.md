@@ -170,6 +170,21 @@ trigger, and output mappings. See the
 [FMI module](../modules/fmi2-co-simulation.md) and
 [ADR-0016](../adr/0016-use-a-small-fmi2-co-simulation-loader.md).
 
+### Application-interface layer
+
+Application services compose existing core and adapter APIs for user
+interfaces without becoming part of the generic core. The first service is
+`DefaultBoschRunService`: it consumes a typed `BoschRunRequest`, loads one
+supplied trajectory, constructs the Bosch FMI functional model, invokes the
+existing reference-scenario runner, and returns detached summary data.
+
+The CLI registry converts either direct argv or interactive wizard choices to
+the same request and injects the service for testing. Terminal prompts contain
+no simulation semantics. The internal Bosch compatibility executable calls
+the same service. See the
+[application-interface module](../modules/application-interfaces.md) and
+[ADR-0022](../adr/0022-share-application-services-across-cli-paths.md).
+
 ### GUI layer
 
 The GUI uses a one-way presentation boundary. `SimulationController` copies
@@ -217,6 +232,8 @@ the [GUI tutorial](../gui/README.md), and the
 | Bosch trigger mapping | Bosch adapter |
 | Rendered state | GUI snapshot |
 | Pending presentation commands | `GuiCommandQueue` |
+| CLI command collection and dispatch | `CommandRegistry` / `CliApplication` |
+| One supplied Bosch run sequence | `DefaultBoschRunService` |
 
 The portable runtime records and their coordinated state changes are defined
 in the [runtime-state module](../modules/runtime-state.md). The records enforce
@@ -394,6 +411,7 @@ experiments/
 resources/
 src/
     cpssim/
+        application/
         core/
         model/
         kernel/

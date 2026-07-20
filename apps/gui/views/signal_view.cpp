@@ -270,7 +270,9 @@ void draw_signal_view(const SimulationSnapshot& snapshot, GuiSelection& selectio
             if (series == nullptr) {
                 continue;
             }
-            auto samples = downsample_signal(*series, visible_begin, visible_end, maximum_points);
+            auto samples = downsample_signal(*series, {.begin_tick = visible_begin,
+                                                       .end_tick = visible_end,
+                                                       .maximum_points = maximum_points});
             for (const auto& sample : samples) {
                 const auto value = gui_scalar_as_double(sample.value);
                 value_minimum = std::min(value_minimum, value);

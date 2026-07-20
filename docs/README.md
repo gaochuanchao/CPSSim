@@ -38,8 +38,9 @@ flowchart LR
 ```
 
 The generic core owns logical time, jobs, resources, scheduling mechanism,
-messages, and traces. Scheduling policies recommend decisions. FMI, Bosch,
-MATLAB-reference, and GUI code stay outside the core.
+messages, and traces. Scheduling policies recommend decisions. CLI application
+services compose core and adapter APIs without moving terminal, FMI, Bosch,
+MATLAB-reference, or GUI code into the core.
 
 ## Documentation layers
 
@@ -64,6 +65,8 @@ online functional-model interaction, Bosch timing/trigger conformance, FMI 2.0
 Co-Simulation import, strict single-vehicle execution of all three supplied
 Bosch trajectory formats, and an optional GUI workbench with run-plan editing,
 an architecture graph, a scheduling timeline, and functional plots.
+The terminal interface supports a persistent command shell plus interactive
+and direct execution of the three supplied Bosch trajectories.
 Shared-capacity resources, task channels, network contention/loss, multiple
 scheduling domains, multi-vehicle functional coupling, and workspace
 persistence are future work, not hidden current behavior.

@@ -98,13 +98,14 @@ bool GuiSimulationSession::apply_draft() {
     }
 
     const auto& validation = validate_draft();
-    if (!validation.valid()) {
+    if (!validation.plan.has_value() || !validation.diagnostics.empty()) {
         return false;
     }
 
     try {
-        auto replacement = std::make_unique<SimulationController>(
-            config_, *validation.plan, functional_model_factory_, functional_signal_registry_);
+        auto replacement = std::make_unique<SimulationController>(config_, validation.plan.value(),
+                                                                  functional_model_factory_,
+                                                                  functional_signal_registry_);
         controller_ = std::move(replacement);
         return true;
     } catch (const std::exception& error) {

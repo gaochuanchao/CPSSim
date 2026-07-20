@@ -97,7 +97,7 @@ class SimulationController {
      * paused engine. The plan is defensively revalidated against this exact
      * experiment before mutable runtime state exists.
      ***/
-    SimulationController(ExperimentConfig config, RunPlan run_plan,
+    SimulationController(ExperimentConfig config, const RunPlan& run_plan,
                          GuiFunctionalModelFactory functional_model_factory = {},
                          std::vector<GuiSignalDescriptor> functional_signal_registry = {});
 

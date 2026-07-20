@@ -1,5 +1,9 @@
 # 2026-07-19 — Bosch Example Execution
 
+> Historical note: command names on this dated page record the interface used
+> for that validation. The current public interface is documented in
+> [the command handbook](../COMMANDS.md).
+
 ## Scope
 
 Added a Bosch-specific executable workflow for the three supplied trajectory

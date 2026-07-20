@@ -59,9 +59,11 @@ long as each change remains small and tested.
 
 ## F1 — Real experiment-running CLI
 
-Current gap: [`apps/cli/main.cpp`](../../apps/cli/main.cpp) prints only the
-version. Tests and conformance applications can run simulations, but a user
-cannot yet run an arbitrary JSON experiment and save its trace.
+Implemented foundation: `cpssim_cli` now has a registered persistent shell,
+direct commands, and one shared application service for interactive/direct
+execution of the three supplied Bosch trajectories. The remaining F1 gap is a
+general command that loads an arbitrary JSON experiment plus allocation plan
+and writes its canonical trace and run manifest.
 
 Proposed first command:
 
@@ -74,9 +76,10 @@ cpssim_cli run \
   --summary summary.json
 ```
 
-Proposed stages:
+Remaining proposed stages:
 
-1. Parse command-line options in the application layer.
+1. Register a general experiment-run command in the existing CLI application
+   layer.
 2. Load `ExperimentConfig` through the existing JSON boundary.
 3. Load a separate task-to-resource assignment file and construct
    `ConfiguredResourceAllocator`. Keeping this separate avoids putting a

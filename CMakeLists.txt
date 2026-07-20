@@ -154,8 +154,47 @@ target_link_libraries(
 cpssim_set_project_warnings(cpssim_bosch_functional_reference)
 cpssim_enable_sanitizers(cpssim_bosch_functional_reference)
 
+add_library(
+    cpssim_bosch_application STATIC
+    src/cpssim/application/bosch_run_service.cpp
+)
+target_link_libraries(
+    cpssim_bosch_application
+    PUBLIC
+        cpssim_bosch_fmi2_adapter
+        cpssim_bosch_reference
+)
+
+cpssim_set_project_warnings(cpssim_bosch_application)
+cpssim_enable_sanitizers(cpssim_bosch_application)
+
+add_library(
+    cpssim_cli_support STATIC
+    apps/cli/cli_application.cpp
+    apps/cli/command_parser.cpp
+    apps/cli/command_registry.cpp
+    apps/cli/commands/bosch_run_command.cpp
+    apps/cli/commands/exit_command.cpp
+    apps/cli/commands/help_command.cpp
+    apps/cli/commands/list_command.cpp
+    apps/cli/commands/version_command.cpp
+)
+target_include_directories(
+    cpssim_cli_support
+    PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>"
+)
+target_link_libraries(
+    cpssim_cli_support
+    PUBLIC
+        cpssim::core
+        cpssim_bosch_application
+)
+
+cpssim_set_project_warnings(cpssim_cli_support)
+cpssim_enable_sanitizers(cpssim_cli_support)
+
 add_executable(cpssim_cli apps/cli/main.cpp)
-target_link_libraries(cpssim_cli PRIVATE cpssim::core)
+target_link_libraries(cpssim_cli PRIVATE cpssim_cli_support)
 
 cpssim_set_project_warnings(cpssim_cli)
 cpssim_enable_sanitizers(cpssim_cli)
@@ -239,12 +278,7 @@ cpssim_set_project_warnings(cpssim_bosch_conformance)
 cpssim_enable_sanitizers(cpssim_bosch_conformance)
 
 add_executable(cpssim_bosch_example apps/bosch_example/main.cpp)
-target_link_libraries(
-    cpssim_bosch_example
-    PRIVATE
-        cpssim_bosch_fmi2_adapter
-        cpssim_bosch_reference
-)
+target_link_libraries(cpssim_bosch_example PRIVATE cpssim_bosch_application)
 
 cpssim_set_project_warnings(cpssim_bosch_example)
 cpssim_enable_sanitizers(cpssim_bosch_example)
@@ -253,6 +287,26 @@ include(CTest)
 
 if(BUILD_TESTING)
     find_package(Catch2 3 CONFIG REQUIRED)
+
+    include(Catch)
+
+    function(cpssim_add_catch_tests target)
+        cmake_parse_arguments(ARG "" "LABEL" "SOURCES;LIBRARIES" ${ARGN})
+        add_executable(${target} ${ARG_SOURCES})
+        # Catch2's decomposer intentionally rewrites assertions into chained
+        # comparisons that trigger clang-tidy false positives. Test targets
+        # still compile with project warnings and execute in the tidy preset.
+        set_target_properties(${target} PROPERTIES CXX_CLANG_TIDY "")
+        target_link_libraries(${target} PRIVATE ${ARG_LIBRARIES} Catch2::Catch2WithMain)
+        cpssim_set_project_warnings(${target})
+        cpssim_enable_sanitizers(${target})
+        catch_discover_tests(
+            ${target}
+            TEST_PREFIX "${target}: "
+            DISCOVERY_MODE PRE_TEST
+            PROPERTIES LABELS "${ARG_LABEL}"
+        )
+    endfunction()
 
     add_library(
         cpssim_bosch_fmu_linux SHARED
@@ -272,57 +326,107 @@ if(BUILD_TESTING)
             OUTPUT_NAME "LateralMotionControl"
     )
 
-    add_executable(
-        cpssim_tests
-        tests/bosch/trigger_encoder_test.cpp
-        tests/config/json_config_test.cpp
-        tests/config/json_run_plan_test.cpp
-        tests/conformance/bosch_reference_test.cpp
-        tests/functional/functional_runtime_test.cpp
-        tests/gui/architecture_graph_test.cpp
-        tests/gui/display_scale_test.cpp
-        tests/gui/draft_run_plan_test.cpp
-        tests/gui/presentation_model_test.cpp
-        tests/gui/selection_model_test.cpp
-        tests/gui/signal_series_test.cpp
-        tests/gui/simulation_controller_test.cpp
-        tests/gui/timeline_model_test.cpp
-        tests/kernel/event_queue_test.cpp
-        tests/kernel/multi_resource_simulation_test.cpp
-        tests/kernel/network_simulation_test.cpp
-        tests/kernel/periodic_release_test.cpp
-        tests/kernel/scheduler_test.cpp
-        tests/kernel/simulation_engine_test.cpp
-        tests/model/categories_test.cpp
-        tests/model/event_test.cpp
-        tests/model/identifiers_test.cpp
-        tests/model/message_test.cpp
-        tests/model/run_plan_test.cpp
-        tests/model/runtime_state_test.cpp
-        tests/model/specifications_test.cpp
-        tests/model/time_test.cpp
-        tests/network/fixed_delay_network_test.cpp
-        tests/policy/fixed_priority_test.cpp
-        tests/policy/resource_allocator_test.cpp
-        tests/smoke_test.cpp
-        tests/trace/event_json_test.cpp
-    )
-    target_link_libraries(
-        cpssim_tests
-        PRIVATE
-            cpssim::core
-            cpssim_bosch_reference
-            cpssim_gui_support
-            Catch2::Catch2WithMain
+    cpssim_add_catch_tests(
+        cpssim_core_tests
+        SOURCES
+            tests/model/categories_test.cpp
+            tests/model/event_test.cpp
+            tests/model/identifiers_test.cpp
+            tests/model/message_test.cpp
+            tests/model/run_plan_test.cpp
+            tests/model/runtime_state_test.cpp
+            tests/model/specifications_test.cpp
+            tests/model/time_test.cpp
+            tests/smoke_test.cpp
+            tests/trace/event_json_test.cpp
+        LIBRARIES cpssim::core
+        LABEL core
     )
 
-    cpssim_set_project_warnings(cpssim_tests)
-    cpssim_enable_sanitizers(cpssim_tests)
+    cpssim_add_catch_tests(
+        cpssim_config_tests
+        SOURCES
+            tests/config/json_config_test.cpp
+            tests/config/json_run_plan_test.cpp
+        LIBRARIES cpssim::core
+        LABEL config
+    )
 
-    include(Catch)
-    catch_discover_tests(cpssim_tests DISCOVERY_MODE PRE_TEST)
+    cpssim_add_catch_tests(
+        cpssim_kernel_tests
+        SOURCES
+            tests/kernel/event_queue_test.cpp
+            tests/kernel/periodic_release_test.cpp
+            tests/kernel/simulation_engine_test.cpp
+        LIBRARIES cpssim::core
+        LABEL kernel
+    )
+
+    cpssim_add_catch_tests(
+        cpssim_scheduler_tests
+        SOURCES
+            tests/kernel/multi_resource_simulation_test.cpp
+            tests/kernel/scheduler_test.cpp
+            tests/policy/fixed_priority_test.cpp
+            tests/policy/resource_allocator_test.cpp
+        LIBRARIES cpssim::core
+        LABEL scheduler
+    )
+
+    cpssim_add_catch_tests(
+        cpssim_network_tests
+        SOURCES
+            tests/kernel/network_simulation_test.cpp
+            tests/network/fixed_delay_network_test.cpp
+        LIBRARIES cpssim::core
+        LABEL network
+    )
+
+    cpssim_add_catch_tests(
+        cpssim_functional_runtime_tests
+        SOURCES tests/functional/functional_runtime_test.cpp
+        LIBRARIES cpssim::core
+        LABEL functional
+    )
+
+    cpssim_add_catch_tests(
+        cpssim_bosch_tests
+        SOURCES tests/bosch/trigger_encoder_test.cpp
+        LIBRARIES cpssim_bosch_reference
+        LABEL bosch
+    )
+
+    cpssim_add_catch_tests(
+        cpssim_bosch_reference_tests
+        SOURCES tests/conformance/bosch_reference_test.cpp
+        LIBRARIES cpssim_bosch_reference
+        LABEL conformance
+    )
+
+    cpssim_add_catch_tests(
+        cpssim_gui_tests
+        SOURCES
+            tests/gui/architecture_graph_test.cpp
+            tests/gui/display_scale_test.cpp
+            tests/gui/draft_run_plan_test.cpp
+            tests/gui/presentation_model_test.cpp
+            tests/gui/selection_model_test.cpp
+            tests/gui/signal_series_test.cpp
+            tests/gui/simulation_controller_test.cpp
+            tests/gui/timeline_model_test.cpp
+        LIBRARIES cpssim_gui_support
+        LABEL gui
+    )
+
+    cpssim_add_catch_tests(
+        cpssim_cli_tests
+        SOURCES tests/cli/cli_application_test.cpp
+        LIBRARIES cpssim_cli_support
+        LABEL cli
+    )
 
     add_executable(cpssim_fmi2_tests tests/fmi/fmi2_importer_test.cpp)
+    set_target_properties(cpssim_fmi2_tests PROPERTIES CXX_CLANG_TIDY "")
     target_link_libraries(
         cpssim_fmi2_tests
         PRIVATE
@@ -341,6 +445,7 @@ if(BUILD_TESTING)
         PROPERTIES
             ENVIRONMENT
                 "CPSSIM_T15_BOSCH_FMU_LIBRARY=$<TARGET_FILE:cpssim_bosch_fmu_linux>"
+            LABELS fmi
     )
 
     add_executable(
@@ -349,9 +454,11 @@ if(BUILD_TESTING)
         tests/bosch/example_data_test.cpp
         tests/conformance/bosch_functional_reference_test.cpp
     )
+    set_target_properties(cpssim_functional_tests PROPERTIES CXX_CLANG_TIDY "")
     target_link_libraries(
         cpssim_functional_tests
         PRIVATE
+            cpssim_bosch_application
             cpssim_bosch_functional_reference
             Catch2::Catch2WithMain
     )
@@ -367,6 +474,7 @@ if(BUILD_TESTING)
         PROPERTIES
             ENVIRONMENT
                 "CPSSIM_T16_BOSCH_FMU_LIBRARY=$<TARGET_FILE:cpssim_bosch_fmu_linux>"
+            LABELS functional
     )
 
     add_test(
@@ -380,5 +488,10 @@ if(BUILD_TESTING)
         COMMAND cpssim_bosch_conformance
                 "${CMAKE_CURRENT_SOURCE_DIR}/experiments/bosch_v10_reference"
                 shared_cloud
+    )
+    set_tests_properties(
+        cpssim_bosch_conformance_dedicated
+        cpssim_bosch_conformance_shared_cloud
+        PROPERTIES LABELS conformance
     )
 endif()

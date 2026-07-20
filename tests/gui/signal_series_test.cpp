@@ -182,8 +182,10 @@ TEST_CASE("signal downsampling is deterministic and preserves visible extrema",
         series.samples.push_back({.tick = static_cast<Tick>(index), .value = values[index]});
     }
 
-    const auto first = downsample_signal(series, 0, 9, 4);
-    const auto second = downsample_signal(series, 0, 9, 4);
+    const auto first =
+        downsample_signal(series, {.begin_tick = 0, .end_tick = 9, .maximum_points = 4});
+    const auto second =
+        downsample_signal(series, {.begin_tick = 0, .end_tick = 9, .maximum_points = 4});
     REQUIRE((first == second));
     REQUIRE((first.size() == 4));
     REQUIRE((first.front() == series.samples.front()));
@@ -195,7 +197,8 @@ TEST_CASE("signal downsampling is deterministic and preserves visible extrema",
         return gui_scalar_as_double(sample.value) == -50.0;
     }));
 
-    const auto visible = downsample_signal(series, 1, 8, 4);
+    const auto visible =
+        downsample_signal(series, {.begin_tick = 1, .end_tick = 8, .maximum_points = 4});
     REQUIRE((visible.front().tick == 1));
     REQUIRE((visible.back().tick == 8));
     REQUIRE((series.samples.size() == values.size()));

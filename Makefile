@@ -1,112 +1,49 @@
-.DEFAULT_GOAL := build
+.DEFAULT_GOAL := all
 
-MAKE_DEV_DIR := build/make-dev
-MAKE_RELEASE_DIR := build/make-release
-MAKE_ASAN_DIR := build/make-asan
-MAKE_GUI_DIR := build/make-gui
-CXX_SOURCES := $(shell find src apps tests -type f \( -name '*.cpp' -o -name '*.hpp' \) -print | sort)
-BOSCH_EXAMPLE_DIR ?= examples/example_v_10
-BOSCH_SCENARIO ?= shared_cloud
-BOSCH_STOP_TICK ?=
-BOSCH_FMU_LIBRARY := ./$(MAKE_DEV_DIR)/LateralMotionControl.so
+NORMAL_PRESET := make-dev
+NORMAL_BUILD_DIR := build/make-dev
+GENERATED_BUILD_DIRS := \
+	build/make-dev \
+	build/dev \
+	build/release \
+	build/asan \
+	build/clang \
+	build/tidy \
+	build/gui \
+	build/make-release \
+	build/make-asan \
+	build/make-gui \
+	build/_deps
 
-.PHONY: \
-	build \
-	debug \
-	release \
-	configure \
-	test \
-	conformance \
-	fmi-test \
-	functional-test \
-	bosch-example \
-	bosch-examples \
-	gui \
-	run-gui \
-	run \
-	asan \
-	format \
-	format-check \
-	clean \
-	help
+.PHONY: all run-cli run-gui test clean help
 
-configure:
-	cmake --preset make-dev
+all:
+	cmake --preset $(NORMAL_PRESET)
+	cmake --build --preset $(NORMAL_PRESET) \
+		--target cpssim_cli cpssim_gui cpssim_bosch_fmu_linux
 
-build: configure
-	$(MAKE) --no-print-directory -C $(MAKE_DEV_DIR)
+run-cli:
+	cmake --preset $(NORMAL_PRESET)
+	cmake --build --preset $(NORMAL_PRESET) \
+		--target cpssim_cli cpssim_bosch_fmu_linux
+	./$(NORMAL_BUILD_DIR)/cpssim_cli
 
-debug: build
+run-gui:
+	cmake --preset $(NORMAL_PRESET)
+	cmake --build --preset $(NORMAL_PRESET) --target cpssim_gui
+	./$(NORMAL_BUILD_DIR)/cpssim_gui
 
-release:
-	cmake --preset make-release
-	$(MAKE) --no-print-directory -C $(MAKE_RELEASE_DIR)
-	ctest --preset make-release --output-on-failure
-
-test: build
-	ctest --preset make-dev --output-on-failure
-
-conformance: build
-	./$(MAKE_DEV_DIR)/cpssim_bosch_conformance
-
-fmi-test: build
-	ctest --test-dir $(MAKE_DEV_DIR) --output-on-failure -R '^fmi2:'
-
-functional-test: build
-	ctest --test-dir $(MAKE_DEV_DIR) --output-on-failure -R '^functional:'
-
-bosch-example: build
-	./$(MAKE_DEV_DIR)/cpssim_bosch_example "$(BOSCH_EXAMPLE_DIR)" \
-		"$(BOSCH_FMU_LIBRARY)" "$(BOSCH_SCENARIO)" $(BOSCH_STOP_TICK)
-
-bosch-examples: build
-	./$(MAKE_DEV_DIR)/cpssim_bosch_example examples/example_v_10 \
-		"$(BOSCH_FMU_LIBRARY)" "$(BOSCH_SCENARIO)"
-	./$(MAKE_DEV_DIR)/cpssim_bosch_example examples/example_v_12_5 \
-		"$(BOSCH_FMU_LIBRARY)" "$(BOSCH_SCENARIO)"
-	./$(MAKE_DEV_DIR)/cpssim_bosch_example examples/example_v_15 \
-		"$(BOSCH_FMU_LIBRARY)" "$(BOSCH_SCENARIO)"
-
-gui:
-	cmake --preset make-gui
-	$(MAKE) --no-print-directory -C $(MAKE_GUI_DIR) cpssim_gui cpssim_tests
-
-run-gui: gui
-	./$(MAKE_GUI_DIR)/cpssim_gui
-
-run: build
-	./$(MAKE_DEV_DIR)/cpssim_cli
-
-asan:
-	cmake --preset make-asan
-	$(MAKE) --no-print-directory -C $(MAKE_ASAN_DIR)
-	ctest --preset make-asan --output-on-failure
-
-format:
-	clang-format -i $(CXX_SOURCES)
-
-format-check:
-	clang-format --dry-run --Werror $(CXX_SOURCES)
+test:
+	@./scripts/verify.sh
 
 clean:
-	cmake -E rm -rf $(MAKE_DEV_DIR) $(MAKE_RELEASE_DIR) $(MAKE_ASAN_DIR) $(MAKE_GUI_DIR)
+	cmake -E rm -rf $(GENERATED_BUILD_DIRS)
 
 help:
-	@echo "CPSSim Make targets:"
-	@echo "  make              Configure and build the GCC Debug tree"
-	@echo "  make debug        Explicit alias for the normal Debug build"
-	@echo "  make release      Build and test the optimized Release tree"
-	@echo "  make test         Build and run the smoke tests"
-	@echo "  make conformance  Compare both T12 MATLAB timing references"
-	@echo "  make fmi-test     Run only the T15 Bosch FMI lifecycle tests"
-	@echo "  make functional-test Run T16 mock, Bosch, and replay tests"
-	@echo "  make bosch-example Run one Bosch example dataset through CPSSim"
-	@echo "  make bosch-examples Run all three full Bosch example datasets"
-	@echo "  make gui          Build the optional T17 Dear ImGui executable"
-	@echo "  make run-gui      Build and launch the T17 GUI"
-	@echo "  make run          Build and run cpssim_cli"
-	@echo "  make asan         Build and test with ASan/UBSan"
-	@echo "  make format       Format project C++ files"
-	@echo "  make format-check Check project C++ formatting"
-	@echo "  make clean        Remove only Makefile-generator build trees"
-	@echo "  make help         Show this help"
+	@echo "CPSSim commands:"
+	@echo "  make          Build CPSSim and its normal user applications"
+	@echo "  make run-cli  Launch the interactive terminal interface"
+	@echo "  make run-gui  Launch the graphical workbench"
+	@echo "  make test     Open the verification interface"
+	@echo "  make clean    Remove documented generated build directories"
+	@echo "  make help     Show this help"

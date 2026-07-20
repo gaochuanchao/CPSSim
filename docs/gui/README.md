@@ -16,13 +16,6 @@ see [Simulation semantics](../guide/SIMULATION-SEMANTICS.md).
 
 ## 1. Build and launch
 
-The normal CPSSim build is headless. Build the optional Dear ImGui application
-explicitly from the repository root:
-
-```bash
-make gui
-```
-
 Launch the tracked example with the default inclusive stop tick of 300:
 
 ```bash
@@ -32,14 +25,14 @@ make run-gui
 The executable also accepts an experiment configuration and stop tick:
 
 ```bash
-./build/make-gui/cpssim_gui config/examples/basic.json 500
+./build/make-dev/cpssim_gui config/examples/basic.json 500
 ```
 
 To learn the signal plot without preparing an FMU, attach the deterministic
 mock functional model:
 
 ```bash
-./build/make-gui/cpssim_gui \
+./build/make-dev/cpssim_gui \
   config/examples/basic.json 500 --mock-functional
 ```
 
@@ -49,9 +42,9 @@ On Ubuntu, GLFW and OpenGL development packages are required:
 sudo apt install libglfw3-dev libgl1-mesa-dev
 ```
 
-The first GUI configuration may download the pinned Dear ImGui source. The
-headless targets do not link GUI libraries. More build variants and dependency
-details are in the [command handbook](../COMMANDS.md#build-and-run-the-optional-gui).
+The first application configuration may download the pinned Dear ImGui source.
+More build variants and dependency details are in the
+[command handbook](../COMMANDS.md#gui-build-and-launch).
 
 GLFW scales the initial native content area for the monitor where the window is
 placed. Once the window exists, CPSSim reads the scale of the monitor containing
@@ -269,7 +262,8 @@ pixel dimensions except for small drawing primitives.
 3. Add the `.cpp` only to the `cpssim_gui` target in `CMakeLists.txt`.
 4. Add visibility and transient view state to `GuiApplication`.
 5. Call the view from `draw_center_panels` or the appropriate workbench column.
-6. Build with `make gui` and verify resizing, hiding, and selection behavior.
+6. Build and launch with `make run-gui`, then verify resizing, hiding, and
+   selection behavior.
 
 If the panel only formats existing snapshot values, it needs no core or
 controller change.
@@ -341,18 +335,15 @@ kept small because display-server behavior is environment-sensitive.
 During development, select the closest test, then run the full suite:
 
 ```bash
-make debug
-./build/make-dev/cpssim_tests '[gui]'
-make gui
-make test
+./scripts/verify.sh module gui
+make run-gui
+./scripts/verify.sh quick
 ```
 
 Before handing off an ownership, cache, or lifecycle change, also run:
 
 ```bash
-make asan
-make release
-make format-check
+./scripts/verify.sh full
 git diff --check
 ```
 

@@ -16,20 +16,22 @@ make test
 After a normal code change:
 
 ```bash
-make format
-make test
-make format-check
+./scripts/verify.sh format-apply
+./scripts/verify.sh quick
 ```
 
 Before handing off a substantial change:
 
 ```bash
-make release
-make asan
+./scripts/verify.sh full
 ```
 
 The [command handbook](../COMMANDS.md) explains when to use Debug, Release,
 sanitizers, Clang, clang-tidy, conformance tools, and the optional GUI.
+
+`make test` opens the same verification interface for a person at a terminal.
+Use the direct driver commands in automation so a workflow never depends on
+answering a prompt.
 
 ## Code-reading path
 
@@ -101,12 +103,16 @@ Examples:
 
 | Change | Start with | Then run |
 |---|---|---|
-| Tick conversion | `time_test` | full `make test` |
+| Tick conversion | `./scripts/verify.sh module core` | `./scripts/verify.sh quick` |
 | Queue precedence | `event_queue_test` | engine + conformance tests |
 | Scheduling policy | `fixed_priority_test` | scheduler + engine tests |
 | Network lifecycle | `fixed_delay_network_test` | network simulation test |
 | Bosch trigger mapping | trigger encoder test | Bosch timing conformance |
 | GUI controller | simulation controller test | GUI/headless equality test |
+
+CTest primary module labels—not Make targets—select focused groups. List them
+with `./scripts/verify.sh list-modules` and run one with
+`./scripts/verify.sh module LABEL`.
 
 CTest test names and filtering examples are in [COMMANDS.md](../COMMANDS.md).
 
@@ -167,6 +173,16 @@ Start with the [GUI tutorial](../gui/README.md#5-where-to-make-a-change) for a
 source map and worked customization recipes. Use the detailed
 [GUI architecture](../gui/GUI_ARCHITECTURE.md) when the change touches state
 ownership, selection, caches, run plans, or the command/snapshot boundary.
+
+### Add a CLI command
+
+Implement `CliCommand` below `apps/cli/commands/`, expose its private factory,
+and add that factory once in `command_registry.cpp`. Direct argv and
+interactive input both reach the same execution method; commands that offer a
+wizard should convert prompts into the same request object used by direct
+options. Put parser, shell, and prompt tests under `tests/cli/` with injected
+streams and services. Document syntax in [the command handbook](../COMMANDS.md).
+Do not add a Make target or put simulator semantics in terminal code.
 
 ### Extend networking or resource capacity
 

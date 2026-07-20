@@ -50,8 +50,9 @@ GuiSelectionKind GuiSelection::kind() const {
         return GuiSelectionKind::Job;
     case 6:
         return GuiSelectionKind::Event;
+    default:
+        return GuiSelectionKind::None;
     }
-    return GuiSelectionKind::None;
 }
 
 void GuiSelection::clear() {
@@ -120,19 +121,21 @@ bool event_matches_selection(const Event& event, const GuiSelection& selection) 
     case GuiSelectionKind::Resource:
         entity_matches = event.entities().resource_id == selection.resource_id();
         break;
-    case GuiSelectionKind::Job:
-        entity_matches = event_refers_to_job(event, *selection.job());
+    case GuiSelectionKind::Job: {
+        const auto job = selection.job();
+        entity_matches = job.has_value() && event_refers_to_job(event, job.value());
         break;
+    }
     case GuiSelectionKind::Event:
-        entity_matches = event.sequence() == *selection.event_sequence();
+        entity_matches = event.sequence() == selection.event_sequence();
         break;
     case GuiSelectionKind::None:
     case GuiSelectionKind::Experiment:
     case GuiSelectionKind::Route:
         break;
     }
-    return entity_matches ||
-           (selection.tick_range().has_value() && selection.tick_range()->contains(event.tick()));
+    const auto tick_range = selection.tick_range();
+    return entity_matches || (tick_range.has_value() && tick_range.value().contains(event.tick()));
 }
 
 /*** Clears only identities no longer present after reset/config replacement. ***/
@@ -148,22 +151,33 @@ void synchronize_selection(GuiSelection& selection, const SimulationSnapshot& sn
     case GuiSelectionKind::None:
     case GuiSelectionKind::Experiment:
         return;
-    case GuiSelectionKind::Task:
-        available = find_task(snapshot.experiment, *selection.task_id()) != nullptr;
+    case GuiSelectionKind::Task: {
+        const auto task_id = selection.task_id();
+        available =
+            task_id.has_value() && find_task(snapshot.experiment, task_id.value()) != nullptr;
         break;
-    case GuiSelectionKind::Resource:
-        available = find_resource(snapshot.experiment, *selection.resource_id()) != nullptr;
+    }
+    case GuiSelectionKind::Resource: {
+        const auto resource_id = selection.resource_id();
+        available = resource_id.has_value() &&
+                    find_resource(snapshot.experiment, resource_id.value()) != nullptr;
         break;
-    case GuiSelectionKind::Route:
-        available = find_route(snapshot.experiment, *selection.route_id()) != nullptr;
+    }
+    case GuiSelectionKind::Route: {
+        const auto route_id = selection.route_id();
+        available =
+            route_id.has_value() && find_route(snapshot.experiment, route_id.value()) != nullptr;
         break;
-    case GuiSelectionKind::Job:
-        available = snapshot_contains_job(snapshot, *selection.job());
+    }
+    case GuiSelectionKind::Job: {
+        const auto job = selection.job();
+        available = job.has_value() && snapshot_contains_job(snapshot, job.value());
         break;
+    }
     case GuiSelectionKind::Event:
         available = std::any_of(snapshot.event_log.begin(), snapshot.event_log.end(),
                                 [&selection](const Event& event) {
-                                    return event.sequence() == *selection.event_sequence();
+                                    return event.sequence() == selection.event_sequence();
                                 });
         break;
     }

@@ -29,6 +29,12 @@ extraction, extrema-preserving visual downsampling, and a custom live
 Functional signals plot synchronized with the scheduling timeline's time
 selection. `cpssim_gui` accepts
 `--mock-functional` as a dependency-free demonstration source.
+The repository command surface is limited to `make`, `make run-cli`,
+`make run-gui`, `make test`, `make clean`, and `make help`. The CLI provides a
+registered persistent shell and direct commands; its Bosch wizard/direct path
+shares `DefaultBoschRunService` with the internal compatibility executable.
+`scripts/verify.sh` owns interactive/direct verification selection, and CTest
+primary module labels replace specialized public Make targets.
 
 Before selecting new work, verify the current roadmap and future-work guide
 because this paragraph can become stale.
@@ -105,6 +111,8 @@ these rules.
 | `SimulationEngine` | current event tick, routing, accepted trace |
 | `FunctionalRuntime` | functional lifecycle and observation trace |
 | `BoschFmi2FunctionalModel` | immutable Bosch trajectory copy and FMI component lifecycle |
+| `DefaultBoschRunService` | parser-independent supplied-trajectory run orchestration |
+| `CommandRegistry` / `CliApplication` | CLI command collection, dispatch, and shell lifecycle |
 | `SimulationController` | GUI commands, current GUI-owned functional model, and detached snapshots |
 | `GuiSimulationSession` | loaded experiment, functional-model factory/registry, draft validation, and atomic active-controller replacement |
 | `ExperimentPresentationSnapshot` | sorted detached configuration and applied assignment copy |
@@ -126,10 +134,8 @@ these rules.
 Common completion commands:
 
 ```bash
-make test
-make release
-make asan
-make format-check
+./scripts/verify.sh quick
+./scripts/verify.sh full
 git diff --check
 ```
 
@@ -148,6 +154,9 @@ the C++ behavior silently.
 
 - the categorized backlog and staged implementation proposals are maintained
   in [Future improvements](FUTURE-WORK.md); its F-labels are not approved tasks;
+- F1 still requires general JSON experiment/allocation execution and canonical
+  trace/manifest output; the registered CLI and supplied Bosch run path are
+  implemented foundations, not completion of that broader proposal;
 - one directed channel and task port per configured task connection is planned
   in [ADR-0011](../adr/0011-plan-user-configured-task-channels.md);
 - multiple servers/scheduling domains, resource capacity sharing, migration,
@@ -170,3 +179,44 @@ the C++ behavior silently.
 End every handoff with exact commands/results, changed documents, limitations,
 and the next permitted task. Update this page whenever the implemented project
 boundary changes.
+
+## Latest command-interface validation
+
+The Make/CLI refinement was validated on 2026-07-20 with:
+
+- `make`: built `cpssim_cli`, `cpssim_gui`, their core/adapter dependencies,
+  and `cpssim_bosch_fmu_linux` without building test executables;
+- `printf 'exit\n' | make run-cli`: built required targets and opened/closed
+  the persistent `CPSSim 0.1.0` shell cleanly;
+- `./build/make-dev/cpssim_cli run bosch --example
+  examples/example_v_10 --scenario shared_cloud --stop-tick 2`: completed via
+  the real FMU with 9 canonical events and 3 functional observations;
+- interactive `make test`: displayed the seven-choice menu, listed all 11
+  maintained module labels, and exited cleanly;
+- `./scripts/verify.sh all`: 178/178 Debug tests passed before the tidy cleanup;
+- `./scripts/verify.sh module fmi`: 7/7 passed; `module bosch`: 4/4 passed;
+- follow-up `./scripts/verify.sh full`: formatting and all 179 tests passed
+  under Debug, ASan/UBSan, Release, Clang, and clang-tidy after guarded
+  optional access was added across run-plan persistence and GUI caches;
+- `git diff --check` and `./scripts/verify.sh format-check`: passed; and
+- `make clean`: removed only the documented generated directories; sources,
+  docs, configurations, examples, and Bosch references remained present.
+
+Changed current documentation: root `README.md`, `docs/COMMANDS.md`,
+`docs/README.md`, `docs/MODULE-INTERACTIONS.md`, the developer/project/handoff
+guides, GUI tutorial, F1 future-work boundary, architecture/roadmap
+instructions, FMI/functional/application module notes, Bosch example usage,
+and ADR-0022. The tidy follow-up also updated the experiment-configuration and
+GUI architecture pages. The dated Bosch devlog only gained a notice that its
+former command names are historical.
+
+Limitations: `make run-gui` built `cpssim_gui` successfully but GLFW could not
+open the environment's `:0` X11 display, so no visual smoke was possible. The
+clang-tidy limitation is resolved: production targets are analyzed cleanly;
+Catch2 test targets remain warning-clean and execute in the tidy preset but are
+not analyzed because Catch2's assertion decomposition produces false chained-
+comparison diagnostics.
+
+No next task is selected. The next permitted F1 step, only when explicitly
+requested, is general JSON experiment/allocation execution with canonical
+trace and run-manifest output; do not infer it from this interface refactor.

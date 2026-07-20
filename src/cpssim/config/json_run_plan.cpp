@@ -245,31 +245,51 @@ std::size_t assignment_index(const RunPlanRequest& request, TaskId task_id,
     return 0;
 }
 
+TaskId require_task_id(const RunPlanDiagnostic& diagnostic) {
+    if (!diagnostic.task_id.has_value()) {
+        fail_at("$", "run-plan validation diagnostic omitted its task identifier");
+    }
+    return diagnostic.task_id.value();
+}
+
+ResourceId require_resource_id(const RunPlanDiagnostic& diagnostic) {
+    if (!diagnostic.resource_id.has_value()) {
+        fail_at("$", "run-plan validation diagnostic omitted its resource identifier");
+    }
+    return diagnostic.resource_id.value();
+}
+
 [[noreturn]] void fail_build(const RunPlanDiagnostic& diagnostic, const RunPlanRequest& request) {
     switch (diagnostic.code) {
     case RunPlanDiagnosticCode::InvalidStopTick:
         fail_at("$.stop_tick", diagnostic.message);
     case RunPlanDiagnosticCode::UnsupportedPolicy:
         fail_at("$.scheduling_policy.kind", diagnostic.message);
-    case RunPlanDiagnosticCode::MissingTaskAssignment:
+    case RunPlanDiagnosticCode::MissingTaskAssignment: {
+        const auto task_id = require_task_id(diagnostic);
         fail_at("$.task_assignments",
-                diagnostic.message + " for task T" + std::to_string(diagnostic.task_id->value()));
+                diagnostic.message + " for task T" + std::to_string(task_id.value()));
+    }
     case RunPlanDiagnosticCode::DuplicateTaskAssignment: {
-        const auto index = assignment_index(request, *diagnostic.task_id, std::nullopt, 1);
+        const auto task_id = require_task_id(diagnostic);
+        const auto index = assignment_index(request, task_id, std::nullopt, 1);
         fail_at("$.task_assignments[" + std::to_string(index) + "].task_id",
-                diagnostic.message + " for task T" + std::to_string(diagnostic.task_id->value()));
+                diagnostic.message + " for task T" + std::to_string(task_id.value()));
     }
     case RunPlanDiagnosticCode::UnknownTask: {
-        const auto index = assignment_index(request, *diagnostic.task_id, diagnostic.resource_id);
+        const auto task_id = require_task_id(diagnostic);
+        const auto index = assignment_index(request, task_id, diagnostic.resource_id);
         fail_at("$.task_assignments[" + std::to_string(index) + "].task_id",
-                diagnostic.message + " T" + std::to_string(diagnostic.task_id->value()));
+                diagnostic.message + " T" + std::to_string(task_id.value()));
     }
     case RunPlanDiagnosticCode::UnknownResource:
     case RunPlanDiagnosticCode::InaccessibleResource: {
-        const auto index = assignment_index(request, *diagnostic.task_id, diagnostic.resource_id);
+        const auto task_id = require_task_id(diagnostic);
+        const auto resource_id = require_resource_id(diagnostic);
+        const auto index = assignment_index(request, task_id, resource_id);
         fail_at("$.task_assignments[" + std::to_string(index) + "].resource_id",
-                diagnostic.message + " R" + std::to_string(diagnostic.resource_id->value()) +
-                    " for task T" + std::to_string(diagnostic.task_id->value()));
+                diagnostic.message + " R" + std::to_string(resource_id.value()) + " for task T" +
+                    std::to_string(task_id.value()));
     }
     case RunPlanDiagnosticCode::RunConstructionFailed:
         fail_at("$", diagnostic.message);
@@ -277,15 +297,22 @@ std::size_t assignment_index(const RunPlanRequest& request, TaskId task_id,
     fail_at("$", "unknown validation failure");
 }
 
+RunPlan require_validated_plan(const RunPlanBuildResult& result, const RunPlanRequest& request) {
+    if (!result.plan.has_value()) {
+        if (result.diagnostics.empty()) {
+            fail_at("$", "run-plan validation failed without a diagnostic");
+        }
+        fail_build(result.diagnostics.front(), request);
+    }
+    return result.plan.value();
+}
+
 RunPlan revalidate_plan(const ExperimentConfig& config, const RunPlan& plan) {
     const RunPlanRequest request{.stop_tick = plan.stop_tick(),
                                  .policy_kind = plan.policy_kind(),
                                  .assignments = plan.assignments()};
     const auto result = build_run_plan(config, request);
-    if (!result.valid()) {
-        fail_build(result.diagnostics.front(), request);
-    }
-    return *result.plan;
+    return require_validated_plan(result, request);
 }
 
 } // namespace
@@ -341,10 +368,7 @@ RunPlan parse_run_plan_json(std::string_view json_text, const ExperimentConfig& 
         .assignments = read_assignments(require_field(document, "task_assignments", "$")),
     };
     const auto result = build_run_plan(config, request);
-    if (!result.valid()) {
-        fail_build(result.diagnostics.front(), request);
-    }
-    return *result.plan;
+    return require_validated_plan(result, request);
 }
 
 RunPlan load_run_plan(const std::filesystem::path& path, const ExperimentConfig& config) {
