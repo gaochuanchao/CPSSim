@@ -171,7 +171,7 @@ TEST_CASE("project creation writes and reloads the complete directory convention
     REQUIRE((loaded->session().snapshot().run_state == GuiRunState::Paused));
 }
 
-TEST_CASE("project metadata and minimal workspace JSON round trip strictly",
+TEST_CASE("project metadata and presentation workspace JSON round trip strictly",
           "[project][persistence][json]") {
     const ProjectMetadata metadata{.name = "round-trip",
                                    .system_file = "definitions/system.json",
@@ -183,10 +183,34 @@ TEST_CASE("project metadata and minimal workspace JSON round trip strictly",
     REQUIRE((parse_project_metadata_json(serialize_project_metadata_json(metadata)) == metadata));
     REQUIRE((parse_project_workspace_json(serialize_project_workspace_json(ProjectWorkspace{})) ==
              ProjectWorkspace{}));
-    REQUIRE_THROWS_AS(parse_project_workspace_json(R"({"schema_version":2})"),
+    auto workspace = ProjectWorkspace{};
+    workspace.theme = GuiTheme::Light;
+    workspace.panels.events = false;
+    workspace.analysis_lower_ratio = 0.7F;
+    workspace.active_analysis_tab = GuiAnalysisTab::Signals;
+    workspace.active_resource_tab = GuiResourceTab::Utilization;
+    workspace.event_filters.type = EventType::JobFinish;
+    workspace.event_filters.task = TaskId{1};
+    workspace.event_filters.text = "finished";
+    workspace.event_columns.phase = false;
+    workspace.selected_signals = {{GuiSignalScalarType::Real, "vehicle.x"}};
+    REQUIRE(
+        (parse_project_workspace_json(serialize_project_workspace_json(workspace)) == workspace));
+    REQUIRE((parse_project_workspace_json(R"({"schema_version":1})") == ProjectWorkspace{}));
+    REQUIRE_THROWS_AS(parse_project_workspace_json(R"({"schema_version":99})"),
                       std::invalid_argument);
-    REQUIRE_THROWS_AS(parse_project_workspace_json(R"({"schema_version":1,"theme":"dark"})"),
+    REQUIRE_THROWS_AS(parse_project_workspace_json(R"({"schema_version":2,"unknown":true})"),
                       std::invalid_argument);
+}
+
+TEST_CASE("invalid workspace values use safe presentation defaults", "[project][workspace]") {
+    const auto parsed = parse_project_workspace_json(
+        R"({"schema_version":2,"theme":"invalid","splitters":{"analysis_lower":-4.0,"right_sidebar":8.0},"active_tabs":{"analysis":"invalid","resources":"invalid"}})");
+    REQUIRE(parsed.theme == GuiTheme::Dark);
+    REQUIRE(parsed.analysis_lower_ratio == 0.05F);
+    REQUIRE(parsed.right_sidebar_ratio == 0.95F);
+    REQUIRE(parsed.active_analysis_tab == GuiAnalysisTab::Architecture);
+    REQUIRE(parsed.active_resource_tab == GuiResourceTab::ResourceState);
 }
 
 TEST_CASE("project loading resolves valid nested relative references",
@@ -394,6 +418,29 @@ TEST_CASE("invalid optional workspace uses defaults without changing simulation 
     REQUIRE((loaded->workspace() == ProjectWorkspace{}));
     REQUIRE(loaded->workspace_diagnostic().has_value());
     REQUIRE((serialize_experiment_config_json(loaded->session().config()) == expected_system));
+}
+
+TEST_CASE("presentation workspace save does not alter semantic project files",
+          "[project][workspace][semantics]") {
+    TemporaryDirectory temporary;
+    auto project = create_project(make_request(temporary.root(), "presentation-only"));
+    const auto system_before = read_text(project->root() / "system.json");
+    const auto plan_before = read_text(project->root() / "run-plans" / "default.json");
+
+    auto workspace = project->workspace();
+    workspace.theme = GuiTheme::Light;
+    workspace.panels.events = false;
+    workspace.resources_events_ratio = 0.75F;
+    workspace.event_filters.text = "deadline";
+    project->set_workspace(workspace);
+    save_project(*project);
+
+    REQUIRE(read_text(project->root() / "system.json") == system_before);
+    REQUIRE(read_text(project->root() / "run-plans" / "default.json") == plan_before);
+    const auto reloaded = load_project(project->root() / "project.json");
+    REQUIRE(reloaded->workspace().theme == GuiTheme::Light);
+    REQUIRE_FALSE(reloaded->workspace().panels.events);
+    REQUIRE(reloaded->workspace().event_filters.text == "deadline");
 }
 
 } // namespace

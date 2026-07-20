@@ -237,6 +237,12 @@ ProjectContext::ProjectContext(std::filesystem::path root, ProjectMetadata metad
     if (session_ == nullptr) {
         throw std::invalid_argument{"project context session must not be empty"};
     }
+    normalize_workspace_state(workspace_);
+}
+
+void ProjectContext::set_workspace(ProjectWorkspace workspace) {
+    normalize_workspace_state(workspace);
+    workspace_ = std::move(workspace);
 }
 
 std::string serialize_project_metadata_json(const ProjectMetadata& metadata) {
@@ -296,7 +302,96 @@ std::string serialize_project_workspace_json(const ProjectWorkspace& workspace) 
                      "unsupported version " + std::to_string(workspace.schema_version) +
                          "; expected " + std::to_string(current_project_workspace_schema_version));
     }
-    return Json{{"schema_version", workspace.schema_version}}.dump(2) + '\n';
+    const auto theme = workspace.theme == GuiTheme::Light ? "light" : "dark";
+    const auto analysis_tab = [&] {
+        switch (workspace.active_analysis_tab) {
+        case GuiAnalysisTab::Architecture:
+            return "architecture";
+        case GuiAnalysisTab::Timeline:
+            return "timeline";
+        case GuiAnalysisTab::Signals:
+            return "signals";
+        }
+        return "architecture";
+    }();
+    const auto resource_tab = workspace.active_resource_tab == GuiResourceTab::Utilization
+                                  ? "utilization"
+                                  : "resource_state";
+    const auto event_type = [](EventType type) {
+        switch (type) {
+        case EventType::JobRelease:
+            return "job_release";
+        case EventType::JobStart:
+            return "job_start";
+        case EventType::JobPreempt:
+            return "job_preempt";
+        case EventType::JobResume:
+            return "job_resume";
+        case EventType::JobFinish:
+            return "job_finish";
+        case EventType::DeadlineMiss:
+            return "deadline_miss";
+        case EventType::MessageSend:
+            return "message_send";
+        case EventType::MessageDelivery:
+            return "message_delivery";
+        }
+        return "job_release";
+    };
+    Json filters{{"text", workspace.event_filters.text}};
+    if (workspace.event_filters.type.has_value()) {
+        filters["type"] = event_type(*workspace.event_filters.type);
+    }
+    if (workspace.event_filters.task.has_value()) {
+        filters["task"] = workspace.event_filters.task->value();
+    }
+    if (workspace.event_filters.resource.has_value()) {
+        filters["resource"] = workspace.event_filters.resource->value();
+    }
+    if (workspace.event_filters.vehicle.has_value()) {
+        filters["vehicle"] = workspace.event_filters.vehicle->value();
+    }
+    Json signals = Json::array();
+    for (const auto& signal : workspace.selected_signals) {
+        const auto scalar_type = signal.scalar_type == GuiSignalScalarType::Real      ? "real"
+                                 : signal.scalar_type == GuiSignalScalarType::Integer ? "integer"
+                                                                                      : "boolean";
+        signals.push_back({{"source_name", signal.source_name}, {"type", scalar_type}});
+    }
+    const auto& panels = workspace.panels;
+    const auto& columns = workspace.event_columns;
+    const Json document{{"active_tabs", {{"analysis", analysis_tab}, {"resources", resource_tab}}},
+                        {"event_columns",
+                         {{"cause", columns.cause},
+                          {"job", columns.job},
+                          {"message", columns.message},
+                          {"phase", columns.phase},
+                          {"resource", columns.resource},
+                          {"sequence", columns.sequence},
+                          {"task", columns.task},
+                          {"tick", columns.tick},
+                          {"time", columns.time},
+                          {"type", columns.type},
+                          {"vehicle", columns.vehicle}}},
+                        {"event_filters", std::move(filters)},
+                        {"panels",
+                         {{"architecture", panels.architecture},
+                          {"events", panels.events},
+                          {"explorer", panels.explorer},
+                          {"inspector", panels.inspector},
+                          {"resources", panels.resources},
+                          {"signals", panels.signals},
+                          {"system_builder", panels.system_builder},
+                          {"timeline", panels.timeline}}},
+                        {"schema_version", workspace.schema_version},
+                        {"selected_signals", std::move(signals)},
+                        {"splitters",
+                         {{"analysis_lower", workspace.analysis_lower_ratio},
+                          {"left_sidebar", workspace.left_sidebar_ratio},
+                          {"resources_events", workspace.resources_events_ratio},
+                          {"right_sidebar", workspace.right_sidebar_ratio}}},
+                        {"theme", theme}};
+    return document.dump(2) + '\n';
 }
 
 ProjectWorkspace parse_project_workspace_json(std::string_view json_text) {
@@ -306,11 +401,164 @@ ProjectWorkspace parse_project_workspace_json(std::string_view json_text) {
     } catch (const Json::parse_error& error) {
         fail_project("workspace $ (byte " + std::to_string(error.byte) + ')', "malformed JSON");
     }
-    require_only_fields(document, {"schema_version"}, "workspace $");
-    return ProjectWorkspace{.schema_version = read_schema_version(
-                                require_field(document, "schema_version", "workspace $"),
-                                "workspace $.schema_version",
-                                current_project_workspace_schema_version)};
+    require_object(document, "workspace $");
+    const std::string workspace_path{"workspace $"};
+    const auto& version_value = require_field(document, "schema_version", workspace_path);
+    std::uint64_t version = 0;
+    if (version_value.is_number_unsigned()) {
+        version = version_value.get<std::uint64_t>();
+    } else if (version_value.is_number_integer() && version_value.get<std::int64_t>() >= 0) {
+        version = static_cast<std::uint64_t>(version_value.get<std::int64_t>());
+    } else {
+        fail_project("workspace $.schema_version", "must be a nonnegative integer");
+    }
+    if (version == 1) {
+        require_only_fields(document, {"schema_version"}, "workspace $");
+        return ProjectWorkspace{};
+    }
+    if (version != current_project_workspace_schema_version) {
+        fail_project("workspace $.schema_version",
+                     "unsupported version " + std::to_string(version) + "; expected 1 or " +
+                         std::to_string(current_project_workspace_schema_version));
+    }
+    require_only_fields(document,
+                        {"schema_version", "theme", "panels", "splitters", "active_tabs",
+                         "event_filters", "event_columns", "selected_signals"},
+                        "workspace $");
+
+    ProjectWorkspace workspace;
+    const auto read_optional_bool = [](const Json& object, const char* name, bool fallback) {
+        const auto found = object.find(name);
+        return found != object.end() && found->is_boolean() ? found->get<bool>() : fallback;
+    };
+    const auto read_optional_float = [](const Json& object, const char* name, float fallback) {
+        const auto found = object.find(name);
+        return found != object.end() && found->is_number() ? found->get<float>() : fallback;
+    };
+    if (const auto found = document.find("theme"); found != document.end() && found->is_string()) {
+        workspace.theme = found->get<std::string>() == "light" ? GuiTheme::Light : GuiTheme::Dark;
+    }
+    if (const auto found = document.find("panels"); found != document.end() && found->is_object()) {
+        require_only_fields(*found,
+                            {"explorer", "system_builder", "inspector", "architecture", "timeline",
+                             "signals", "resources", "events"},
+                            "workspace $.panels");
+        auto& value = workspace.panels;
+        value.explorer = read_optional_bool(*found, "explorer", value.explorer);
+        value.system_builder = read_optional_bool(*found, "system_builder", value.system_builder);
+        value.inspector = read_optional_bool(*found, "inspector", value.inspector);
+        value.architecture = read_optional_bool(*found, "architecture", value.architecture);
+        value.timeline = read_optional_bool(*found, "timeline", value.timeline);
+        value.signals = read_optional_bool(*found, "signals", value.signals);
+        value.resources = read_optional_bool(*found, "resources", value.resources);
+        value.events = read_optional_bool(*found, "events", value.events);
+    }
+    if (const auto found = document.find("splitters");
+        found != document.end() && found->is_object()) {
+        require_only_fields(*found,
+                            {"left_sidebar", "right_sidebar", "analysis_lower", "resources_events"},
+                            "workspace $.splitters");
+        workspace.left_sidebar_ratio =
+            read_optional_float(*found, "left_sidebar", workspace.left_sidebar_ratio);
+        workspace.right_sidebar_ratio =
+            read_optional_float(*found, "right_sidebar", workspace.right_sidebar_ratio);
+        workspace.analysis_lower_ratio =
+            read_optional_float(*found, "analysis_lower", workspace.analysis_lower_ratio);
+        workspace.resources_events_ratio =
+            read_optional_float(*found, "resources_events", workspace.resources_events_ratio);
+    }
+    if (const auto found = document.find("active_tabs");
+        found != document.end() && found->is_object()) {
+        require_only_fields(*found, {"analysis", "resources"}, "workspace $.active_tabs");
+        if (const auto tab = found->find("analysis"); tab != found->end() && tab->is_string()) {
+            const auto value = tab->get<std::string>();
+            workspace.active_analysis_tab = value == "timeline"  ? GuiAnalysisTab::Timeline
+                                            : value == "signals" ? GuiAnalysisTab::Signals
+                                                                 : GuiAnalysisTab::Architecture;
+        }
+        if (const auto tab = found->find("resources"); tab != found->end() && tab->is_string()) {
+            workspace.active_resource_tab = tab->get<std::string>() == "utilization"
+                                                ? GuiResourceTab::Utilization
+                                                : GuiResourceTab::ResourceState;
+        }
+    }
+    if (const auto found = document.find("event_filters");
+        found != document.end() && found->is_object()) {
+        require_only_fields(*found, {"type", "task", "resource", "vehicle", "text"},
+                            "workspace $.event_filters");
+        if (const auto text = found->find("text"); text != found->end() && text->is_string()) {
+            workspace.event_filters.text = text->get<std::string>();
+        }
+        const auto read_identifier = [&]<typename Identifier>(const char* name) {
+            const auto value = found->find(name);
+            if (value != found->end() && value->is_number_unsigned()) {
+                return std::optional<Identifier>{Identifier{value->get<std::uint64_t>()}};
+            }
+            return std::optional<Identifier>{};
+        };
+        workspace.event_filters.task = read_identifier.template operator()<TaskId>("task");
+        workspace.event_filters.resource =
+            read_identifier.template operator()<ResourceId>("resource");
+        workspace.event_filters.vehicle = read_identifier.template operator()<VehicleId>("vehicle");
+        if (const auto type = found->find("type"); type != found->end() && type->is_string()) {
+            const auto value = type->get<std::string>();
+            static const std::vector<std::pair<std::string, EventType>> types{
+                {"job_release", EventType::JobRelease},
+                {"job_start", EventType::JobStart},
+                {"job_preempt", EventType::JobPreempt},
+                {"job_resume", EventType::JobResume},
+                {"job_finish", EventType::JobFinish},
+                {"deadline_miss", EventType::DeadlineMiss},
+                {"message_send", EventType::MessageSend},
+                {"message_delivery", EventType::MessageDelivery}};
+            const auto match = std::find_if(types.begin(), types.end(),
+                                            [&](const auto& row) { return row.first == value; });
+            if (match != types.end()) {
+                workspace.event_filters.type = match->second;
+            }
+        }
+    }
+    if (const auto found = document.find("event_columns");
+        found != document.end() && found->is_object()) {
+        require_only_fields(*found,
+                            {"sequence", "tick", "time", "type", "phase", "task", "job", "resource",
+                             "message", "vehicle", "cause"},
+                            "workspace $.event_columns");
+        auto& value = workspace.event_columns;
+        value.sequence = read_optional_bool(*found, "sequence", value.sequence);
+        value.tick = read_optional_bool(*found, "tick", value.tick);
+        value.time = read_optional_bool(*found, "time", value.time);
+        value.type = read_optional_bool(*found, "type", value.type);
+        value.phase = read_optional_bool(*found, "phase", value.phase);
+        value.task = read_optional_bool(*found, "task", value.task);
+        value.job = read_optional_bool(*found, "job", value.job);
+        value.resource = read_optional_bool(*found, "resource", value.resource);
+        value.message = read_optional_bool(*found, "message", value.message);
+        value.vehicle = read_optional_bool(*found, "vehicle", value.vehicle);
+        value.cause = read_optional_bool(*found, "cause", value.cause);
+    }
+    if (const auto found = document.find("selected_signals");
+        found != document.end() && found->is_array()) {
+        for (const auto& signal : *found) {
+            if (!signal.is_object()) {
+                continue;
+            }
+            require_only_fields(signal, {"type", "source_name"}, "workspace $.selected_signals[]");
+            const auto type = signal.find("type");
+            const auto name = signal.find("source_name");
+            if (type == signal.end() || name == signal.end() || !type->is_string() ||
+                !name->is_string() || name->get<std::string>().empty()) {
+                continue;
+            }
+            const auto type_name = type->get<std::string>();
+            const auto scalar_type = type_name == "integer"   ? GuiSignalScalarType::Integer
+                                     : type_name == "boolean" ? GuiSignalScalarType::Boolean
+                                                              : GuiSignalScalarType::Real;
+            workspace.selected_signals.push_back({scalar_type, name->get<std::string>()});
+        }
+    }
+    normalize_workspace_state(workspace);
+    return workspace;
 }
 
 std::unique_ptr<ProjectContext>

@@ -10,6 +10,8 @@
 
 #pragma once
 
+#include "cpssim/gui/workspace_state.hpp"
+
 namespace cpssim {
 
 // Returns a finite positive scale, preserving the last valid value when a
@@ -27,5 +29,10 @@ float sanitize_gui_font_size(float requested_font_size);
 // Reports a stable, user-visible content-scale change while ignoring tiny
 // floating-point jitter and transient invalid reports.
 bool gui_display_scale_changed(float current_scale, float reported_scale);
+
+// A theme change always rebuilds the unscaled base style; a monitor change
+// reapplies the current base exactly once.
+bool gui_presentation_style_changed(GuiTheme applied_theme, GuiTheme requested_theme,
+                                    float current_scale, float reported_scale);
 
 } // namespace cpssim

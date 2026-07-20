@@ -54,4 +54,12 @@ TEST_CASE("GUI display scale detects stable monitor changes", "[gui][display-sca
     REQUIRE_FALSE(gui_display_scale_changed(1.25F, 0.0F));
 }
 
+TEST_CASE("GUI style rebuild detects theme and DPI changes independently",
+          "[gui][display-scale][theme]") {
+    REQUIRE(gui_presentation_style_changed(GuiTheme::Dark, GuiTheme::Light, 1.0F, 1.0F));
+    REQUIRE(gui_presentation_style_changed(GuiTheme::Light, GuiTheme::Light, 1.0F, 1.5F));
+    REQUIRE_FALSE(gui_presentation_style_changed(GuiTheme::Dark, GuiTheme::Dark, 1.5F, 1.5F));
+    REQUIRE(gui_theme_clear_color(GuiTheme::Light) != gui_theme_clear_color(GuiTheme::Dark));
+}
+
 } // namespace

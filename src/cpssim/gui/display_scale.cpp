@@ -50,4 +50,10 @@ bool gui_display_scale_changed(float current_scale, float reported_scale) {
     return std::abs(safe_reported_scale - safe_current_scale) > display_scale_change_epsilon;
 }
 
+bool gui_presentation_style_changed(GuiTheme applied_theme, GuiTheme requested_theme,
+                                    float current_scale, float reported_scale) {
+    return applied_theme != requested_theme ||
+           gui_display_scale_changed(current_scale, reported_scale);
+}
+
 } // namespace cpssim

@@ -8,6 +8,7 @@
 #pragma once
 
 #include "cpssim/gui/simulation_session.hpp"
+#include "cpssim/gui/workspace_state.hpp"
 
 #include <cstdint>
 #include <filesystem>
@@ -21,7 +22,8 @@
 namespace cpssim {
 
 inline constexpr std::uint32_t current_project_schema_version = 1;
-inline constexpr std::uint32_t current_project_workspace_schema_version = 1;
+inline constexpr std::uint32_t current_project_workspace_schema_version =
+    current_gui_workspace_schema_version;
 
 /*** Persistent metadata and project-owned relative file references. ***/
 struct ProjectMetadata {
@@ -46,12 +48,7 @@ using ProjectRuntimeResolver =
     std::function<ProjectRuntimeInputs(const std::filesystem::path&, const ProjectMetadata&)>;
 using ProjectContentWriter = std::function<void(const std::filesystem::path&)>;
 
-/*** Minimal presentation-only workspace persisted by G1.2. ***/
-struct ProjectWorkspace {
-    std::uint32_t schema_version{current_project_workspace_schema_version};
-
-    bool operator==(const ProjectWorkspace&) const = default;
-};
+using ProjectWorkspace = GuiWorkspaceState;
 
 /*** Validated inputs for creation below a caller-selected parent directory. ***/
 struct ProjectCreationRequest {
@@ -76,6 +73,7 @@ class ProjectContext {
     const ProjectMetadata& metadata() const { return metadata_; }
     const RunPlan& default_run_plan() const { return default_run_plan_; }
     const ProjectWorkspace& workspace() const { return workspace_; }
+    void set_workspace(ProjectWorkspace workspace);
     const std::optional<std::string>& workspace_diagnostic() const { return workspace_diagnostic_; }
     const ProjectRuntimeInputs& runtime_inputs() const { return runtime_inputs_; }
     GuiSimulationSession& session() { return *session_; }
