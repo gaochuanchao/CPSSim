@@ -14,6 +14,7 @@
 #include "views/experiment_explorer.hpp"
 #include "views/inspector_view.hpp"
 #include "views/resource_view.hpp"
+#include "views/results_view.hpp"
 #include "views/run_plan_editor.hpp"
 #include "views/signal_view.hpp"
 #include "views/system_builder.hpp"
@@ -134,6 +135,7 @@ void GuiApplication::load_workspace_state() {
     signal_view_state_.selection_initialized = !workspace_state_.selected_signals.empty();
     resource_view_state_.restore_active_tab = true;
     event_view_state_.filter_initialized = false;
+    results_view_state_ = {};
     restore_analysis_tab_ = true;
 }
 
@@ -351,6 +353,7 @@ bool GuiApplication::draw_main_menu() {
         ImGui::MenuItem("Architecture", nullptr, &workspace_state_.panels.architecture);
         ImGui::MenuItem("Scheduling timeline", nullptr, &workspace_state_.panels.timeline);
         ImGui::MenuItem("Functional signals", nullptr, &workspace_state_.panels.signals);
+        ImGui::MenuItem("Results", nullptr, &workspace_state_.panels.results);
         ImGui::MenuItem("Resources", nullptr, &workspace_state_.panels.resources);
         ImGui::MenuItem("Canonical events", nullptr, &workspace_state_.panels.events);
         if (ImGui::BeginMenu("Theme")) {
@@ -842,7 +845,7 @@ void GuiApplication::draw_center_panels(const SimulationSnapshot& snapshot) {
     auto& session = application_state_.active_session();
     auto available_height = ImGui::GetContentRegionAvail().y;
     if (workspace_state_.panels.architecture || workspace_state_.panels.timeline ||
-        workspace_state_.panels.signals) {
+        workspace_state_.panels.signals || workspace_state_.panels.results) {
         const auto has_lower_panel =
             workspace_state_.panels.resources || workspace_state_.panels.events;
         auto analysis_height = 0.0F;
@@ -930,6 +933,24 @@ void GuiApplication::draw_center_panels(const SimulationSnapshot& snapshot) {
                 ImGui::BeginTabItem("Functional signals", nullptr, signals_flags)) {
                 workspace_state_.active_analysis_tab = GuiAnalysisTab::Signals;
                 draw_signal_view(snapshot, runtime_selection_, signal_view_state_);
+                ImGui::EndTabItem();
+            }
+            const auto results_flags =
+                restore_analysis_tab_ &&
+                        workspace_state_.active_analysis_tab == GuiAnalysisTab::Results
+                    ? ImGuiTabItemFlags_SetSelected
+                    : ImGuiTabItemFlags_None;
+            if (workspace_state_.panels.results &&
+                ImGui::BeginTabItem("Results", nullptr, results_flags)) {
+                workspace_state_.active_analysis_tab = GuiAnalysisTab::Results;
+                const auto scenario_kind = application_state_.has_active_project()
+                                               ? application_state_.active_project()
+                                                     .metadata()
+                                                     .scenario_kind
+                                               : std::string{"generic"};
+                draw_results_view(snapshot, std::move(scenario_kind),
+                                  signal_view_state_.selected_signals, runtime_selection_,
+                                  results_view_state_);
                 ImGui::EndTabItem();
             }
             ImGui::EndTabBar();

@@ -16,6 +16,7 @@ TEST_CASE("workspace defaults expose every Goal 3 workbench panel", "[gui][works
     REQUIRE(workspace.panels.inspector);
     REQUIRE(workspace.panels.resources);
     REQUIRE(workspace.panels.events);
+    REQUIRE(workspace.panels.results);
     REQUIRE(workspace.event_filters == GuiEventFilters{});
 }
 

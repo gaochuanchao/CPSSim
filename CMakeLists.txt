@@ -236,6 +236,7 @@ cpssim_enable_sanitizers(cpssim_gui_support)
 add_library(
     cpssim_bosch_gui_application STATIC
     src/cpssim/application/bosch_project_factory.cpp
+    src/cpssim/application/bosch_result_analysis.cpp
 )
 target_link_libraries(
     cpssim_bosch_gui_application
@@ -305,6 +306,7 @@ if(CPSSIM_BUILD_GUI)
         apps/gui/views/experiment_explorer.cpp
         apps/gui/views/inspector_view.cpp
         apps/gui/views/resource_view.cpp
+        apps/gui/views/results_view.cpp
         apps/gui/views/run_plan_editor.cpp
         apps/gui/views/signal_view.cpp
         apps/gui/views/system_builder.cpp
@@ -489,6 +491,7 @@ if(BUILD_TESTING)
     add_executable(
         cpssim_bosch_project_tests
         tests/application/bosch_project_factory_test.cpp
+        tests/application/bosch_result_analysis_test.cpp
     )
     set_target_properties(cpssim_bosch_project_tests PROPERTIES CXX_CLANG_TIDY "")
     target_link_libraries(

@@ -6,6 +6,7 @@
 #include "views/event_view.hpp"
 #include "views/experiment_explorer.hpp"
 #include "views/resource_view.hpp"
+#include "views/results_view.hpp"
 #include "views/signal_view.hpp"
 #include "views/system_builder.hpp"
 #include "views/timeline_view.hpp"
@@ -133,6 +134,7 @@ class GuiApplication {
     TimelineViewState timeline_view_state_;
     SignalViewState signal_view_state_;
     ResourceViewState resource_view_state_;
+    ResultsViewState results_view_state_;
     EventViewState event_view_state_;
     bool restore_analysis_tab_{true};
     float text_scale_{1.0F};

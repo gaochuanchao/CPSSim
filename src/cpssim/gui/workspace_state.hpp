@@ -12,10 +12,10 @@
 
 namespace cpssim {
 
-inline constexpr std::uint32_t current_gui_workspace_schema_version = 2;
+inline constexpr std::uint32_t current_gui_workspace_schema_version = 3;
 
 enum class GuiTheme { Dark, Light };
-enum class GuiAnalysisTab { Architecture, Timeline, Signals };
+enum class GuiAnalysisTab { Architecture, Timeline, Signals, Results };
 enum class GuiResourceTab { ResourceState, Utilization };
 
 struct GuiPanelVisibility {
@@ -25,6 +25,7 @@ struct GuiPanelVisibility {
     bool architecture{true};
     bool timeline{true};
     bool signals{true};
+    bool results{true};
     bool resources{true};
     bool events{true};
 

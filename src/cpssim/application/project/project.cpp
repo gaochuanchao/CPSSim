@@ -311,6 +311,8 @@ std::string serialize_project_workspace_json(const ProjectWorkspace& workspace) 
             return "timeline";
         case GuiAnalysisTab::Signals:
             return "signals";
+        case GuiAnalysisTab::Results:
+            return "results";
         }
         return "architecture";
     }();
@@ -380,6 +382,7 @@ std::string serialize_project_workspace_json(const ProjectWorkspace& workspace) 
                           {"explorer", panels.explorer},
                           {"inspector", panels.inspector},
                           {"resources", panels.resources},
+                          {"results", panels.results},
                           {"signals", panels.signals},
                           {"system_builder", panels.system_builder},
                           {"timeline", panels.timeline}}},
@@ -416,9 +419,9 @@ ProjectWorkspace parse_project_workspace_json(std::string_view json_text) {
         require_only_fields(document, {"schema_version"}, "workspace $");
         return ProjectWorkspace{};
     }
-    if (version != current_project_workspace_schema_version) {
+    if (version != 2 && version != current_project_workspace_schema_version) {
         fail_project("workspace $.schema_version",
-                     "unsupported version " + std::to_string(version) + "; expected 1 or " +
+                     "unsupported version " + std::to_string(version) + "; expected 1, 2, or " +
                          std::to_string(current_project_workspace_schema_version));
     }
     require_only_fields(document,
@@ -441,7 +444,7 @@ ProjectWorkspace parse_project_workspace_json(std::string_view json_text) {
     if (const auto found = document.find("panels"); found != document.end() && found->is_object()) {
         require_only_fields(*found,
                             {"explorer", "system_builder", "inspector", "architecture", "timeline",
-                             "signals", "resources", "events"},
+                             "signals", "results", "resources", "events"},
                             "workspace $.panels");
         auto& value = workspace.panels;
         value.explorer = read_optional_bool(*found, "explorer", value.explorer);
@@ -450,6 +453,7 @@ ProjectWorkspace parse_project_workspace_json(std::string_view json_text) {
         value.architecture = read_optional_bool(*found, "architecture", value.architecture);
         value.timeline = read_optional_bool(*found, "timeline", value.timeline);
         value.signals = read_optional_bool(*found, "signals", value.signals);
+        value.results = read_optional_bool(*found, "results", value.results);
         value.resources = read_optional_bool(*found, "resources", value.resources);
         value.events = read_optional_bool(*found, "events", value.events);
     }
@@ -474,6 +478,7 @@ ProjectWorkspace parse_project_workspace_json(std::string_view json_text) {
             const auto value = tab->get<std::string>();
             workspace.active_analysis_tab = value == "timeline"  ? GuiAnalysisTab::Timeline
                                             : value == "signals" ? GuiAnalysisTab::Signals
+                                            : value == "results" ? GuiAnalysisTab::Results
                                                                  : GuiAnalysisTab::Architecture;
         }
         if (const auto tab = found->find("resources"); tab != found->end() && tab->is_string()) {
