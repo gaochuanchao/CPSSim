@@ -1,6 +1,6 @@
 /***
  * File: apps/gui/views/resource_view.cpp
- * Purpose: Render copied resource state and a normalized busy-time histogram.
+ * Purpose: Render copied resource state with inline utilization.
  * Creator: Chuanchao Gao
  * Documentation date: 2026-07-19
  ***/
@@ -88,64 +88,33 @@ void draw_resource_state(const SimulationSnapshot& snapshot, GuiSelection& selec
             ImGui::TableSetColumnIndex(4);
             ImGui::Text("%lld", static_cast<long long>(resource.idle_ticks));
             ImGui::TableSetColumnIndex(5);
-            ImGui::Text("%.1f%%", 100.0 * calculate_resource_utilization(resource.busy_ticks,
-                                                                         resource.idle_ticks));
+            const auto observed = resource.busy_ticks + resource.idle_ticks;
+            if (observed <= 0) {
+                ImGui::TextDisabled("No observations");
+            } else {
+                const auto utilization = calculate_resource_utilization(resource.busy_ticks,
+                                                                         resource.idle_ticks);
+                const auto overlay =
+                    std::to_string(static_cast<int>(utilization * 100.0 + 0.5)) + "%";
+                ImGui::ProgressBar(static_cast<float>(utilization), ImVec2{-1.0F, 0.0F},
+                                   overlay.c_str());
+                if (ImGui::IsItemHovered() && ImGui::BeginItemTooltip()) {
+                    ImGui::Text("Busy: %lld ticks", static_cast<long long>(resource.busy_ticks));
+                    ImGui::Text("Idle: %lld ticks", static_cast<long long>(resource.idle_ticks));
+                    ImGui::Text("Observed: %lld ticks", static_cast<long long>(observed));
+                    ImGui::EndTooltip();
+                }
+                if (ImGui::IsItemClicked()) {
+                    selection.select_resource(resource.id);
+                }
+            }
         }
         ImGui::EndTable();
     }
 }
 
-void draw_utilization(const SimulationSnapshot& snapshot, GuiSelection& selection) {
-    const auto rows = build_resource_presentation(snapshot);
-    if (rows.empty()) {
-        ImGui::TextDisabled("No resources are available.");
-        return;
-    }
-    for (const auto& row : rows) {
-        ImGui::PushID(static_cast<int>(row.id.value()));
-        const auto selected = selection.resource_id() == row.id;
-        if (ImGui::Selectable(
-                row.name.c_str(), selected, ImGuiSelectableFlags_None,
-                ImVec2{std::min(16.0F * ImGui::GetFontSize(), ImGui::GetContentRegionAvail().x),
-                       0.0F})) {
-            selection.select_resource(row.id);
-        }
-        if (ImGui::IsItemHovered() && ImGui::BeginItemTooltip()) {
-            ImGui::TextUnformatted(row.name.c_str());
-            ImGui::EndTooltip();
-        }
-        ImGui::SameLine();
-        const auto overlay = std::to_string(static_cast<int>(row.utilization * 100.0 + 0.5)) + "%";
-        ImGui::ProgressBar(static_cast<float>(row.utilization), ImVec2{-1.0F, 0.0F},
-                           overlay.c_str());
-        ImGui::PopID();
-    }
-}
-
-void draw_resource_view(const SimulationSnapshot& snapshot, GuiSelection& selection,
-                        GuiResourceTab& active_tab, ResourceViewState& state) {
-    if (!ImGui::BeginTabBar("Resource views")) {
-        return;
-    }
-    const auto state_flags = state.restore_active_tab && active_tab == GuiResourceTab::ResourceState
-                                 ? ImGuiTabItemFlags_SetSelected
-                                 : ImGuiTabItemFlags_None;
-    if (ImGui::BeginTabItem("Resource State", nullptr, state_flags)) {
-        active_tab = GuiResourceTab::ResourceState;
-        draw_resource_state(snapshot, selection);
-        ImGui::EndTabItem();
-    }
-    const auto utilization_flags =
-        state.restore_active_tab && active_tab == GuiResourceTab::Utilization
-            ? ImGuiTabItemFlags_SetSelected
-            : ImGuiTabItemFlags_None;
-    if (ImGui::BeginTabItem("Utilization", nullptr, utilization_flags)) {
-        active_tab = GuiResourceTab::Utilization;
-        draw_utilization(snapshot, selection);
-        ImGui::EndTabItem();
-    }
-    state.restore_active_tab = false;
-    ImGui::EndTabBar();
+void draw_resource_view(const SimulationSnapshot& snapshot, GuiSelection& selection) {
+    draw_resource_state(snapshot, selection);
 }
 
 } // namespace cpssim::gui

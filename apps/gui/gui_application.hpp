@@ -151,10 +151,9 @@ class GuiApplication {
     ArchitectureViewState architecture_view_state_;
     TimelineViewState timeline_view_state_;
     SignalViewState signal_view_state_;
-    ResourceViewState resource_view_state_;
     ResultsViewState results_view_state_;
     EventViewState event_view_state_;
-    bool restore_analysis_tab_{true};
+    bool restore_center_tabs_{true};
     float text_scale_{1.0F};
 };
 

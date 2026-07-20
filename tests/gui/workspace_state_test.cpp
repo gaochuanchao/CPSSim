@@ -24,11 +24,37 @@ TEST_CASE("workspace splitter ratios clamp invalid and extreme values", "[gui][w
     GuiWorkspaceState workspace;
     workspace.left_sidebar_ratio = -2.0F;
     workspace.right_sidebar_ratio = 4.0F;
-    workspace.analysis_lower_ratio = std::numeric_limits<float>::quiet_NaN();
+    workspace.center_split_ratio = std::numeric_limits<float>::quiet_NaN();
     normalize_workspace_state(workspace);
     REQUIRE(workspace.left_sidebar_ratio == 0.05F);
     REQUIRE(workspace.right_sidebar_ratio == 0.95F);
-    REQUIRE(workspace.analysis_lower_ratio == 0.56F);
+    REQUIRE(workspace.center_split_ratio == 0.62F);
+}
+
+TEST_CASE("center tabs move deterministically and reset to the Goal 5 arrangement",
+          "[gui][workspace][tabs]") {
+    GuiWorkspaceState workspace;
+    REQUIRE(center_tab_is_upper(workspace, GuiCenterTab::Timeline));
+    REQUIRE(move_center_tab(workspace, GuiCenterTab::Timeline, false));
+    REQUIRE_FALSE(center_tab_is_upper(workspace, GuiCenterTab::Timeline));
+    REQUIRE(workspace.active_lower_tab == GuiCenterTab::Timeline);
+    REQUIRE_FALSE(move_center_tab(workspace, GuiCenterTab::Timeline, false));
+    reset_center_tab_arrangement(workspace);
+    REQUIRE(workspace.upper_tabs ==
+            std::vector<GuiCenterTab>{GuiCenterTab::Architecture, GuiCenterTab::Timeline,
+                                      GuiCenterTab::Signals, GuiCenterTab::Results});
+    REQUIRE(workspace.lower_tabs ==
+            std::vector<GuiCenterTab>{GuiCenterTab::Resources, GuiCenterTab::Events});
+}
+
+TEST_CASE("workspace normalization repairs duplicate and missing center tabs",
+          "[gui][workspace][tabs]") {
+    GuiWorkspaceState workspace;
+    workspace.upper_tabs = {GuiCenterTab::Architecture, GuiCenterTab::Architecture};
+    workspace.lower_tabs.clear();
+    normalize_workspace_state(workspace);
+    REQUIRE(workspace.upper_tabs.front() == GuiCenterTab::Architecture);
+    REQUIRE(workspace.upper_tabs.size() + workspace.lower_tabs.size() == 6);
 }
 
 TEST_CASE("vertical split preserves both panels in narrow layouts", "[gui][workspace][layout]") {

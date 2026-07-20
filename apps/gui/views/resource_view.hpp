@@ -13,11 +13,6 @@
 namespace cpssim::gui {
 
 /*** Draws resource rows and utilization derived only from a snapshot. ***/
-struct ResourceViewState {
-    bool restore_active_tab{true};
-};
-
-void draw_resource_view(const SimulationSnapshot& snapshot, GuiSelection& selection,
-                        GuiResourceTab& active_tab, ResourceViewState& state);
+void draw_resource_view(const SimulationSnapshot& snapshot, GuiSelection& selection);
 
 } // namespace cpssim::gui

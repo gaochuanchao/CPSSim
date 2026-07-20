@@ -200,9 +200,13 @@ TEST_CASE("project metadata and presentation workspace JSON round trip strictly"
     auto workspace = ProjectWorkspace{};
     workspace.theme = GuiTheme::Light;
     workspace.panels.events = false;
-    workspace.analysis_lower_ratio = 0.7F;
-    workspace.active_analysis_tab = GuiAnalysisTab::Signals;
-    workspace.active_resource_tab = GuiResourceTab::Utilization;
+    workspace.center_split_ratio = 0.7F;
+    REQUIRE(move_center_tab(workspace, GuiCenterTab::Signals, false));
+    workspace.active_upper_tab = GuiCenterTab::Results;
+    workspace.run_mode = GuiRunMode::Fast;
+    workspace.fast_batch_unit = GuiFastBatchUnit::Ticks;
+    workspace.fast_event_batch_size = 17;
+    workspace.fast_tick_batch_size = 29;
     workspace.event_filters.type = EventType::JobFinish;
     workspace.event_filters.task = TaskId{1};
     workspace.event_filters.text = "finished";
@@ -221,10 +225,9 @@ TEST_CASE("invalid workspace values use safe presentation defaults", "[project][
     const auto parsed = parse_project_workspace_json(
         R"({"schema_version":2,"theme":"invalid","splitters":{"analysis_lower":-4.0,"right_sidebar":8.0},"active_tabs":{"analysis":"invalid","resources":"invalid"}})");
     REQUIRE(parsed.theme == GuiTheme::Dark);
-    REQUIRE(parsed.analysis_lower_ratio == 0.05F);
+    REQUIRE(parsed.center_split_ratio == 0.05F);
     REQUIRE(parsed.right_sidebar_ratio == 0.95F);
-    REQUIRE(parsed.active_analysis_tab == GuiAnalysisTab::Architecture);
-    REQUIRE(parsed.active_resource_tab == GuiResourceTab::ResourceState);
+    REQUIRE(parsed.active_upper_tab == GuiCenterTab::Architecture);
 }
 
 TEST_CASE("project loading resolves valid nested relative references",
@@ -455,7 +458,7 @@ TEST_CASE("presentation workspace save does not alter semantic project files",
     auto workspace = project->workspace();
     workspace.theme = GuiTheme::Light;
     workspace.panels.events = false;
-    workspace.resources_events_ratio = 0.75F;
+    workspace.center_split_ratio = 0.75F;
     workspace.event_filters.text = "deadline";
     project->set_workspace(workspace);
     save_project(*project);
