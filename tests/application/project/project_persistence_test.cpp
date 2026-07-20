@@ -421,6 +421,17 @@ TEST_CASE("failed project content preparation removes the incomplete directory",
     REQUIRE_FALSE(std::filesystem::exists(temporary.root() / "will-fail"));
 }
 
+TEST_CASE("failed Save As content preparation removes the incomplete copy",
+          "[project][save-as][cleanup]") {
+    TemporaryDirectory temporary;
+    const auto source = create_project(make_request(temporary.root(), "copy-source"));
+    REQUIRE_THROWS_AS(
+        save_project_as(*source, temporary.root(), "copy-will-fail", {},
+                        [](const auto&) { throw std::runtime_error{"injected content failure"}; }),
+        std::runtime_error);
+    REQUIRE_FALSE(std::filesystem::exists(temporary.root() / "copy-will-fail"));
+}
+
 TEST_CASE("invalid optional workspace uses defaults without changing simulation input",
           "[project][workspace][fallback]") {
     TemporaryDirectory temporary;

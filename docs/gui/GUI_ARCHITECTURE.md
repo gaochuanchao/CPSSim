@@ -86,6 +86,7 @@ The view files are deliberately small boundaries:
 | [`analysis/run_result.*`](../../src/cpssim/analysis/run_result.hpp) | immutable detached run result and deterministic generic metrics | [`run_result_test.cpp`](../../tests/analysis/run_result_test.cpp) |
 | [`application/result_export.*`](../../src/cpssim/application/result_export.hpp) | versioned manifest plus atomic authoritative JSON/CSV publication | [`result_export_test.cpp`](../../tests/application/result_export_test.cpp) |
 | [`application/results_workbook.*`](../../src/cpssim/application/results_workbook.hpp) | pinned-library XLSX convenience output and row-limit splitting | [`result_export_test.cpp`](../../tests/application/result_export_test.cpp) |
+| [`application/gui_layout_store.*`](../../src/cpssim/application/gui_layout_store.hpp) | immutable default layout, disposable staging, and explicit project `imgui.ini` saves | [`gui_layout_store_test.cpp`](../../tests/application/gui_layout_store_test.cpp) |
 
 If logic can be tested without opening a window, it normally belongs in
 `cpssim_gui_support`, not in an ImGui draw function.
@@ -165,6 +166,7 @@ Use this table before adding a field:
 | Derived graph/timeline/signal data | corresponding GUI-support builder/cache |
 | Immutable run result and generic metrics | `RunResult`, derived from `SimulationSnapshot` |
 | Atomic result-directory publication | `result_export` application service |
+| Default, staged, and project-specific Dear ImGui layout text | `GuiLayoutStore` |
 | Home/Workbench and optional active project/session | `GuiApplicationState` |
 | Project specifications, workspace metadata, and sole session | `ProjectContext` |
 | Atomic system/project/session reconstruction | `system_builder_workflow` application service |
@@ -172,6 +174,13 @@ Use this table before adding a field:
 | Theme, panel visibility, splitter ratios, tabs (including Results), event filters, and selected signals | `GuiWorkspaceState`, mirrored by `GuiApplication` and persisted by `ProjectContext` |
 | Non-persisted canvas viewport and text scale | corresponding view-state struct or `GuiApplication` |
 | Current monitor scale, base style, last valid framebuffer density | native loop in `main.cpp` |
+
+Dear ImGui runs with `ImGuiIO::IniFilename == nullptr`. The native loop forwards
+manual save notifications to `GuiApplication`, which serializes settings into
+`GuiLayoutStore`. Project activation clears the previous in-memory settings and
+loads either `<project>/imgui.ini` or the fixed `apps/gui/imgui.ini` default.
+Only explicit project Save/Save As writes the optional project override;
+temporary staging is removed on project replacement or application shutdown.
 
 Moving a value into a view merely because a widget displays it creates two
 sources of truth. Modify the actual owner and communicate through its public

@@ -144,6 +144,7 @@ these rules.
 | `RunResult` | detached immutable run input, typed signal series, and deterministic generic metrics |
 | `result_export` | atomic run-directory publication and raw result schemas |
 | `results_workbook` | XLSX convenience rendering and deterministic row splitting |
+| `GuiLayoutStore` | fixed default ImGui layout, disposable edit staging, and optional project layout publication |
 
 ## Task protocol
 
@@ -197,6 +198,9 @@ the C++ behavior silently.
   an unscaled base style before that scale is applied once; workspace schemas
   1 and 2 migrate to schema 3, which also persists Results visibility and the
   active Results tab;
+- Dear ImGui disk persistence is manual: `apps/gui/imgui.ini` is the fixed
+  default, optional project-root `imgui.ini` files are written only by Save or
+  Save As, and unsaved staging is deleted on replacement or shutdown;
 - Bosch example execution currently uses one functional model and one of the
   validated single-vehicle `dedicated`/`shared_cloud` run plans; multi-vehicle,
   probabilistic timing, and three-core cloud experiments remain future work;
@@ -208,6 +212,25 @@ sweeps, plot-image export, and multi-vehicle results remain future work.
 End every handoff with exact commands/results, changed documents, limitations,
 and the next permitted task. Update this page whenever the implemented project
 boundary changes.
+
+## Latest project-scoped ImGui layout validation
+
+The optional Dear ImGui layout lifecycle was validated on 2026-07-20:
+
+- the focused clang-tidy project build passed, followed by 42/42 project and
+  Bosch-project tests;
+- `./scripts/verify.sh full` passed formatting and 253/253 tests in each Debug,
+  ASan/UBSan, Release, Clang, and clang-tidy profile;
+- `cmake --build --preset make-dev --target cpssim_gui -j2` passed and copied
+  the fixed `apps/gui/imgui.ini` beside the executable without recreating a
+  repository-root settings file; and
+- `cpssim_gui --help` passed without a display.
+
+The current environment could not open X11, so manually confirm moving/resizing
+a saved project, discard-on-close, Save As, and **Restore Default Layout** in a
+desktop session. The graphics-independent tests cover default immutability,
+temporary-file cleanup, save/reopen, Save As, restore/removal, and invalid
+optional project-layout fallback.
 
 ## Latest Goal 4 results/export validation
 

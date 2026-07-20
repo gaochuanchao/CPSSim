@@ -690,7 +690,8 @@ std::unique_ptr<ProjectContext> load_project(const std::filesystem::path& projec
 std::unique_ptr<ProjectContext> save_project_as(const ProjectContext& project,
                                                 const std::filesystem::path& parent_directory,
                                                 std::string new_name,
-                                                const ProjectRuntimeResolver& runtime_resolver) {
+                                                const ProjectRuntimeResolver& runtime_resolver,
+                                                const ProjectContentWriter& content_writer) {
     validate_project_name(new_name);
     if (parent_directory.empty()) {
         fail_project("$.root", "parent directory must not be empty");
@@ -719,6 +720,9 @@ std::unique_ptr<ProjectContext> save_project_as(const ProjectContext& project,
             serialize_run_plan_json(project.session().config(), accepted_project_plan(project)));
         write_text_atomically(target / metadata.workspace_file,
                               serialize_project_workspace_json(project.workspace()));
+        if (content_writer) {
+            content_writer(target);
+        }
         write_text_atomically(target / "project.json", serialize_project_metadata_json(metadata));
         return load_project(target / "project.json", runtime_resolver);
     } catch (...) {

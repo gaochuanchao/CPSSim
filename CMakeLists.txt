@@ -243,6 +243,7 @@ cpssim_enable_sanitizers(cpssim_cli)
 add_library(
     cpssim_gui_support STATIC
     src/cpssim/analysis/run_result.cpp
+    src/cpssim/application/gui_layout_store.cpp
     src/cpssim/application/result_export.cpp
     src/cpssim/application/results_workbook.cpp
     src/cpssim/application/project/project.cpp
@@ -359,6 +360,11 @@ if(CPSSIM_BUILD_GUI)
     target_link_libraries(
         cpssim_gui
         PRIVATE cpssim_gui_support cpssim_bosch_gui_application cpssim_imgui
+    )
+    configure_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/apps/gui/imgui.ini"
+        "${CMAKE_CURRENT_BINARY_DIR}/imgui.ini"
+        COPYONLY
     )
 
     cpssim_set_project_warnings(cpssim_gui)
@@ -522,6 +528,7 @@ if(BUILD_TESTING)
     cpssim_add_catch_tests(
         cpssim_project_tests
         SOURCES
+            tests/application/gui_layout_store_test.cpp
             tests/application/project/project_persistence_test.cpp
             tests/application/project/system_builder_workflow_test.cpp
             tests/application/recent_projects_test.cpp

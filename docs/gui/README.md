@@ -103,6 +103,13 @@ the applied system. Open/close/replacement with pending changes prompts for
 Apply and save, Discard, or Cancel. Bosch systems remain read-only because
 Goal 2 does not introduce Bosch-specific model editing.
 
+Window and table placement use a separate optional `imgui.ini` in the project
+root. The tracked [`apps/gui/imgui.ini`](imgui.ini) is the fixed default and is
+never a Dear ImGui output target. Layout changes are staged in a temporary file;
+**Save Project** or **Save Project As** publishes the current layout to the
+project, while closing or replacing a project without saving deletes the staged
+file. A project without `imgui.ini` always uses the fixed default.
+
 ## 3. Workbench tour
 
 ```text
@@ -125,7 +132,11 @@ normalized ratios and panel visibility persist in the project workspace. Use
 **View → Theme → Light/Dark** to change both the base ImGui style and window
 background. The same menu shows the current monitor scale and provides an
 adjustable text-size slider, which remains an in-memory multiplier on top of
-automatic DPI scaling.
+automatic DPI scaling. **View → Restore Default Layout** reloads the fixed
+layout immediately. Save the project to remove its custom layout permanently;
+without a save, reopening the project restores its previously saved layout.
+The base style uses compact eight-unit scrollbars, scaled once for the active
+monitor, so horizontal and vertical scrolling consume less panel space.
 
 ### Structural and runtime selection
 
@@ -418,6 +429,8 @@ explains how to choose broader checks.
   not docking.
 - Theme, panel visibility, splitters, active tabs, event filters/columns, and
   selected signals are persisted; text size and canvas viewports remain local.
+- Dear ImGui settings are manually staged and saved per project; the tracked
+  default layout is read-only to the application.
 
 Unimplemented improvements and their design gates are kept in
 [Future improvements](../guide/FUTURE-WORK.md#f3-gui-usability-and-workspace-features),

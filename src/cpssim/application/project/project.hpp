@@ -112,9 +112,11 @@ std::unique_ptr<ProjectContext> load_project(const std::filesystem::path& projec
                                              const ProjectRuntimeResolver& runtime_resolver = {});
 
 // Copies, validates, and constructs a complete replacement before returning it.
-std::unique_ptr<ProjectContext>
-save_project_as(const ProjectContext& project, const std::filesystem::path& parent_directory,
-                std::string new_name, const ProjectRuntimeResolver& runtime_resolver = {});
+std::unique_ptr<ProjectContext> save_project_as(const ProjectContext& project,
+                                                const std::filesystem::path& parent_directory,
+                                                std::string new_name,
+                                                const ProjectRuntimeResolver& runtime_resolver = {},
+                                                const ProjectContentWriter& content_writer = {});
 
 // Saves specifications, the default plan, workspace, and metadata only.
 void save_project(const ProjectContext& project);

@@ -31,6 +31,7 @@
 #include "cpssim/core/version.hpp"
 
 #include "imgui.h"
+#include "imgui_internal.h"
 
 #include <algorithm>
 #include <charconv>
@@ -143,6 +144,69 @@ void GuiApplication::initialize_presentation_state() {
     }
     load_workspace_state();
     initialize_system_draft();
+    initialize_imgui_layout();
+}
+
+void GuiApplication::initialize_imgui_layout() {
+    if (paths_.default_imgui_layout.empty() || ImGui::GetCurrentContext() == nullptr) {
+        return;
+    }
+    imgui_layout_store_ = std::make_unique<GuiLayoutStore>(paths_.default_imgui_layout);
+    activate_imgui_layout();
+}
+
+void GuiApplication::activate_imgui_layout() {
+    if (imgui_layout_store_ == nullptr) {
+        return;
+    }
+    const auto project_root = application_state_.has_active_project()
+                                  ? std::optional{application_state_.active_project().root()}
+                                  : std::nullopt;
+    auto activation = imgui_layout_store_->activate(project_root);
+    pending_imgui_layout_ = std::move(activation.settings);
+    if (activation.diagnostic.has_value()) {
+        set_status(*activation.diagnostic, true);
+    }
+}
+
+void GuiApplication::apply_pending_imgui_layout() {
+    if (!pending_imgui_layout_.has_value()) {
+        return;
+    }
+    ImGui::ClearIniSettings();
+    ImGui::LoadIniSettingsFromMemory(pending_imgui_layout_->data(), pending_imgui_layout_->size());
+    ImGui::GetIO().WantSaveIniSettings = false;
+    pending_imgui_layout_.reset();
+}
+
+void GuiApplication::capture_current_imgui_layout() {
+    if (imgui_layout_store_ == nullptr || pending_imgui_layout_.has_value()) {
+        return;
+    }
+    std::size_t size = 0;
+    const auto* settings = ImGui::SaveIniSettingsToMemory(&size);
+    imgui_layout_store_->record_current(std::string{settings, size});
+    ImGui::GetIO().WantSaveIniSettings = false;
+}
+
+void GuiApplication::save_active_imgui_layout() {
+    if (imgui_layout_store_ == nullptr || !application_state_.has_active_project()) {
+        return;
+    }
+    capture_current_imgui_layout();
+    imgui_layout_store_->save_to_project(application_state_.active_project().root());
+}
+
+void GuiApplication::restore_default_imgui_layout() {
+    if (imgui_layout_store_ == nullptr) {
+        set_status("The default GUI layout is unavailable.", true);
+        return;
+    }
+    pending_imgui_layout_ = imgui_layout_store_->restore_default();
+    set_status(application_state_.has_active_project()
+                   ? "Default layout restored. Save Project to keep it for this project."
+                   : "Default layout restored.",
+               false);
 }
 
 void GuiApplication::load_workspace_state() {
@@ -274,6 +338,7 @@ void GuiApplication::replace_session(std::unique_ptr<GuiSimulationSession> sessi
     structural_selection_.select_system();
     runtime_selection_.clear();
     application_status_.clear();
+    activate_imgui_layout();
 }
 
 /*** Activates one fully constructed project and its uniquely owned session. ***/
@@ -284,6 +349,7 @@ void GuiApplication::replace_project(std::unique_ptr<ProjectContext> project) {
     structural_selection_.select_system();
     runtime_selection_.clear();
     application_status_.clear();
+    activate_imgui_layout();
 }
 
 /*** Loads completely before replacing the current project or standalone session. ***/
@@ -297,6 +363,7 @@ void GuiApplication::load_project_file(const std::filesystem::path& project_file
 void GuiApplication::save_active_project() {
     synchronize_project_workspace();
     save_project(application_state_.active_project());
+    save_active_imgui_layout();
 }
 
 /*** Returns the application to Home without retaining a session reference. ***/
@@ -307,12 +374,19 @@ void GuiApplication::clear_session() {
     structural_selection_.select_system();
     runtime_selection_.clear();
     application_status_.clear();
+    activate_imgui_layout();
 }
 
 /*** Advances queued simulation commands only when a session is active. ***/
 void GuiApplication::update_active_session() {
     if (application_state_.has_active_session()) {
         application_state_.active_session().update();
+    }
+}
+
+void GuiApplication::update_imgui_layout_persistence() {
+    if (ImGui::GetIO().WantSaveIniSettings) {
+        capture_current_imgui_layout();
     }
 }
 
@@ -403,6 +477,10 @@ bool GuiApplication::draw_main_menu() {
                            ImGuiSliderFlags_AlwaysClamp);
         if (ImGui::MenuItem("Reset text size", nullptr, false, text_scale_ != 1.0F)) {
             text_scale_ = 1.0F;
+        }
+        ImGui::Separator();
+        if (ImGui::MenuItem("Restore Default Layout")) {
+            restore_default_imgui_layout();
         }
         ImGui::EndMenu();
     }
@@ -635,9 +713,14 @@ void GuiApplication::draw_unapplied_changes_dialog() {
             application_state_, system_draft_ ? &*system_draft_ : nullptr,
             UnappliedSystemDecision::ApplyAndSave, &run_configuration);
         if (result.status == ProjectTransitionStatus::Proceed) {
-            initialize_system_draft();
-            ImGui::CloseCurrentPopup();
-            execute_pending_project_action();
+            try {
+                save_active_imgui_layout();
+                initialize_system_draft();
+                ImGui::CloseCurrentPopup();
+                execute_pending_project_action();
+            } catch (const std::exception& error) {
+                set_status(error.what(), true);
+            }
         } else if (result.status == ProjectTransitionStatus::Failed) {
             set_status(result.diagnostic, true);
         }
@@ -756,8 +839,15 @@ void GuiApplication::draw_project_dialog() {
             std::unique_ptr<ProjectContext> replacement;
             if (save_as) {
                 synchronize_project_workspace();
+                capture_current_imgui_layout();
+                const auto layout_writer = [this](const auto& root) {
+                    if (imgui_layout_store_ != nullptr) {
+                        imgui_layout_store_->write_current_to_project(root);
+                    }
+                };
                 replacement = save_project_as(application_state_.active_project(), project_parent_,
-                                              project_name_.data(), project_runtime_resolver());
+                                              project_name_.data(), project_runtime_resolver(),
+                                              layout_writer);
             } else {
                 replacement = create_project(
                     make_generic_project_template(project_parent_, project_name_.data()));
@@ -1392,6 +1482,7 @@ void GuiApplication::draw_home_screen() {
 
 /*** Fills the native window with Home or a detached-snapshot workbench. ***/
 void GuiApplication::draw_frame() {
+    apply_pending_imgui_layout();
     ImGui::GetStyle().FontScaleMain = text_scale_;
 
     const auto* viewport = ImGui::GetMainViewport();

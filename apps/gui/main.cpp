@@ -38,6 +38,7 @@ namespace {
 constexpr int default_window_width = 1200;
 constexpr int default_window_height = 760;
 constexpr float default_font_size = 16.0F;
+constexpr float default_scrollbar_size = 8.0F;
 
 /*** Reports GLFW errors to the application diagnostic stream. ***/
 void glfw_error_callback(int error, const char* description) {
@@ -72,6 +73,9 @@ ImGuiStyle make_base_style(cpssim::GuiTheme theme) {
         ImGui::StyleColorsDark(&base_style);
     }
     base_style.FontSizeBase = default_font_size;
+    base_style.ScrollbarSize = default_scrollbar_size;
+    base_style.ScrollbarPadding = 1.0F;
+    base_style.ScrollbarRounding = 2.0F;
     return base_style;
 }
 
@@ -104,6 +108,9 @@ int run_gui(std::unique_ptr<cpssim::GuiSimulationSession> session,
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
+    // The application owns layout persistence; Dear ImGui must never rewrite
+    // the tracked default layout through its conventional working-directory file.
+    ImGui::GetIO().IniFilename = nullptr;
     auto applied_theme = cpssim::GuiTheme::Dark;
     auto base_style = make_base_style(applied_theme);
     auto display_scale = startup_display_scale;
@@ -133,7 +140,8 @@ int run_gui(std::unique_ptr<cpssim::GuiSimulationSession> session,
          .preferences_file = cpssim::default_gui_preferences_file(),
          .examples_directory = repository_root / "examples",
          .bosch_reference_directory = repository_root / "experiments/bosch_v10_reference",
-         .bosch_fmu_library = cpssim::resolve_bundled_bosch_fmu(executable_path)}};
+         .bosch_fmu_library = cpssim::resolve_bundled_bosch_fmu(executable_path),
+         .default_imgui_layout = executable_path.parent_path() / "imgui.ini"}};
     applied_theme = application.theme();
     base_style = make_base_style(applied_theme);
     apply_display_scale(base_style, display_scale);
@@ -176,6 +184,7 @@ int run_gui(std::unique_ptr<cpssim::GuiSimulationSession> session,
         application.draw_frame();
 
         ImGui::Render();
+        application.update_imgui_layout_persistence();
         glViewport(0, 0, display_width, display_height);
         const auto clear_color = cpssim::gui_theme_clear_color(application.theme());
         glClearColor(clear_color.red, clear_color.green, clear_color.blue, clear_color.alpha);

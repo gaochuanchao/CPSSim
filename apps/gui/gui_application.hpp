@@ -12,6 +12,7 @@
 #include "views/timeline_view.hpp"
 
 #include "cpssim/application/file_dialog.hpp"
+#include "cpssim/application/gui_layout_store.hpp"
 #include "cpssim/application/recent_projects.hpp"
 #include "cpssim/gui/application_state.hpp"
 #include "cpssim/gui/selection_model.hpp"
@@ -31,6 +32,7 @@ struct GuiApplicationPaths {
     std::filesystem::path examples_directory{"examples"};
     std::filesystem::path bosch_reference_directory{"experiments/bosch_v10_reference"};
     std::filesystem::path bosch_fmu_library;
+    std::filesystem::path default_imgui_layout{"apps/gui/imgui.ini"};
 };
 
 class GuiApplication {
@@ -51,6 +53,7 @@ class GuiApplication {
     void save_active_project();
     void clear_session();
     void update_active_session();
+    void update_imgui_layout_persistence();
     void draw_frame();
 
   private:
@@ -85,6 +88,12 @@ class GuiApplication {
     void synchronize_system_assignments();
     void load_workspace_state();
     void synchronize_project_workspace();
+    void initialize_imgui_layout();
+    void activate_imgui_layout();
+    void apply_pending_imgui_layout();
+    void capture_current_imgui_layout();
+    void save_active_imgui_layout();
+    void restore_default_imgui_layout();
 
     bool draw_main_menu();
     void draw_home_screen();
@@ -100,6 +109,8 @@ class GuiApplication {
     GuiApplicationState application_state_;
     std::unique_ptr<FileDialog> dialogs_;
     GuiApplicationPaths paths_;
+    std::unique_ptr<GuiLayoutStore> imgui_layout_store_;
+    std::optional<std::string> pending_imgui_layout_;
     RecentProjects recent_projects_;
     StructuralSelection structural_selection_;
     GuiSelection runtime_selection_;
