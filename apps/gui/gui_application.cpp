@@ -38,6 +38,40 @@
 #include <string_view>
 
 namespace cpssim::gui {
+namespace {
+
+float sidebar_top_height(float available_height, float splitter_height, float ratio) {
+    const auto usable = std::max(0.0F, available_height - splitter_height);
+    const auto desired_minimum = 6.0F * ImGui::GetTextLineHeightWithSpacing();
+    const auto minimum = std::min(desired_minimum, usable * 0.45F);
+    return std::clamp(usable * ratio, minimum, std::max(minimum, usable - minimum));
+}
+
+void draw_horizontal_splitter(const char* identity, float available_height, float splitter_height,
+                              float& ratio) {
+    const auto usable = std::max(0.0F, available_height - splitter_height);
+    const auto desired_minimum = 6.0F * ImGui::GetTextLineHeightWithSpacing();
+    const auto minimum = std::min(desired_minimum, usable * 0.45F);
+    ImGui::InvisibleButton(identity, ImVec2{-1.0F, splitter_height});
+    if (ImGui::IsItemHovered() || ImGui::IsItemActive()) {
+        ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
+    }
+    if (ImGui::IsItemActive() && usable > 0.0F) {
+        const auto current = sidebar_top_height(available_height, splitter_height, ratio);
+        ratio = std::clamp((current + ImGui::GetIO().MouseDelta.y) / usable, minimum / usable,
+                           (usable - minimum) / usable);
+    }
+}
+
+SystemRunConfigurationDraft
+system_run_configuration(const GuiSimulationSession& session,
+                         const std::vector<DraftTaskAssignment>& assignments) {
+    return {.stop_tick = session.draft().stop_tick(),
+            .policy_kind = session.draft().policy_kind(),
+            .assignments = assignments};
+}
+
+} // namespace
 
 GuiApplication::GuiApplication() {
     paths_.preferences_file = default_gui_preferences_file();
@@ -64,7 +98,8 @@ GuiApplication::GuiApplication(std::unique_ptr<ProjectContext> project,
 
 /*** Establishes presentation defaults shared by Home and Workbench startup. ***/
 void GuiApplication::initialize_presentation_state() {
-    selection_.select_experiment();
+    structural_selection_.select_system();
+    runtime_selection_.clear();
     project_parent_ = paths_.projects_directory;
     bosch_parent_ = paths_.projects_directory;
     constexpr std::string_view generic_name{"new-project"};
@@ -86,6 +121,7 @@ void GuiApplication::initialize_system_draft() {
     system_validation_ = {};
     system_run_assignments_.clear();
     system_builder_view_state_ = {};
+    explorer_view_state_ = {};
     if (application_state_.has_active_project() &&
         application_state_.active_project().metadata().scenario_kind == "generic") {
         system_draft_.emplace(application_state_.active_session().config());
@@ -107,6 +143,9 @@ bool GuiApplication::system_changes_dirty() const {
     if (system_draft_->dirty()) {
         return true;
     }
+    if (application_state_.active_session().draft_dirty()) {
+        return true;
+    }
     const auto* active = application_state_.active_session().active_plan();
     if (active == nullptr || active->assignments().size() != system_run_assignments_.size()) {
         return true;
@@ -122,6 +161,24 @@ bool GuiApplication::system_changes_dirty() const {
         }
     }
     return false;
+}
+
+void GuiApplication::synchronize_system_assignments() {
+    if (!system_draft_.has_value()) {
+        return;
+    }
+    std::vector<DraftTaskAssignment> synchronized;
+    synchronized.reserve(system_draft_->tasks().size());
+    for (const auto& task : system_draft_->tasks()) {
+        const auto found =
+            std::find_if(system_run_assignments_.begin(), system_run_assignments_.end(),
+                         [&task](const auto& row) { return row.task_id == task.id; });
+        synchronized.push_back({.task_id = task.id,
+                                .resource_id = found == system_run_assignments_.end()
+                                                   ? std::nullopt
+                                                   : found->resource_id});
+    }
+    system_run_assignments_ = std::move(synchronized);
 }
 
 ProjectRuntimeResolver GuiApplication::project_runtime_resolver() const {
@@ -163,7 +220,8 @@ void GuiApplication::record_active_project() {
 void GuiApplication::replace_session(std::unique_ptr<GuiSimulationSession> session) {
     application_state_.replace_session(std::move(session));
     initialize_system_draft();
-    selection_.select_experiment();
+    structural_selection_.select_system();
+    runtime_selection_.clear();
     application_status_.clear();
 }
 
@@ -171,7 +229,8 @@ void GuiApplication::replace_session(std::unique_ptr<GuiSimulationSession> sessi
 void GuiApplication::replace_project(std::unique_ptr<ProjectContext> project) {
     application_state_.replace_project(std::move(project));
     initialize_system_draft();
-    selection_.select_experiment();
+    structural_selection_.select_system();
+    runtime_selection_.clear();
     application_status_.clear();
 }
 
@@ -189,7 +248,8 @@ void GuiApplication::save_active_project() { save_project(application_state_.act
 void GuiApplication::clear_session() {
     application_state_.clear_session();
     initialize_system_draft();
-    selection_.select_experiment();
+    structural_selection_.select_system();
+    runtime_selection_.clear();
     application_status_.clear();
 }
 
@@ -250,9 +310,9 @@ bool GuiApplication::draw_main_menu() {
     }
     if (ImGui::BeginMenu("View")) {
         ImGui::MenuItem("Experiment Explorer", nullptr, &show_explorer_);
-        ImGui::MenuItem("Inspector", nullptr, &show_inspector_);
-        ImGui::Separator();
         ImGui::MenuItem("System Builder", nullptr, &show_system_builder_);
+        ImGui::MenuItem("Run / Runtime sidebar", nullptr, &show_inspector_);
+        ImGui::Separator();
         ImGui::MenuItem("Architecture", nullptr, &show_architecture_);
         ImGui::MenuItem("Scheduling timeline", nullptr, &show_timeline_);
         ImGui::MenuItem("Functional signals", nullptr, &show_signals_);
@@ -296,7 +356,8 @@ void GuiApplication::open_project_dialog() {
     const auto result = open_project_from_dialog(
         application_state_, *dialogs_, paths_.projects_directory, project_runtime_resolver());
     if (result.status == ProjectWorkflowStatus::Applied) {
-        selection_.select_experiment();
+        structural_selection_.select_system();
+        runtime_selection_.clear();
         set_status("Opened project '" + application_state_.active_project().metadata().name + "'.",
                    false);
         record_active_project();
@@ -399,9 +460,11 @@ void GuiApplication::draw_unapplied_changes_dialog() {
     }
     ImGui::TextWrapped("The System Builder has unapplied changes. Choose how to continue.");
     if (ImGui::Button("Apply and save")) {
+        const auto run_configuration =
+            system_run_configuration(application_state_.active_session(), system_run_assignments_);
         const auto result = resolve_unapplied_system_changes(
             application_state_, system_draft_ ? &*system_draft_ : nullptr,
-            UnappliedSystemDecision::ApplyAndSave, &system_run_assignments_);
+            UnappliedSystemDecision::ApplyAndSave, &run_configuration);
         if (result.status == ProjectTransitionStatus::Proceed) {
             initialize_system_draft();
             ImGui::CloseCurrentPopup();
@@ -415,6 +478,10 @@ void GuiApplication::draw_unapplied_changes_dialog() {
         static_cast<void>(resolve_unapplied_system_changes(
             application_state_, system_draft_ ? &*system_draft_ : nullptr,
             UnappliedSystemDecision::Discard));
+        if (const auto* active_plan = application_state_.active_session().active_plan();
+            active_plan != nullptr) {
+            static_cast<void>(application_state_.active_session().replace_draft(*active_plan));
+        }
         initialize_system_draft();
         ImGui::CloseCurrentPopup();
         execute_pending_project_action();
@@ -434,15 +501,43 @@ void GuiApplication::draw_unapplied_changes_dialog() {
     ImGui::EndPopup();
 }
 
+void GuiApplication::validate_system_draft() {
+    if (!system_draft_.has_value() || !application_state_.has_active_project()) {
+        set_status("System validation requires an active generic project.", true);
+        return;
+    }
+    system_validation_ = system_draft_->build();
+    if (!system_validation_.valid()) {
+        set_status("System draft has " + std::to_string(system_validation_.diagnostics.size()) +
+                       " issue(s).",
+                   true);
+        return;
+    }
+    const auto run_configuration =
+        system_run_configuration(application_state_.active_session(), system_run_assignments_);
+    const auto result = build_system_project_replacement(application_state_.active_project(),
+                                                         *system_draft_, &run_configuration);
+    if (result.valid()) {
+        set_status("System and run configuration are valid; no active state was changed.", false);
+    } else if (!result.run_plan_diagnostics.empty()) {
+        set_status(result.run_plan_diagnostics.front().message, true);
+    } else {
+        set_status(result.diagnostic, true);
+    }
+}
+
 void GuiApplication::apply_system_draft() {
     if (!system_draft_.has_value() || !application_state_.has_active_project()) {
         set_status("System changes require an active generic project.", true);
         return;
     }
+    const auto run_configuration =
+        system_run_configuration(application_state_.active_session(), system_run_assignments_);
     auto result =
-        apply_system_project_draft(application_state_, *system_draft_, &system_run_assignments_);
+        apply_system_project_draft(application_state_, *system_draft_, &run_configuration);
     if (result.valid()) {
-        selection_.select_experiment();
+        structural_selection_.select_system();
+        runtime_selection_.clear();
         initialize_system_draft();
         set_status("System applied; the simulation session restarted paused.", false);
         return;
@@ -690,7 +785,7 @@ void GuiApplication::draw_about_dialog() {
 void GuiApplication::draw_center_panels(const SimulationSnapshot& snapshot) {
     auto& session = application_state_.active_session();
     auto available_height = ImGui::GetContentRegionAvail().y;
-    if (show_system_builder_ || show_architecture_ || show_timeline_ || show_signals_) {
+    if (show_architecture_ || show_timeline_ || show_signals_) {
         const auto has_lower_panel = show_resources_ || show_events_;
         auto analysis_height = 0.0F;
         if (has_lower_panel) {
@@ -702,24 +797,6 @@ void GuiApplication::draw_center_panels(const SimulationSnapshot& snapshot) {
         }
         ImGui::BeginChild("Analysis panel", ImVec2{0.0F, analysis_height}, ImGuiChildFlags_Borders);
         if (ImGui::BeginTabBar("Analysis views")) {
-            if (show_system_builder_ && ImGui::BeginTabItem("System Builder")) {
-                if (system_draft_.has_value()) {
-                    const auto action = draw_system_builder(
-                        *system_draft_, system_validation_, system_run_assignments_,
-                        system_changes_dirty(), application_state_.active_project().metadata().name,
-                        system_builder_view_state_);
-                    if (action == SystemBuilderAction::ApplyAndRestart) {
-                        apply_system_draft_requested_ = true;
-                    }
-                } else if (application_state_.has_active_project()) {
-                    ImGui::TextWrapped(
-                        "System Builder is available for generic projects. Bosch project "
-                        "configuration remains adapter-owned and read-only.");
-                } else {
-                    ImGui::TextWrapped("Save or open a generic project to edit its system.");
-                }
-                ImGui::EndTabItem();
-            }
             if (show_architecture_ && ImGui::BeginTabItem("Architecture")) {
                 auto previewing = false;
                 const auto* experiment = &snapshot.experiment;
@@ -758,20 +835,20 @@ void GuiApplication::draw_center_panels(const SimulationSnapshot& snapshot) {
                     }
                 }
                 const auto graph = build_architecture_graph(*experiment);
-                if (draw_architecture_view(graph, session, *experiment, selection_,
+                if (draw_architecture_view(graph, session, *experiment, runtime_selection_,
                                            architecture_view_state_, previewing)) {
                     show_inspector_ = true;
                 }
                 ImGui::EndTabItem();
             }
             if (show_timeline_ && ImGui::BeginTabItem("Scheduling timeline")) {
-                if (draw_timeline_view(snapshot, selection_, timeline_view_state_)) {
+                if (draw_timeline_view(snapshot, runtime_selection_, timeline_view_state_)) {
                     show_inspector_ = true;
                 }
                 ImGui::EndTabItem();
             }
             if (show_signals_ && ImGui::BeginTabItem("Functional signals")) {
-                draw_signal_view(snapshot, selection_, signal_view_state_);
+                draw_signal_view(snapshot, runtime_selection_, signal_view_state_);
                 ImGui::EndTabItem();
             }
             ImGui::EndTabBar();
@@ -794,35 +871,139 @@ void GuiApplication::draw_center_panels(const SimulationSnapshot& snapshot) {
         ImGui::BeginChild("Resource panel", ImVec2{0.0F, resource_height}, ImGuiChildFlags_Borders);
         ImGui::TextUnformatted("Resources");
         ImGui::Separator();
-        draw_resource_view(snapshot, selection_);
+        draw_resource_view(snapshot, runtime_selection_);
         ImGui::EndChild();
 
         ImGui::BeginChild("Event panel", ImVec2{0.0F, 0.0F}, ImGuiChildFlags_Borders);
         ImGui::TextUnformatted("Canonical events");
         ImGui::Separator();
-        draw_event_view(snapshot, selection_);
+        draw_event_view(snapshot, runtime_selection_);
         ImGui::EndChild();
     } else if (show_resources_) {
         ImGui::BeginChild("Resource panel", ImVec2{0.0F, 0.0F}, ImGuiChildFlags_Borders);
         ImGui::TextUnformatted("Resources");
         ImGui::Separator();
-        draw_resource_view(snapshot, selection_);
+        draw_resource_view(snapshot, runtime_selection_);
         ImGui::EndChild();
     } else if (show_events_) {
         ImGui::BeginChild("Event panel", ImVec2{0.0F, 0.0F}, ImGuiChildFlags_Borders);
         ImGui::TextUnformatted("Canonical events");
         ImGui::Separator();
-        draw_event_view(snapshot, selection_);
+        draw_event_view(snapshot, runtime_selection_);
         ImGui::EndChild();
     } else {
         ImGui::TextDisabled("No panels are visible. Use the View menu to restore a panel.");
     }
 }
 
+void GuiApplication::draw_left_sidebar(const SimulationSnapshot& snapshot) {
+    const auto draw_explorer = [&] {
+        ImGui::BeginChild("Experiment Explorer panel", ImVec2{0.0F, 0.0F}, ImGuiChildFlags_Borders,
+                          ImGuiWindowFlags_HorizontalScrollbar);
+        ImGui::TextUnformatted("Experiment Explorer");
+        ImGui::Separator();
+        draw_experiment_explorer(
+            snapshot.experiment, system_draft_.has_value() ? &*system_draft_ : nullptr,
+            system_run_assignments_, structural_selection_, system_explorer_interaction_,
+            application_state_.active_session().draft_editable(), explorer_view_state_);
+        ImGui::EndChild();
+    };
+    const auto draw_builder = [&] {
+        ImGui::BeginChild("System Builder panel", ImVec2{0.0F, 0.0F}, ImGuiChildFlags_Borders);
+        ImGui::TextUnformatted("System Builder");
+        ImGui::Separator();
+        if (system_draft_.has_value()) {
+            synchronize_system_assignments();
+            system_validation_ = system_draft_->build();
+            if (explorer_view_state_.focus_request != SystemBuilderFocusTarget::None) {
+                system_builder_view_state_.focus_request = explorer_view_state_.focus_request;
+                explorer_view_state_.focus_request = SystemBuilderFocusTarget::None;
+            }
+            const auto project_name = application_state_.has_active_project()
+                                          ? application_state_.active_project().metadata().name
+                                          : std::string{"Standalone session"};
+            draw_system_builder(*system_draft_, system_validation_, system_run_assignments_,
+                                structural_selection_,
+                                application_state_.active_session().draft_editable(), project_name,
+                                system_builder_view_state_);
+        } else {
+            ImGui::TextWrapped(
+                "Structural editing is available for generic projects. This adapter-owned "
+                "system remains read-only.");
+        }
+        ImGui::EndChild();
+    };
+
+    if (show_explorer_ && show_system_builder_) {
+        const auto available_height = ImGui::GetContentRegionAvail().y;
+        const auto splitter_height = std::max(4.0F, ImGui::GetFrameHeight() * 0.22F);
+        const auto top_height =
+            sidebar_top_height(available_height, splitter_height, left_sidebar_ratio_);
+        ImGui::BeginChild("Explorer upper", ImVec2{0.0F, top_height});
+        draw_explorer();
+        ImGui::EndChild();
+        draw_horizontal_splitter("Explorer Builder splitter", available_height, splitter_height,
+                                 left_sidebar_ratio_);
+        ImGui::BeginChild("Builder lower", ImVec2{0.0F, 0.0F});
+        draw_builder();
+        ImGui::EndChild();
+    } else if (show_explorer_) {
+        draw_explorer();
+    } else if (show_system_builder_) {
+        draw_builder();
+    }
+}
+
+void GuiApplication::draw_right_sidebar(const SimulationSnapshot& snapshot) {
+    const auto available_height = ImGui::GetContentRegionAvail().y;
+    const auto splitter_height = std::max(4.0F, ImGui::GetFrameHeight() * 0.22F);
+    const auto top_height =
+        sidebar_top_height(available_height, splitter_height, right_sidebar_ratio_);
+    ImGui::BeginChild("Run Configuration upper", ImVec2{0.0F, top_height});
+    ImGui::BeginChild("Run Configuration panel", ImVec2{0.0F, 0.0F}, ImGuiChildFlags_Borders);
+    ImGui::TextUnformatted("Run Configuration");
+    ImGui::Separator();
+    synchronize_system_assignments();
+    const auto action =
+        draw_run_configuration(application_state_.active_session(), snapshot,
+                               system_draft_.has_value() ? &*system_draft_ : nullptr,
+                               system_run_assignments_, system_changes_dirty());
+    if (action == RunConfigurationAction::ValidateChanges) {
+        if (system_draft_.has_value()) {
+            validate_system_draft_requested_ = true;
+        } else {
+            const auto& validation = application_state_.active_session().validate_draft();
+            set_status(validation.valid() ? "Run configuration is valid."
+                                          : validation.diagnostics.front().message,
+                       !validation.valid());
+        }
+    } else if (action == RunConfigurationAction::ApplyAndRestart) {
+        if (system_draft_.has_value()) {
+            apply_system_draft_requested_ = true;
+        } else if (application_state_.active_session().apply_draft()) {
+            runtime_selection_.clear();
+            set_status("Run configuration applied and reset.", false);
+        } else {
+            set_status("Run configuration could not be applied.", true);
+        }
+    }
+    ImGui::EndChild();
+    ImGui::EndChild();
+    draw_horizontal_splitter("Run Inspector splitter", available_height, splitter_height,
+                             right_sidebar_ratio_);
+    ImGui::BeginChild("Runtime Inspector lower", ImVec2{0.0F, 0.0F});
+    ImGui::BeginChild("Runtime Inspector panel", ImVec2{0.0F, 0.0F}, ImGuiChildFlags_Borders);
+    ImGui::TextUnformatted("Runtime Inspector");
+    ImGui::Separator();
+    draw_inspector_view(snapshot, runtime_selection_);
+    ImGui::EndChild();
+    ImGui::EndChild();
+}
+
 /*** Draws the existing shared-selection workbench for an active session. ***/
 void GuiApplication::draw_workbench(const SimulationSnapshot& snapshot) {
     auto& session = application_state_.active_session();
-    synchronize_selection(selection_, snapshot);
+    synchronize_selection(runtime_selection_, snapshot);
     if (!draw_main_menu()) {
         return;
     }
@@ -841,10 +1022,11 @@ void GuiApplication::draw_workbench(const SimulationSnapshot& snapshot) {
         ImGui::PopStyleColor();
     }
 
+    const auto show_left_sidebar = show_explorer_ || show_system_builder_;
     const auto column_count =
-        1 + static_cast<int>(show_explorer_) + static_cast<int>(show_inspector_);
+        1 + static_cast<int>(show_left_sidebar) + static_cast<int>(show_inspector_);
     const auto layout_identity =
-        static_cast<int>(show_explorer_) | (static_cast<int>(show_inspector_) << 1);
+        static_cast<int>(show_left_sidebar) | (static_cast<int>(show_inspector_) << 1);
     const auto available_width = ImGui::GetContentRegionAvail().x;
     const auto explorer_width = std::min(18.0F * ImGui::GetFontSize(), available_width * 0.24F);
     const auto inspector_width = std::min(28.0F * ImGui::GetFontSize(), available_width * 0.34F);
@@ -853,24 +1035,20 @@ void GuiApplication::draw_workbench(const SimulationSnapshot& snapshot) {
                           ImGuiTableFlags_Resizable | ImGuiTableFlags_BordersInnerV |
                               ImGuiTableFlags_SizingStretchProp,
                           ImVec2{0.0F, 0.0F})) {
-        if (show_explorer_) {
-            ImGui::TableSetupColumn("Explorer", ImGuiTableColumnFlags_WidthFixed, explorer_width);
+        if (show_left_sidebar) {
+            ImGui::TableSetupColumn("Structure", ImGuiTableColumnFlags_WidthFixed, explorer_width);
         }
         ImGui::TableSetupColumn("Center", ImGuiTableColumnFlags_WidthStretch);
         if (show_inspector_) {
-            ImGui::TableSetupColumn("Inspector", ImGuiTableColumnFlags_WidthFixed, inspector_width);
+            ImGui::TableSetupColumn("Run and runtime", ImGuiTableColumnFlags_WidthFixed,
+                                    inspector_width);
         }
         ImGui::TableNextRow();
 
         int column = 0;
-        if (show_explorer_) {
+        if (show_left_sidebar) {
             ImGui::TableSetColumnIndex(column++);
-            ImGui::BeginChild("Experiment Explorer panel", ImVec2{0.0F, 0.0F},
-                              ImGuiChildFlags_Borders, ImGuiWindowFlags_HorizontalScrollbar);
-            ImGui::TextUnformatted("Experiment Explorer");
-            ImGui::Separator();
-            draw_experiment_explorer(snapshot.experiment, selection_);
-            ImGui::EndChild();
+            draw_left_sidebar(snapshot);
         }
 
         ImGui::TableSetColumnIndex(column++);
@@ -878,13 +1056,7 @@ void GuiApplication::draw_workbench(const SimulationSnapshot& snapshot) {
 
         if (show_inspector_) {
             ImGui::TableSetColumnIndex(column);
-            ImGui::BeginChild("Inspector panel", ImVec2{0.0F, 0.0F}, ImGuiChildFlags_Borders);
-            ImGui::TextUnformatted("Inspector");
-            ImGui::Separator();
-            draw_run_plan_editor(session, snapshot);
-            ImGui::Separator();
-            draw_inspector_view(snapshot, selection_);
-            ImGui::EndChild();
+            draw_right_sidebar(snapshot);
         }
         ImGui::EndTable();
     }
@@ -1015,6 +1187,10 @@ void GuiApplication::draw_frame() {
     draw_unapplied_changes_dialog();
     draw_project_dialog();
     draw_bosch_wizard();
+    if (validate_system_draft_requested_) {
+        validate_system_draft_requested_ = false;
+        validate_system_draft();
+    }
     if (apply_system_draft_requested_) {
         apply_system_draft_requested_ = false;
         apply_system_draft();

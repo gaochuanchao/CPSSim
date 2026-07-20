@@ -1,17 +1,23 @@
-/***
- * File: apps/gui/views/run_plan_editor.hpp
- * Purpose: Declare explicit run-plan draft controls and diagnostics rendering.
- * Creator: Chuanchao Gao
- * Documentation date: 2026-07-19
- ***/
+/*** Declare the right-side run-configuration editor and actions. ***/
 
 #pragma once
 
+#include "cpssim/gui/editable_system_draft.hpp"
 #include "cpssim/gui/simulation_session.hpp"
 
 namespace cpssim::gui {
 
-/*** Draws active/draft plan distinction, typed fields, and Apply controls. ***/
-void draw_run_plan_editor(GuiSimulationSession& session, const SimulationSnapshot& snapshot);
+enum class RunConfigurationAction {
+    None,
+    ValidateChanges,
+    ApplyAndRestart,
+};
+
+/*** Draws run-plan fields only; structural application is deferred to the caller. ***/
+RunConfigurationAction draw_run_configuration(GuiSimulationSession& session,
+                                              const SimulationSnapshot& snapshot,
+                                              const EditableSystemDraft* system_draft,
+                                              std::vector<DraftTaskAssignment>& system_assignments,
+                                              bool system_changes_dirty);
 
 } // namespace cpssim::gui

@@ -13,6 +13,7 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <utility>
 
 namespace {
 
@@ -51,6 +52,14 @@ std::unique_ptr<ProjectContext> make_project(const std::filesystem::path& parent
                           std::move(runtime));
 }
 
+SystemRunConfigurationDraft run_configuration(const GuiApplicationState& state,
+                                              std::vector<DraftTaskAssignment> assignments) {
+    const auto* plan = state.active_session().active_plan();
+    return {.stop_tick = plan->stop_tick(),
+            .policy_kind = plan->policy_kind(),
+            .assignments = std::move(assignments)};
+}
+
 TEST_CASE("valid system apply atomically rebuilds a clean paused project session",
           "[project][system-builder][atomic]") {
     TemporaryDirectory temporary;
@@ -68,6 +77,22 @@ TEST_CASE("valid system apply atomically rebuilds a clean paused project session
     REQUIRE((state.active_session().config().tasks()[0].period() == 120));
     REQUIRE((state.active_session().snapshot().run_state == GuiRunState::Paused));
     REQUIRE(state.active_session().snapshot().event_log.empty());
+}
+
+TEST_CASE("draft editing and replacement validation leave the active configuration unchanged",
+          "[project][system-builder][validate][atomic]") {
+    TemporaryDirectory temporary;
+    GuiApplicationState state{make_project(temporary.root(), "validate-only")};
+    const auto* retained = &state.active_session();
+    EditableSystemDraft draft{state.active_session().config()};
+    draft.set_resource_name(0, "pending CPU");
+
+    REQUIRE((state.active_session().config().resources()[0].name() == "CPU"));
+    const auto replacement = build_system_project_replacement(state.active_project(), draft);
+    REQUIRE(replacement.valid());
+    REQUIRE((&state.active_session() == retained));
+    REQUIRE((state.active_session().config().resources()[0].name() == "CPU"));
+    REQUIRE((replacement.replacement->session().config().resources()[0].name() == "pending CPU"));
 }
 
 TEST_CASE("invalid config and incompatible run plan preserve the active project",
@@ -103,11 +128,14 @@ TEST_CASE("explicit builder assignments make a newly added task applicable",
     const std::vector<DraftTaskAssignment> assignments{
         {.task_id = TaskId{1}, .resource_id = ResourceId{1}},
         {.task_id = added_task, .resource_id = ResourceId{1}}};
+    auto run = run_configuration(state, assignments);
+    run.stop_tick = 250;
 
-    const auto result = apply_system_project_draft(state, draft, &assignments);
+    const auto result = apply_system_project_draft(state, draft, &run);
     REQUIRE(result.valid());
     REQUIRE((state.active_session().config().tasks().size() == 2));
     REQUIRE((state.active_session().active_plan()->assignments().size() == 2));
+    REQUIRE((state.active_session().active_plan()->stop_tick() == 250));
     REQUIRE((state.active_session().snapshot().run_state == GuiRunState::Paused));
 }
 
@@ -160,6 +188,28 @@ TEST_CASE("unapplied-change decisions apply and save, discard, or cancel explici
     const auto reopened = load_project(state.active_project().root() / "project.json");
     REQUIRE((reopened->session().config().resources()[0].name() == "saved edit"));
     REQUIRE(reopened->session().snapshot().event_log.empty());
+}
+
+TEST_CASE("pending run configuration participates in project transition decisions",
+          "[project][system-builder][transition][run-plan]") {
+    TemporaryDirectory temporary;
+    GuiApplicationState state{make_project(temporary.root(), "run-decisions")};
+    EditableSystemDraft draft{state.active_session().config()};
+    auto run = run_configuration(state, {{.task_id = TaskId{1}, .resource_id = ResourceId{1}}});
+    run.stop_tick = 321;
+    const auto* original = &state.active_session();
+
+    const auto cancelled =
+        resolve_unapplied_system_changes(state, &draft, UnappliedSystemDecision::Cancel, &run);
+    REQUIRE((cancelled.status == ProjectTransitionStatus::Cancelled));
+    REQUIRE((&state.active_session() == original));
+
+    const auto applied = resolve_unapplied_system_changes(
+        state, &draft, UnappliedSystemDecision::ApplyAndSave, &run);
+    REQUIRE((applied.status == ProjectTransitionStatus::Proceed));
+    REQUIRE((state.active_session().active_plan()->stop_tick() == 321));
+    const auto reopened = load_project(state.active_project().root() / "project.json");
+    REQUIRE((reopened->session().active_plan()->stop_tick() == 321));
 }
 
 TEST_CASE("Save Project persists only the applied system and reopening preserves it",

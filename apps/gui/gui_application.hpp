@@ -3,6 +3,7 @@
 #pragma once
 
 #include "views/architecture_view.hpp"
+#include "views/experiment_explorer.hpp"
 #include "views/signal_view.hpp"
 #include "views/system_builder.hpp"
 #include "views/timeline_view.hpp"
@@ -74,7 +75,9 @@ class GuiApplication {
                                 std::filesystem::path project_file = {});
     bool execute_pending_project_action();
     void draw_unapplied_changes_dialog();
+    void validate_system_draft();
     void apply_system_draft();
+    void synchronize_system_assignments();
 
     bool draw_main_menu();
     void draw_home_screen();
@@ -83,12 +86,17 @@ class GuiApplication {
     void draw_project_dialog();
     void draw_bosch_wizard();
     void draw_center_panels(const SimulationSnapshot& snapshot);
+    void draw_left_sidebar(const SimulationSnapshot& snapshot);
+    void draw_right_sidebar(const SimulationSnapshot& snapshot);
 
     GuiApplicationState application_state_;
     std::unique_ptr<FileDialog> dialogs_;
     GuiApplicationPaths paths_;
     RecentProjects recent_projects_;
-    GuiSelection selection_;
+    StructuralSelection structural_selection_;
+    GuiSelection runtime_selection_;
+    SystemExplorerInteraction system_explorer_interaction_;
+    ExperimentExplorerViewState explorer_view_state_;
     bool show_explorer_{true};
     bool show_inspector_{true};
     bool show_architecture_{true};
@@ -117,6 +125,7 @@ class GuiApplication {
     SystemDraftBuildResult system_validation_;
     std::vector<DraftTaskAssignment> system_run_assignments_;
     SystemBuilderViewState system_builder_view_state_;
+    bool validate_system_draft_requested_{false};
     bool apply_system_draft_requested_{false};
     PendingProjectAction pending_project_action_{PendingProjectAction::None};
     std::filesystem::path pending_project_file_;
@@ -124,6 +133,8 @@ class GuiApplication {
     ArchitectureViewState architecture_view_state_;
     TimelineViewState timeline_view_state_;
     SignalViewState signal_view_state_;
+    float left_sidebar_ratio_{0.52F};
+    float right_sidebar_ratio_{0.48F};
     float text_scale_{1.0F};
 };
 

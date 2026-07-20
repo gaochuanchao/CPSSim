@@ -20,12 +20,11 @@ RunPlanRequest plan_request(const RunPlan& plan) {
             .assignments = plan.assignments()};
 }
 
-RunPlanRequest plan_request(const RunPlan& plan,
-                            const std::vector<DraftTaskAssignment>& assignments) {
+RunPlanRequest plan_request(const SystemRunConfigurationDraft& draft) {
     auto request = RunPlanRequest{
-        .stop_tick = plan.stop_tick(), .policy_kind = plan.policy_kind(), .assignments = {}};
-    request.assignments.reserve(assignments.size());
-    for (const auto& assignment : assignments) {
+        .stop_tick = draft.stop_tick, .policy_kind = draft.policy_kind, .assignments = {}};
+    request.assignments.reserve(draft.assignments.size());
+    for (const auto& assignment : draft.assignments) {
         if (assignment.resource_id.has_value()) {
             request.assignments.push_back(
                 {.task_id = assignment.task_id, .resource_id = *assignment.resource_id});
@@ -34,25 +33,27 @@ RunPlanRequest plan_request(const RunPlan& plan,
     return request;
 }
 
-bool assignments_match(const RunPlan& plan, const std::vector<DraftTaskAssignment>& assignments) {
-    if (plan.assignments().size() != assignments.size()) {
+bool run_configuration_matches(const RunPlan& plan, const SystemRunConfigurationDraft& draft) {
+    if (plan.stop_tick() != draft.stop_tick || plan.policy_kind() != draft.policy_kind ||
+        plan.assignments().size() != draft.assignments.size()) {
         return false;
     }
-    return std::all_of(assignments.begin(), assignments.end(), [&plan](const auto& assignment) {
-        const auto found = std::find_if(plan.assignments().begin(), plan.assignments().end(),
-                                        [&assignment](const auto& candidate) {
-                                            return candidate.task_id == assignment.task_id;
-                                        });
-        return found != plan.assignments().end() && assignment.resource_id.has_value() &&
-               found->resource_id == *assignment.resource_id;
-    });
+    return std::all_of(
+        draft.assignments.begin(), draft.assignments.end(), [&plan](const auto& assignment) {
+            const auto found = std::find_if(plan.assignments().begin(), plan.assignments().end(),
+                                            [&assignment](const auto& candidate) {
+                                                return candidate.task_id == assignment.task_id;
+                                            });
+            return found != plan.assignments().end() && assignment.resource_id.has_value() &&
+                   found->resource_id == *assignment.resource_id;
+        });
 }
 
 } // namespace
 
 SystemProjectRebuildResult
 build_system_project_replacement(const ProjectContext& current, const EditableSystemDraft& draft,
-                                 const std::vector<DraftTaskAssignment>* assignments) {
+                                 const SystemRunConfigurationDraft* run_configuration) {
     SystemProjectRebuildResult result;
     auto system = draft.build();
     if (!system.config.has_value()) {
@@ -63,9 +64,9 @@ build_system_project_replacement(const ProjectContext& current, const EditableSy
     auto& system_config = system.config.value();
 
     const auto& accepted = accepted_project_plan(current);
-    auto run_plan = build_run_plan(system_config, assignments == nullptr
+    auto run_plan = build_run_plan(system_config, run_configuration == nullptr
                                                       ? plan_request(accepted)
-                                                      : plan_request(accepted, *assignments));
+                                                      : plan_request(*run_configuration));
     if (!run_plan.plan.has_value()) {
         result.run_plan_diagnostics = std::move(run_plan.diagnostics);
         result.diagnostic = "the active/default run plan is incompatible with the edited system";
@@ -86,14 +87,15 @@ build_system_project_replacement(const ProjectContext& current, const EditableSy
 
 SystemProjectRebuildResult
 apply_system_project_draft(GuiApplicationState& state, const EditableSystemDraft& draft,
-                           const std::vector<DraftTaskAssignment>* assignments) {
+                           const SystemRunConfigurationDraft* run_configuration) {
     if (!state.has_active_project()) {
         return {.replacement = nullptr,
                 .system_diagnostics = {},
                 .run_plan_diagnostics = {},
                 .diagnostic = "system changes require an active project"};
     }
-    auto result = build_system_project_replacement(state.active_project(), draft, assignments);
+    auto result =
+        build_system_project_replacement(state.active_project(), draft, run_configuration);
     if (result.replacement != nullptr) {
         result.applied = true;
         state.replace_project(std::move(result.replacement));
@@ -104,14 +106,15 @@ apply_system_project_draft(GuiApplicationState& state, const EditableSystemDraft
 ProjectTransitionResult
 resolve_unapplied_system_changes(GuiApplicationState& state, const EditableSystemDraft* draft,
                                  UnappliedSystemDecision decision,
-                                 const std::vector<DraftTaskAssignment>* assignments) {
+                                 const SystemRunConfigurationDraft* run_configuration) {
     if (draft == nullptr || !state.has_active_project()) {
         return {.status = ProjectTransitionStatus::Proceed, .diagnostic = {}};
     }
-    const auto assignments_dirty =
-        assignments != nullptr &&
-        !assignments_match(accepted_project_plan(state.active_project()), *assignments);
-    if (!draft->dirty() && !assignments_dirty) {
+    const auto run_configuration_dirty =
+        run_configuration != nullptr &&
+        !run_configuration_matches(accepted_project_plan(state.active_project()),
+                                   *run_configuration);
+    if (!draft->dirty() && !run_configuration_dirty) {
         return {.status = ProjectTransitionStatus::Proceed, .diagnostic = {}};
     }
     if (decision == UnappliedSystemDecision::Cancel) {
@@ -122,7 +125,7 @@ resolve_unapplied_system_changes(GuiApplicationState& state, const EditableSyste
     }
 
     auto replacement =
-        build_system_project_replacement(state.active_project(), *draft, assignments);
+        build_system_project_replacement(state.active_project(), *draft, run_configuration);
     if (!replacement.valid()) {
         return {.status = ProjectTransitionStatus::Failed, .diagnostic = replacement.diagnostic};
     }

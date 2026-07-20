@@ -1,31 +1,25 @@
-/*** Declare the Goal 2 forms-and-tables system editor. ***/
+/*** Declare the selection-driven structural property editor. ***/
 
 #pragma once
 
-#include "cpssim/gui/draft_run_plan.hpp"
-#include "cpssim/gui/editable_system_draft.hpp"
+#include "cpssim/gui/selection_model.hpp"
+#include "cpssim/gui/system_builder_interaction.hpp"
 
-#include <cstddef>
 #include <string>
 #include <string_view>
 
 namespace cpssim::gui {
 
-enum class SystemBuilderAction {
-    None,
-    ApplyAndRestart,
-};
-
 struct SystemBuilderViewState {
-    std::size_t profile_resource_page{0};
+    SystemBuilderFocusTarget focus_request{SystemBuilderFocusTarget::None};
     std::string status;
     bool status_error{false};
 };
 
-SystemBuilderAction draw_system_builder(EditableSystemDraft& draft,
-                                        SystemDraftBuildResult& validation,
-                                        std::vector<DraftTaskAssignment>& assignments,
-                                        bool changes_dirty, std::string_view project_name,
-                                        SystemBuilderViewState& state);
+/*** Draws only the editor mapped from the current structural selection. ***/
+void draw_system_builder(EditableSystemDraft& draft, const SystemDraftBuildResult& validation,
+                         std::vector<DraftTaskAssignment>& assignments,
+                         StructuralSelection& selection, bool editing_enabled,
+                         std::string_view project_name, SystemBuilderViewState& state);
 
 } // namespace cpssim::gui

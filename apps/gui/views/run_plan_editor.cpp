@@ -1,10 +1,4 @@
-/***
- * File: apps/gui/views/run_plan_editor.cpp
- * Purpose: Render the G03 explicit run-plan editor over GUI-neutral session
- *          state and shared validation diagnostics.
- * Creator: Chuanchao Gao
- * Documentation date: 2026-07-19
- ***/
+/*** Render run-plan settings separately from structural system properties. ***/
 
 #include "run_plan_editor.hpp"
 
@@ -17,164 +11,135 @@
 namespace cpssim::gui {
 namespace {
 
-std::string resource_label(const ExperimentPresentationSnapshot& experiment,
-                           ResourceId resource_id) {
-    const auto* resource = find_resource(experiment, resource_id);
-    const auto name = resource != nullptr ? resource->name : std::string{"Unknown"};
-    return name + " (R" + std::to_string(resource_id.value()) + ')';
+constexpr ImVec4 error_color{1.0F, 0.55F, 0.35F, 1.0F};
+
+std::string resource_label(const EditableSystemDraft& draft, ResourceId id) {
+    const auto found = std::find_if(draft.resources().begin(), draft.resources().end(),
+                                    [id](const auto& resource) { return resource.id == id; });
+    const auto name = found == draft.resources().end() ? std::string{"Unknown"} : found->name;
+    return name + " (R" + std::to_string(id.value()) + ')';
 }
 
-const GuiTaskResourceProfilePresentation*
-find_profile(const ExperimentPresentationSnapshot& experiment, TaskId task_id,
-             ResourceId resource_id) {
-    const auto found =
-        std::find_if(experiment.profiles.begin(), experiment.profiles.end(),
-                     [task_id, resource_id](const GuiTaskResourceProfilePresentation& profile) {
-                         return profile.task_id == task_id && profile.resource_id == resource_id;
-                     });
-    return found != experiment.profiles.end() ? &*found : nullptr;
-}
-
-std::optional<ResourceId> active_assignment(const RunPlan* plan, TaskId task_id) {
-    if (plan == nullptr) {
-        return std::nullopt;
-    }
-    const auto found = std::find_if(
-        plan->assignments().begin(), plan->assignments().end(),
-        [task_id](const TaskAssignment& assignment) { return assignment.task_id == task_id; });
-    return found != plan->assignments().end() ? std::optional<ResourceId>{found->resource_id}
-                                              : std::nullopt;
-}
-
-void draw_task_diagnostics(const GuiSimulationSession& session, TaskId task_id) {
+void draw_plan_diagnostics(const GuiSimulationSession& session) {
     if (!session.last_validation().has_value()) {
         return;
     }
     for (const auto& diagnostic : session.last_validation()->diagnostics) {
-        if (diagnostic.task_id == task_id) {
-            ImGui::TextColored(ImVec4{1.0F, 0.55F, 0.35F, 1.0F}, "%s", diagnostic.message.c_str());
-        }
+        ImGui::TextColored(error_color, "%s", diagnostic.message.c_str());
     }
 }
 
-void draw_stop_tick_diagnostics(const GuiSimulationSession& session) {
-    if (!session.last_validation().has_value()) {
-        return;
-    }
-    for (const auto& diagnostic : session.last_validation()->diagnostics) {
-        if (diagnostic.code == RunPlanDiagnosticCode::InvalidStopTick ||
-            diagnostic.code == RunPlanDiagnosticCode::UnsupportedPolicy ||
-            diagnostic.code == RunPlanDiagnosticCode::RunConstructionFailed) {
-            ImGui::TextColored(ImVec4{1.0F, 0.55F, 0.35F, 1.0F}, "%s", diagnostic.message.c_str());
+void draw_system_assignments(const EditableSystemDraft& draft,
+                             std::vector<DraftTaskAssignment>& assignments) {
+    ImGui::SeparatorText("Task assignments");
+    for (auto& assignment : assignments) {
+        const auto task =
+            std::find_if(draft.tasks().begin(), draft.tasks().end(),
+                         [&assignment](const auto& row) { return row.id == assignment.task_id; });
+        if (task == draft.tasks().end()) {
+            continue;
         }
+        ImGui::PushID(static_cast<int>(assignment.task_id.value()));
+        ImGui::TextUnformatted(task->name.c_str());
+        const auto preview = assignment.resource_id.has_value()
+                                 ? resource_label(draft, *assignment.resource_id)
+                                 : std::string{"Select resource..."};
+        ImGui::SetNextItemWidth(-1.0F);
+        if (ImGui::BeginCombo("##assignment", preview.c_str())) {
+            if (ImGui::Selectable("Unassigned", !assignment.resource_id.has_value())) {
+                assignment.resource_id.reset();
+            }
+            for (const auto& profile : draft.profiles()) {
+                if (profile.task_id != assignment.task_id) {
+                    continue;
+                }
+                const auto selected = assignment.resource_id == profile.resource_id;
+                if (ImGui::Selectable(resource_label(draft, profile.resource_id).c_str(),
+                                      selected)) {
+                    assignment.resource_id = profile.resource_id;
+                }
+            }
+            ImGui::EndCombo();
+        }
+        if (!assignment.resource_id.has_value()) {
+            ImGui::TextColored(error_color, "A resource assignment is required.");
+        }
+        ImGui::PopID();
     }
 }
 
-void draw_assignment_editor(GuiSimulationSession& session,
-                            const ExperimentPresentationSnapshot& experiment,
-                            const GuiTaskPresentation& task) {
-    const auto editable = session.draft_editable();
-    auto selected = session.draft().assignment(task.id);
-    const auto preview = selected.has_value() ? resource_label(experiment, *selected)
-                                              : std::string{"Select resource..."};
-    const auto stable_id = "task-plan-" + std::to_string(task.id.value());
-    ImGui::PushID(stable_id.c_str());
-    ImGui::BeginDisabled(!editable);
-    if (ImGui::BeginCombo("Draft resource", preview.c_str())) {
-        if (ImGui::Selectable("Unassigned", !selected.has_value())) {
-            session.set_draft_assignment(task.id, std::nullopt);
-            selected.reset();
-        }
-        for (const auto& profile : experiment.profiles) {
-            if (profile.task_id != task.id) {
-                continue;
-            }
-            const auto label = resource_label(experiment, profile.resource_id);
-            const auto is_selected = selected == profile.resource_id;
-            if (ImGui::Selectable(label.c_str(), is_selected)) {
-                session.set_draft_assignment(task.id, profile.resource_id);
-                selected = profile.resource_id;
-            }
-            if (is_selected) {
-                ImGui::SetItemDefaultFocus();
+void draw_session_assignments(GuiSimulationSession& session,
+                              const ExperimentPresentationSnapshot& experiment) {
+    ImGui::SeparatorText("Task assignments");
+    for (const auto& task : experiment.tasks) {
+        ImGui::PushID(static_cast<int>(task.id.value()));
+        ImGui::TextUnformatted(task.name.c_str());
+        auto selected = session.draft().assignment(task.id);
+        auto preview = std::string{"Select resource..."};
+        if (selected.has_value()) {
+            const auto* resource = find_resource(experiment, *selected);
+            if (resource != nullptr) {
+                preview = resource->name + " (R" + std::to_string(resource->id.value()) + ')';
             }
         }
-        ImGui::EndCombo();
-    }
-    ImGui::EndDisabled();
-
-    if (selected.has_value()) {
-        const auto* profile = find_profile(experiment, task.id, *selected);
-        if (profile != nullptr) {
-            ImGui::Text("Draft execution: %lld ticks",
-                        static_cast<long long>(profile->execution_time));
+        ImGui::SetNextItemWidth(-1.0F);
+        if (ImGui::BeginCombo("##assignment", preview.c_str())) {
+            for (const auto& profile : experiment.profiles) {
+                if (profile.task_id != task.id) {
+                    continue;
+                }
+                const auto* resource = find_resource(experiment, profile.resource_id);
+                const auto label =
+                    resource == nullptr
+                        ? std::string{"Unavailable"}
+                        : resource->name + " (R" + std::to_string(resource->id.value()) + ')';
+                if (ImGui::Selectable(label.c_str(), selected == profile.resource_id)) {
+                    session.set_draft_assignment(task.id, profile.resource_id);
+                    selected = profile.resource_id;
+                }
+            }
+            ImGui::EndCombo();
         }
-    } else {
-        ImGui::TextDisabled("Draft execution: unavailable");
+        ImGui::PopID();
     }
-
-    const auto active = active_assignment(session.active_plan(), task.id);
-    if (active.has_value()) {
-        const auto label = resource_label(experiment, *active);
-        ImGui::TextDisabled("Active: %s", label.c_str());
-    } else {
-        ImGui::TextDisabled("Active: none");
-    }
-    draw_task_diagnostics(session, task.id);
-    ImGui::PopID();
 }
 
 } // namespace
 
-void draw_run_plan_editor(GuiSimulationSession& session, const SimulationSnapshot& snapshot) {
-    ImGui::SeparatorText("Run plan");
-    ImGui::Text("Draft: %s", session.draft_dirty() ? "Modified" : "Matches active");
-    if (session.active_plan() != nullptr) {
-        ImGui::TextDisabled("Active stop tick: %lld",
-                            static_cast<long long>(session.active_plan()->stop_tick()));
-    } else {
-        ImGui::TextDisabled("Active plan: none");
-    }
-    ImGui::TextDisabled("Policy: Fixed priority");
-
+RunConfigurationAction draw_run_configuration(GuiSimulationSession& session,
+                                              const SimulationSnapshot& snapshot,
+                                              const EditableSystemDraft* system_draft,
+                                              std::vector<DraftTaskAssignment>& system_assignments,
+                                              bool system_changes_dirty) {
+    ImGui::Text("State: %s", system_changes_dirty || session.draft_dirty() ? "Pending changes"
+                                                                           : "Matches applied");
+    ImGui::TextDisabled("Scheduling policy: Fixed priority");
     auto stop_tick = session.draft().stop_tick();
     ImGui::BeginDisabled(!session.draft_editable());
     ImGui::SetNextItemWidth(-1.0F);
-    if (ImGui::InputScalar("Draft stop tick", ImGuiDataType_S64, &stop_tick)) {
+    if (ImGui::InputScalar("Stop tick", ImGuiDataType_S64, &stop_tick)) {
         session.set_draft_stop_tick(stop_tick);
     }
-    ImGui::EndDisabled();
-    draw_stop_tick_diagnostics(session);
-
-    for (const auto& task : snapshot.experiment.tasks) {
-        ImGui::SeparatorText(task.name.c_str());
-        ImGui::TextDisabled("Task T%llu", static_cast<unsigned long long>(task.id.value()));
-        draw_assignment_editor(session, snapshot.experiment, task);
+    if (system_draft != nullptr) {
+        draw_system_assignments(*system_draft, system_assignments);
+    } else {
+        draw_session_assignments(session, snapshot.experiment);
     }
-
-    if (!session.draft_editable()) {
-        ImGui::TextWrapped("Pause the active run before editing or applying the draft.");
-    }
-    ImGui::BeginDisabled(!session.draft_editable());
-    if (ImGui::Button("Validate")) {
-        session.validate_draft();
+    ImGui::SeparatorText("Actions");
+    auto action = RunConfigurationAction::None;
+    if (ImGui::Button("Validate changes")) {
+        action = RunConfigurationAction::ValidateChanges;
     }
     ImGui::SameLine();
-    if (ImGui::Button("Apply and reset")) {
-        session.apply_draft();
+    if (ImGui::Button(system_draft != nullptr ? "Apply and restart" : "Apply and reset")) {
+        action = RunConfigurationAction::ApplyAndRestart;
     }
     ImGui::EndDisabled();
-
-    if (session.last_validation().has_value()) {
-        if (session.last_validation()->valid()) {
-            ImGui::TextColored(ImVec4{0.45F, 0.85F, 0.55F, 1.0F}, "Plan is valid");
-        } else {
-            ImGui::TextColored(ImVec4{1.0F, 0.55F, 0.35F, 1.0F}, "%zu issue(s)",
-                               session.last_validation()->diagnostics.size());
-        }
-    } else {
-        ImGui::TextDisabled("Draft changed; validate or apply it.");
+    if (!session.draft_editable()) {
+        ImGui::TextWrapped("Pause or reset the active run before editing run configuration.");
     }
+    draw_plan_diagnostics(session);
+    return action;
 }
 
 } // namespace cpssim::gui
