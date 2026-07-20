@@ -7,6 +7,8 @@
 
 #include "architecture_view.hpp"
 
+#include "cpssim/gui/display_scale.hpp"
+
 #include "imgui.h"
 
 #include <algorithm>
@@ -221,7 +223,7 @@ void draw_resource_node(ImDrawList* draw_list, const GuiGraphNode& node,
     draw_list->AddLine({rect.minimum.x, rect.minimum.y + 42.0F * transform.zoom},
                        {rect.maximum.x, rect.minimum.y + 42.0F * transform.zoom}, border, 1.2F);
     draw_list->AddText(
-        nullptr, ImGui::GetFontSize() * transform.zoom,
+        nullptr, sanitize_gui_font_size(ImGui::GetFontSize() * transform.zoom),
         {rect.minimum.x + 12.0F * transform.zoom, rect.minimum.y + 11.0F * transform.zoom},
         ImGui::GetColorU32(ImGuiCol_Text), node.label.c_str());
 }
@@ -249,13 +251,13 @@ void draw_task_node(ImDrawList* draw_list, const GuiGraphNode& node,
                        ImGui::GetColorU32(selected ? ImGuiCol_HeaderHovered : ImGuiCol_Border),
                        3.0F * transform.zoom, 0, selected ? 3.0F : 1.5F);
     draw_list->AddText(
-        nullptr, ImGui::GetFontSize() * transform.zoom,
+        nullptr, sanitize_gui_font_size(ImGui::GetFontSize() * transform.zoom),
         {rect.minimum.x + 10.0F * transform.zoom, rect.minimum.y + 8.0F * transform.zoom},
         ImGui::GetColorU32(ImGuiCol_Text), node.label.c_str());
     if (draft_changed && draft_resource.has_value()) {
         const auto draft_label = "Draft R" + std::to_string(draft_resource->value());
         draw_list->AddText(
-            nullptr, ImGui::GetFontSize() * 0.82F * transform.zoom,
+            nullptr, sanitize_gui_font_size(ImGui::GetFontSize() * 0.82F * transform.zoom),
             {rect.minimum.x + 10.0F * transform.zoom, rect.maximum.y - 21.0F * transform.zoom},
             ImGui::GetColorU32(ImGuiCol_PlotHistogram), draft_label.c_str());
     }

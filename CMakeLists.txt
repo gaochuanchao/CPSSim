@@ -163,6 +163,7 @@ cpssim_enable_sanitizers(cpssim_cli)
 add_library(
     cpssim_gui_support STATIC
     src/cpssim/gui/architecture_graph.cpp
+    src/cpssim/gui/display_scale.cpp
     src/cpssim/gui/draft_run_plan.cpp
     src/cpssim/gui/presentation_model.cpp
     src/cpssim/gui/selection_model.cpp
@@ -279,6 +280,7 @@ if(BUILD_TESTING)
         tests/conformance/bosch_reference_test.cpp
         tests/functional/functional_runtime_test.cpp
         tests/gui/architecture_graph_test.cpp
+        tests/gui/display_scale_test.cpp
         tests/gui/draft_run_plan_test.cpp
         tests/gui/presentation_model_test.cpp
         tests/gui/selection_model_test.cpp

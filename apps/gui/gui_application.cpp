@@ -74,7 +74,9 @@ void GuiApplication::draw_main_menu() {
         ImGui::MenuItem("Resources", nullptr, &show_resources_);
         ImGui::MenuItem("Canonical events", nullptr, &show_events_);
         ImGui::SeparatorText("Text");
-        ImGui::TextDisabled("Display scale: %.2fx", ImGui::GetStyle().FontScaleDpi);
+        const auto display_scale =
+            std::max(ImGui::GetStyle().FontScaleDpi, ImGui::GetIO().DisplayFramebufferScale.x);
+        ImGui::TextDisabled("Display scale: %.2fx", display_scale);
         ImGui::SetNextItemWidth(8.0F * ImGui::GetFontSize());
         ImGui::SliderFloat("Text size", &text_scale_, 0.75F, 2.0F, "%.2fx",
                            ImGuiSliderFlags_AlwaysClamp);

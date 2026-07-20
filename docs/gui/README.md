@@ -53,6 +53,11 @@ The first GUI configuration may download the pinned Dear ImGui source. The
 headless targets do not link GUI libraries. More build variants and dependency
 details are in the [command handbook](../COMMANDS.md#build-and-run-the-optional-gui).
 
+GLFW scales the initial native content area for the monitor where the window is
+placed. Once the window exists, CPSSim reads the scale of the monitor containing
+it and follows that scale as the window moves. Native size, text, and layout
+spacing therefore adapt without a restart.
+
 ## 2. Your first run
 
 The GUI opens with a loaded experiment but no active run. Follow this sequence:
@@ -93,8 +98,9 @@ ticks or canonical event ordering.
 ```
 
 Panel boundaries are resizable. Use the **View** menu to hide or restore a
-panel. The same menu shows the startup display scale and provides an adjustable
-text-size slider. Text size is presentation state and is not persisted.
+panel. The same menu shows the current monitor scale and provides an adjustable
+text-size slider. The slider is an additional multiplier on top of automatic
+DPI scaling. Text size is presentation state and is not persisted.
 
 ### Experiment Explorer and Inspector
 
@@ -140,6 +146,8 @@ It supports:
 A drag changes only the draft. The applied assignment remains visible until
 **Apply and reset** succeeds. Dashed message routes describe configured causal
 communication; they do not imply typed Simulink-style signal ports.
+At extreme fit/zoom levels, canvas labels retain a safe minimum font-bake size;
+zoom in to make their content readable.
 
 ### Scheduling timeline
 
@@ -221,7 +229,7 @@ Use the smallest layer that owns the behavior:
 
 | Goal | Start here | Usually test here |
 |---|---|---|
-| Change startup size, DPI handling, or backend setup | `apps/gui/main.cpp` | GUI build and startup smoke |
+| Change startup size, DPI handling, or backend setup | `apps/gui/main.cpp` and `display_scale.*` | `display_scale_test.cpp`, GUI build, and monitor-move smoke |
 | Rearrange panels or add a View-menu toggle | `gui_application.*` | GUI build; controller tests remain unchanged |
 | Change one widget or canvas interaction | `apps/gui/views/<name>_view.*` | headless model test plus manual smoke |
 | Add copied experiment/runtime data | `presentation_model.*` or `simulation_controller.*` | `presentation_model_test.cpp` or `simulation_controller_test.cpp` |
@@ -242,6 +250,12 @@ For application-wide startup styling, begin in `run_gui` in
 [`main.cpp`](../../apps/gui/main.cpp). For a local visual, change only the
 corresponding view. Keep semantic colors paired with text, line style, or shape
 so information is not encoded by color alone.
+
+`main.cpp` keeps an unscaled base `ImGuiStyle` and reapplies it when the current
+monitor scale changes. Add global spacing to that base style before it is
+copied; do not repeatedly scale the already-scaled style, because integer
+rounding accumulates. Keep user text adjustment independent through
+`FontScaleMain`.
 
 Use `ImGui::GetFontSize()` or `ImGui::GetTextLineHeightWithSpacing()` for
 layout dimensions that should follow the user's text-size setting. Avoid fixed

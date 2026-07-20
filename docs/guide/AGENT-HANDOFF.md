@@ -11,8 +11,8 @@ task placement, fixed-priority scheduling across independent exclusive
 resources, causal fixed-delay messages, captured Bosch conformance, FMI 2.0
 Co-Simulation import, online functional interaction, strict execution of all
 three supplied Bosch example trajectory formats, and an optional panelized GUI
-workbench with DPI-aware startup sizing, adjustable text, queued controls,
-an Experiment Explorer, shared strong-ID selection, read-only inspection,
+workbench with automatic current-monitor DPI scaling, adjustable text, queued
+controls, an Experiment Explorer, shared strong-ID selection, read-only inspection,
 resource utilization, canonical events, and an explicit validated run-plan
 editor with atomic Apply/Reset behavior and strict versioned JSON Load/Save.
 The GUI also includes a deterministic pan/zoom architecture graph for tasks,
@@ -160,8 +160,8 @@ the C++ behavior silently.
 - architecture layout is deliberately simple and workspace pan/zoom is not
   persisted; graph task drops edit the pending plan and never migrate active
   jobs;
-- display scale is captured at GUI startup; live per-monitor rescaling and
-  persisted text preferences remain future presentation work;
+- current-monitor display scale updates automatically; persisted text
+  preferences remain future presentation work;
 - Bosch example execution currently uses one functional model and one of the
   validated single-vehicle `dedicated`/`shared_cloud` run plans; multi-vehicle,
   probabilistic timing, and three-core cloud experiments remain future work;

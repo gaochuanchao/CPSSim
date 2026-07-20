@@ -12,6 +12,7 @@
 
 #include "cpssim/config/json_config.hpp"
 #include "cpssim/functional/mock_functional_model.hpp"
+#include "cpssim/gui/display_scale.hpp"
 #include "cpssim/gui/simulation_session.hpp"
 
 #include "imgui.h"
@@ -20,8 +21,6 @@
 
 #include <GLFW/glfw3.h>
 
-#include <algorithm>
-#include <cmath>
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
@@ -36,8 +35,6 @@ namespace {
 constexpr int default_window_width = 1200;
 constexpr int default_window_height = 760;
 constexpr float default_font_size = 16.0F;
-constexpr float minimum_display_scale = 1.0F;
-constexpr float maximum_display_scale = 4.0F;
 
 /*** Reports GLFW errors to the application diagnostic stream. ***/
 void glfw_error_callback(int error, const char* description) {
@@ -48,14 +45,20 @@ void glfw_error_callback(int error, const char* description) {
 float initial_display_scale() {
     auto* primary_monitor = glfwGetPrimaryMonitor();
     if (primary_monitor == nullptr) {
-        return minimum_display_scale;
+        return cpssim::sanitize_gui_display_scale(0.0F);
     }
 
-    const auto reported_scale = ImGui_ImplGlfw_GetContentScaleForMonitor(primary_monitor);
-    if (!std::isfinite(reported_scale) || reported_scale <= 0.0F) {
-        return minimum_display_scale;
-    }
-    return std::clamp(reported_scale, minimum_display_scale, maximum_display_scale);
+    return cpssim::sanitize_gui_display_scale(
+        ImGui_ImplGlfw_GetContentScaleForMonitor(primary_monitor));
+}
+
+/*** Rebuilds layout metrics from an unscaled style for the current monitor. ***/
+void apply_display_scale(const ImGuiStyle& base_style, float display_scale) {
+    const auto user_text_scale = ImGui::GetStyle().FontScaleMain;
+    ImGui::GetStyle() = base_style;
+    ImGui::GetStyle().FontScaleMain = user_text_scale;
+    ImGui::GetStyle().ScaleAllSizes(display_scale);
+    ImGui::GetStyle().FontScaleDpi = display_scale;
 }
 
 /*** Owns the native window and immediate-mode render loop. ***/
@@ -68,13 +71,13 @@ int run_gui(cpssim::GuiSimulationSession& session) {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_TRUE);
 #ifdef __APPLE__
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 #endif
-    const auto display_scale = initial_display_scale();
-    const auto window_width = static_cast<int>(default_window_width * display_scale);
-    const auto window_height = static_cast<int>(default_window_height * display_scale);
-    GLFWwindow* window = glfwCreateWindow(window_width, window_height, "CPSSim", nullptr, nullptr);
+    const auto startup_display_scale = initial_display_scale();
+    GLFWwindow* window =
+        glfwCreateWindow(default_window_width, default_window_height, "CPSSim", nullptr, nullptr);
     if (window == nullptr) {
         glfwTerminate();
         throw std::runtime_error{"GLFW window creation failed"};
@@ -86,10 +89,10 @@ int run_gui(cpssim::GuiSimulationSession& session) {
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGui::StyleColorsDark();
-    auto& style = ImGui::GetStyle();
-    style.FontSizeBase = default_font_size;
-    style.ScaleAllSizes(display_scale);
-    style.FontScaleDpi = display_scale;
+    ImGui::GetStyle().FontSizeBase = default_font_size;
+    const ImGuiStyle base_style = ImGui::GetStyle();
+    auto display_scale = startup_display_scale;
+    apply_display_scale(base_style, display_scale);
     if (!ImGui_ImplGlfw_InitForOpenGL(window, true)) {
         ImGui::DestroyContext();
         glfwDestroyWindow(window);
@@ -103,24 +106,47 @@ int run_gui(cpssim::GuiSimulationSession& session) {
         glfwTerminate();
         throw std::runtime_error{"Dear ImGui OpenGL3 backend initialization failed"};
     }
+    display_scale = cpssim::sanitize_gui_display_scale(
+        ImGui_ImplGlfw_GetContentScaleForWindow(window), display_scale);
+    apply_display_scale(base_style, display_scale);
 
     cpssim::gui::GuiApplication application{session};
+    ImVec2 last_framebuffer_scale{1.0F, 1.0F};
 
     while (glfwWindowShouldClose(window) == GLFW_FALSE) {
         glfwPollEvents();
         session.update();
+
+        const auto reported_display_scale = ImGui_ImplGlfw_GetContentScaleForWindow(window);
+        if (cpssim::gui_display_scale_changed(display_scale, reported_display_scale)) {
+            display_scale =
+                cpssim::sanitize_gui_display_scale(reported_display_scale, display_scale);
+            apply_display_scale(base_style, display_scale);
+        }
+
+        int display_width = 0;
+        int display_height = 0;
+        glfwGetFramebufferSize(window, &display_width, &display_height);
+        if (display_width <= 0 || display_height <= 0) {
+            glfwWaitEventsTimeout(0.05);
+            continue;
+        }
+
         const auto snapshot = session.snapshot();
 
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
+        auto& io = ImGui::GetIO();
+        io.DisplayFramebufferScale.x = cpssim::sanitize_gui_framebuffer_scale(
+            io.DisplayFramebufferScale.x, last_framebuffer_scale.x);
+        io.DisplayFramebufferScale.y = cpssim::sanitize_gui_framebuffer_scale(
+            io.DisplayFramebufferScale.y, last_framebuffer_scale.y);
+        last_framebuffer_scale = io.DisplayFramebufferScale;
         ImGui::NewFrame();
 
         application.draw_frame(snapshot);
 
         ImGui::Render();
-        int display_width = 0;
-        int display_height = 0;
-        glfwGetFramebufferSize(window, &display_width, &display_height);
         glViewport(0, 0, display_width, display_height);
         glClearColor(0.08F, 0.09F, 0.11F, 1.0F);
         glClear(GL_COLOR_BUFFER_BIT);

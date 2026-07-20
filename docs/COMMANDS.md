@@ -158,11 +158,13 @@ the signal view without an FMU:
   config/examples/basic.json 500 --mock-functional
 ```
 
-At startup the GUI applies the primary display's content scale to its initial
-window, text, spacing, and panel layout. Use `View` -> `Text size` to adjust the
-font further without changing simulation behavior. The adjustment and initial
-display scale are presentation-only and are not persisted; restart the GUI
-after moving it to a display with a different scale.
+At startup GLFW scales the native content area for the monitor where the window
+is placed. CPSSim then follows that window's monitor scale. Moving the GUI
+between displays automatically resizes the native content area where required
+and rescales text, spacing, and panel layout. Use `View` -> `Text size` to apply
+an additional personal text multiplier without changing simulation behavior.
+Display scale and text size are presentation-only; the text multiplier is not
+persisted.
 
 On a new Ubuntu machine, install the GLFW/OpenGL development boundary first:
 

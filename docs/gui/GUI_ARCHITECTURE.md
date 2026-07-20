@@ -45,7 +45,7 @@ canonical trace cannot depend on render timing.
 
 | File | Responsibility |
 |---|---|
-| [`apps/gui/main.cpp`](../../apps/gui/main.cpp) | Argument parsing, display scale, native window, graphics backends, and frame loop |
+| [`apps/gui/main.cpp`](../../apps/gui/main.cpp) | Argument parsing, current-monitor scale, native window, graphics backends, and frame loop |
 | [`gui_application.*`](../../apps/gui/gui_application.hpp) | Workbench layout, panel visibility, shared selection, view-state ownership, and dialogs |
 | [`apps/gui/views/`](../../apps/gui/views/) | Immediate-mode widgets and canvas drawing for individual views |
 
@@ -67,6 +67,7 @@ The view files are deliberately small boundaries:
 
 | File | Responsibility | Closest test |
 |---|---|---|
+| [`display_scale.*`](../../src/cpssim/gui/display_scale.hpp) | safe display/framebuffer scale fallback, layout bounds, font-bake floor, and change detection | [`display_scale_test.cpp`](../../tests/gui/display_scale_test.cpp) |
 | [`simulation_controller.*`](../../src/cpssim/gui/simulation_controller.hpp) | FIFO commands, current engine/policy/model ownership, detached snapshots | [`simulation_controller_test.cpp`](../../tests/gui/simulation_controller_test.cpp) |
 | [`simulation_session.*`](../../src/cpssim/gui/simulation_session.hpp) | loaded experiment, draft/active plan boundary, atomic controller replacement | [`draft_run_plan_test.cpp`](../../tests/gui/draft_run_plan_test.cpp) |
 | [`draft_run_plan.*`](../../src/cpssim/gui/draft_run_plan.hpp) | incomplete editable run-plan values and validation input | [`draft_run_plan_test.cpp`](../../tests/gui/draft_run_plan_test.cpp) |
@@ -86,8 +87,11 @@ The frame loop in `main.cpp` performs these steps:
 ```text
 poll native events
     -> session.update()
+    -> detect current-monitor scale and rebuild style if needed
+    -> skip drawing while the framebuffer is unavailable
     -> copy session.snapshot()
     -> start Dear ImGui frame
+    -> sanitize framebuffer density
     -> GuiApplication::draw_frame(snapshot)
     -> submit drawing
 ```
@@ -96,6 +100,17 @@ poll native events
 the state remains Running, the controller processes one complete logical event
 tick. VSync or a slow frame can change only how quickly a user sees progress;
 it cannot change the sequence of simulated ticks.
+
+GLFW can temporarily report a zero-sized framebuffer while a window is
+minimized or crosses monitors. The frame loop does not begin an ImGui frame in
+that state. It also retains the last finite positive framebuffer density before
+ImGui's dynamic font atlas sees the value. These are rendering guards only;
+`session.update()` remains ahead of them.
+
+The `GLFW_SCALE_TO_MONITOR` creation hint lets GLFW preserve the intended native
+content-area size on platforms that require pixel resizing. CPSSim separately
+rebuilds an unscaled base `ImGuiStyle` when the window's content scale changes,
+so text and spacing follow the same monitor without cumulative rounding.
 
 Widgets do not call the engine. The toolbar calls `session.enqueue(...)`, and
 `SimulationController::update()` applies commands in FIFO order at the next
@@ -130,6 +145,7 @@ Use this table before adding a field:
 | Selected entity and inclusive tick range | `GuiSelection` |
 | Derived graph/timeline/signal data | corresponding GUI-support builder/cache |
 | Panel visibility, viewport, filters, text scale | `GuiApplication` or view-state struct |
+| Current monitor scale, base style, last valid framebuffer density | native loop in `main.cpp` |
 
 Moving a value into a view merely because a widget displays it creates two
 sources of truth. Modify the actual owner and communicate through its public
@@ -243,6 +259,8 @@ fall back to stable TaskId order. Logical coordinates are graphics-independent.
 
 The draw view owns only canvas pan, zoom, fit, drag feedback, and selection.
 A task drop calls the session's draft API. It cannot migrate an active job.
+Zoom-scaled architecture labels pass through `sanitize_gui_font_size`, which
+keeps ImGui's integer font-bake request above zero even at minimum zoom.
 
 ### Scheduling timeline
 
@@ -317,7 +335,8 @@ const auto width = 18.0F * ImGui::GetFontSize();
 const auto row = ImGui::GetTextLineHeightWithSpacing();
 ```
 
-This preserves the startup DPI scale and user-controlled text scaling.
+This preserves automatic current-monitor DPI scaling and user-controlled text
+scaling.
 
 ## 10. Dependencies, threading, and persistence
 
