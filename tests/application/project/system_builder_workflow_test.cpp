@@ -182,6 +182,11 @@ TEST_CASE("Save Project persists only the applied system and reopening preserves
     save_project(state.active_project());
     const auto reopened = load_project(state.active_project().root() / "project.json");
     REQUIRE((reopened->session().config().tasks()[0].name() == "persisted task"));
+
+    const auto copied = save_project_as(state.active_project(), temporary.root(), "saved-copy");
+    REQUIRE((copied->session().config().tasks()[0].name() == "persisted task"));
+    REQUIRE(
+        (copied->session().config().scheduling().preemption_mode == PreemptionMode::NonPreemptive));
 }
 
 } // namespace

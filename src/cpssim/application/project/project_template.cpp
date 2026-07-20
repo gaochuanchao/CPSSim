@@ -1,4 +1,4 @@
-/*** Construct one small valid generic project without introducing a system editor. ***/
+/*** Construct one small valid generic project as the System Builder baseline. ***/
 
 #include "cpssim/application/project/project_template.hpp"
 

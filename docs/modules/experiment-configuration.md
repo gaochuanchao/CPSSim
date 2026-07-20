@@ -44,6 +44,14 @@ sorted by documented identifier keys. The Explorer, run-plan editor, and
 Inspector render those copies without reparsing JSON or receiving mutable
 configuration/runtime access.
 
+Goal 2 adds `EditableSystemDraft` as a detached application/GUI-support value.
+It copies every current schema-v4 system field, derives dirty state from typed
+comparison, allocates deterministic positive IDs, blocks referenced deletion,
+and returns entity/field diagnostics. Only a diagnostic-free draft is passed
+through the existing immutable specification constructors. Explicit pending
+default assignments are separately validated by `build_run_plan`; successful
+application constructs and swaps a complete paused `ProjectContext`.
+
 ## Invariants
 
 - Tick period is positive.
@@ -93,6 +101,7 @@ file. Both operations use the same non-GUI API intended for the future CLI.
 - [ADR-0002](../adr/0002-use-versioned-json-configuration.md)
 - [ADR-0019](../adr/0019-use-typed-run-plans-and-atomic-gui-application.md)
 - [ADR-0020](../adr/0020-use-versioned-json-run-plans-with-structural-signatures.md)
+- [ADR-0023](../adr/0023-use-detached-system-drafts-and-atomic-project-rebuilds.md)
 
 ## Verification
 
@@ -109,3 +118,8 @@ edit gate. [json_run_plan_test.cpp](../../tests/config/json_run_plan_test.cpp)
 checks byte-deterministic round trips, declaration-order independence, exact
 error locations (including unknown-task and inaccessible-resource
 diagnostics), structural association, and file I/O.
+[`editable_system_draft_test.cpp`](../../tests/gui/editable_system_draft_test.cpp)
+and
+[`system_builder_workflow_test.cpp`](../../tests/application/project/system_builder_workflow_test.cpp)
+cover system editing, structured diagnostics, explicit assignment reconciliation,
+atomic reconstruction, transition decisions, and save/reopen behavior.

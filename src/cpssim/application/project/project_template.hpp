@@ -1,4 +1,4 @@
-/*** Minimal built-in generic project template used until Goal 2. ***/
+/*** Minimal built-in generic project template used to enter the System Builder. ***/
 
 #pragma once
 

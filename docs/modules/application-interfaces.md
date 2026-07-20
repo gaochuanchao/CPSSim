@@ -19,6 +19,9 @@ networking, trigger, FMI, or event-ordering behavior.
   metadata, context, results, and the single registration owner.
 - [`command_parser.hpp`](../../apps/cli/command_parser.hpp) tokenizes only
   interactive terminal lines. Direct argv bypasses tokenization.
+- [`system_builder_workflow.hpp`](../../src/cpssim/application/project/system_builder_workflow.hpp)
+  validates an `EditableSystemDraft` plus explicit assignments and builds one
+  complete replacement `ProjectContext` before application-state mutation.
 
 ## Ownership and flow
 
@@ -58,6 +61,9 @@ simulation engine own mutable execution state for each call.
 `cpssim_bosch_application` depends inward on the Bosch FMI adapter and Bosch
 reference runner. The internal compatibility executable and public CLI both
 depend on this application service; neither duplicates the run sequence.
+Generic project reconstruction remains in `cpssim_gui_support`; it depends on
+public configuration, run-plan, project, and functional-factory boundaries but
+not on Dear ImGui.
 
 ## Failure behavior
 

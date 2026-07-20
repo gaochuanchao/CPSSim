@@ -236,3 +236,27 @@ Manual checks:
 - payload ports/channels;
 - canvas-based entity creation;
 - Bosch-specific model editing.
+
+## Implemented boundary
+
+- `EditableSystemDraft` is a Dear-ImGui-independent typed draft with derived
+  dirty state, deterministic positive ID allocation, blocked referenced-entity
+  deletion, complete field-addressed diagnostics, and canonical
+  `ExperimentConfig` conversion.
+- The System Builder provides General, Resources, Tasks, Execution Profiles,
+  Message Routes, and Validation tabs. The profile matrix is horizontally
+  scrollable and paged for large resource sets; route selectors display task
+  names while retaining strong IDs.
+- Explicit default run assignments are initialized from the accepted plan and
+  edited beside the profile matrix. New tasks must be assigned before Apply;
+  no first-profile inference is introduced.
+- Apply and restart validates the system and run plan, constructs the complete
+  functional/session/project replacement, and swaps application ownership only
+  on success. The replacement always starts Paused with no runtime trace.
+- Save Project writes only the applied system. Project replacement with pending
+  changes requires Apply and save, Discard, or Cancel.
+- A valid modified draft can drive a labelled read-only architecture preview.
+  Structural graph editing and Bosch-specific editing remain out of scope.
+
+The ownership decision is recorded by
+[ADR-0023](../adr/0023-use-detached-system-drafts-and-atomic-project-rebuilds.md).

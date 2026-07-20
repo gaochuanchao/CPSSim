@@ -35,6 +35,10 @@ atomic open/save-as, run-plan load/save, and custom Bosch trajectory selection.
 The Bosch GUI factory builds a validated paused project without executing the
 simulation; recent projects live in a separate bounded user-preference file,
 and invalid minimal workspace presentation state falls back safely.
+Generic projects now provide a complete forms-and-tables System Builder over a
+detached typed draft. Resources, tasks, execution profiles, routes, and
+explicit default assignments validate before one atomic paused project/session
+replacement; valid unapplied drafts can drive a read-only architecture preview.
 The repository command surface is limited to `make`, `make run-cli`,
 `make run-gui`, `make test`, `make clean`, and `make help`. The CLI provides a
 registered persistent shell and direct commands; its Bosch wizard/direct path
@@ -108,6 +112,7 @@ these rules.
 | `ExperimentConfig` | validated immutable input |
 | `RunPlan` | validated assignments, inclusive stop tick, and scheduling-policy kind |
 | `RunPlanDraft` | incomplete GUI/application choices, detached from active runtime |
+| `EditableSystemDraft` | detached system fields, stable ID allocation, mutation policy, and structured diagnostics |
 | runtime `Task` | applied assignment and next release |
 | `EventQueue` | pending candidates and sequence allocation |
 | `SchedulingPolicy` | read-only ranking/preemption recommendation |
@@ -129,6 +134,7 @@ these rules.
 | `GuiApplicationState` | Home or one owned standalone/project Workbench context |
 | `ProjectContext` | project root/metadata, loaded specifications/workspace, runtime factory inputs, and sole GUI session |
 | `RecentProjects` | normalized bounded GUI user-preference history |
+| `system_builder_workflow` | canonical config/plan validation and atomic project/session reconstruction |
 
 ## Task protocol
 
@@ -188,6 +194,28 @@ the C++ behavior silently.
 End every handoff with exact commands/results, changed documents, limitations,
 and the next permitted task. Update this page whenever the implemented project
 boundary changes.
+
+## Latest Goal 2 System Builder validation
+
+Goal 2 was implemented on 2026-07-20. Focused validation covered canonical
+round trips, minimal drafts, dirty state, deterministic IDs, all editor
+mutations, blocked referenced deletion, profiles/routes, structured
+diagnostics, explicit new-task assignments, atomic rebuild failures,
+transition decisions, and save/reopen behavior:
+
+- `cmake --build --preset gui --target cpssim_gui -j2`: passed;
+- `ctest --test-dir build/dev --output-on-failure -L "^(gui|project)$"`:
+  82/82 focused tests passed, including current DPI tests;
+- `cmake --build --preset tidy --target cpssim_gui_support
+  cpssim_project_tests -j2`: passed; and
+- `./scripts/verify.sh full`: passed formatting, Debug, ASan/UBSan, Release,
+  Clang, and clang-tidy verification; each test profile passed all 216 tests,
+  including the Bosch functional and conformance regressions.
+
+The automated environment still has no usable X11 display, so the forms,
+tables, native prompts, keyboard traversal, and monitor switching require a
+manual desktop smoke test. Bosch systems are intentionally read-only; Goal 2
+does not define Bosch-specific model editing.
 
 ## Latest Goal 1 project-workflow validation
 

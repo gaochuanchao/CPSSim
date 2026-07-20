@@ -51,9 +51,11 @@ placed. Once the window exists, CPSSim reads the scale of the monitor containing
 it and follows that scale as the window moves. Native size, text, and layout
 spacing therefore adapt without a restart.
 
-## 2. Your first run
+## 2. Your first project and run
 
-The GUI opens with a loaded experiment but no active run. Follow this sequence:
+The GUI opens on Home. Create a generic project, open an existing project, or
+use the Bosch Challenge wizard. A created/opened project starts with a paused
+active run. To change its run plan:
 
 1. In **Experiment Explorer**, expand Tasks and Resources to inspect the input.
 2. In **Inspector > Run plan**, choose one accessible resource for every task.
@@ -76,6 +78,26 @@ The toolbar distinguishes four states:
 
 Changing the rendering rate, panel size, or text size cannot change logical
 ticks or canonical event ordering.
+
+### System Builder
+
+Generic projects include a **System Builder** tab with General, Resources,
+Tasks, Execution Profiles, Message Routes, and Validation sections. All edits
+remain detached until **Apply and restart** succeeds.
+
+- IDs are stable when names or timing fields change.
+- Removing a referenced task/resource is blocked until its profiles/routes are
+  removed explicitly.
+- Each matrix cell enables or removes one deterministic execution profile.
+- Each task needs an explicit default resource assignment before Apply.
+- A valid modified system appears in Architecture as a labelled read-only
+  preview.
+
+Apply validates the canonical configuration and run plan, constructs the full
+replacement session, and swaps only on success. **Save Project** writes only
+the applied system. Open/close/replacement with pending changes prompts for
+Apply and save, Discard, or Cancel. Bosch systems remain read-only because
+Goal 2 does not introduce Bosch-specific model editing.
 
 ## 3. Workbench tour
 
@@ -231,6 +253,7 @@ Use the smallest layer that owns the behavior:
 | Derive timeline data | `timeline_model.*` | `timeline_model_test.cpp` |
 | Derive functional series | `signal_series.*` | `signal_series_test.cpp` |
 | Edit or validate run input | `draft_run_plan.*` / `simulation_session.*` | `draft_run_plan_test.cpp` |
+| Edit a generic project system | `editable_system_draft.*`, `system_builder_workflow.*`, and `system_builder.*` | `editable_system_draft_test.cpp` and `system_builder_workflow_test.cpp` |
 | Change simulation behavior | the owning core module, not a view | relevant core and conformance tests |
 
 The [GUI architecture guide](GUI_ARCHITECTURE.md) gives the complete source and

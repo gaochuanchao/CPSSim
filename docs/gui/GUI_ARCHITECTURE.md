@@ -57,7 +57,8 @@ The view files are deliberately small boundaries:
 | `experiment_explorer` | validated experiment tree | shared entity selection |
 | `inspector_view` | selected immutable/runtime/event details | none |
 | `run_plan_editor` | draft assignments, stop tick, validation | `RunPlanDraft` through session methods |
-| `architecture_view` | task/resource/route/assignment canvas | selection, canvas viewport, draft assignment |
+| `system_builder` | system forms, profile matrix, routes, diagnostics | `EditableSystemDraft` and explicit pending default assignments |
+| `architecture_view` | task/resource/route/assignment canvas | selection, canvas viewport, run-plan draft assignment; system previews are read-only |
 | `timeline_view` | Ready/Running intervals and event markers | selection, visible categories, time viewport |
 | `signal_view` | typed functional series | selected series, time viewport, shared time selection |
 | `resource_view` | copied resource/runtime rows | shared selection |
@@ -71,6 +72,7 @@ The view files are deliberately small boundaries:
 | [`simulation_controller.*`](../../src/cpssim/gui/simulation_controller.hpp) | FIFO commands, current engine/policy/model ownership, detached snapshots | [`simulation_controller_test.cpp`](../../tests/gui/simulation_controller_test.cpp) |
 | [`simulation_session.*`](../../src/cpssim/gui/simulation_session.hpp) | loaded experiment, draft/active plan boundary, atomic controller replacement | [`draft_run_plan_test.cpp`](../../tests/gui/draft_run_plan_test.cpp) |
 | [`draft_run_plan.*`](../../src/cpssim/gui/draft_run_plan.hpp) | incomplete editable run-plan values and validation input | [`draft_run_plan_test.cpp`](../../tests/gui/draft_run_plan_test.cpp) |
+| [`editable_system_draft.*`](../../src/cpssim/gui/editable_system_draft.hpp) | detached system rows, stable IDs, mutation policy, structured diagnostics, canonical conversion | [`editable_system_draft_test.cpp`](../../tests/gui/editable_system_draft_test.cpp) |
 | [`presentation_model.*`](../../src/cpssim/gui/presentation_model.hpp) | sorted detached experiment descriptions | [`presentation_model_test.cpp`](../../tests/gui/presentation_model_test.cpp) |
 | [`selection_model.*`](../../src/cpssim/gui/selection_model.hpp) | shared strong entity identity and optional tick range | [`selection_model_test.cpp`](../../tests/gui/selection_model_test.cpp) |
 | [`architecture_graph.*`](../../src/cpssim/gui/architecture_graph.hpp) | deterministic graph records and logical layout | [`architecture_graph_test.cpp`](../../tests/gui/architecture_graph_test.cpp) |
@@ -136,6 +138,8 @@ Use this table before adding a field:
 | Validated experiment input | `ExperimentConfig` |
 | Validated active assignments, policy, and stop tick | `RunPlan` |
 | Incomplete pending edits | `RunPlanDraft` |
+| Unapplied system fields and validation | `EditableSystemDraft` in `GuiApplication` |
+| Pending default assignments for an edited system | `GuiApplication`, validated through `build_run_plan` |
 | Draft validation and active-controller replacement | `GuiSimulationSession` |
 | GUI command queue and active engine ownership graph | `SimulationController` |
 | Accepted event trace and logical progress | `SimulationEngine` |
@@ -146,6 +150,7 @@ Use this table before adding a field:
 | Derived graph/timeline/signal data | corresponding GUI-support builder/cache |
 | Home/Workbench and optional active project/session | `GuiApplicationState` |
 | Project specifications, workspace metadata, and sole session | `ProjectContext` |
+| Atomic system/project/session reconstruction | `system_builder_workflow` application service |
 | Recent-project history | GUI user-preference file through `RecentProjects` |
 | Panel visibility, viewport, filters, text scale | `GuiApplication` or view-state struct |
 | Current monitor scale, base style, last valid framebuffer density | native loop in `main.cpp` |
@@ -184,7 +189,31 @@ Run-plan ownership is specified by
 the versioned structural-signature format by
 [ADR-0020](../adr/0020-use-versioned-json-run-plans-with-structural-signatures.md).
 
-## 6. Detached presentation data
+## 6. System Builder lifecycle
+
+System edits never mutate the active immutable configuration:
+
+```mermaid
+flowchart TD
+    Active[Applied ExperimentConfig + RunPlan] --> Draft[EditableSystemDraft + explicit assignments]
+    Draft --> Validate[structured validation]
+    Validate --> Canonical[new ExperimentConfig]
+    Canonical --> Plan[build_run_plan]
+    Plan --> Replacement[new ProjectContext + paused session]
+    Replacement --> Swap[atomic GuiApplicationState replacement]
+```
+
+The draft uses stable strong IDs internally. Referenced task/resource deletion
+is blocked rather than cascaded. A valid unapplied draft may replace only the
+Architecture tab's detached presentation input and is labelled as a read-only
+preview. It never becomes engine input until Apply and restart succeeds.
+
+Save Project reads the applied session, not the draft. Open, close, Save As,
+generic-project creation, and Bosch-project replacement prompt when system
+changes are pending. The lifecycle is fixed by
+[ADR-0023](../adr/0023-use-detached-system-drafts-and-atomic-project-rebuilds.md).
+
+## 7. Detached presentation data
 
 `SimulationSnapshot` owns copies needed by the renderer:
 
@@ -220,7 +249,7 @@ rebuilding all presentation records on every unchanged frame. If trace-copy
 cost becomes measurable, optimize the snapshot contract through an explicit
 immutable/incremental design rather than exposing live containers.
 
-## 7. Shared selection
+## 8. Shared selection
 
 `GuiSelection` contains one selected entity and an independent optional
 inclusive tick range:
@@ -251,7 +280,7 @@ such as after Reset.
 Stable IDs—not labels, vector positions, canvas coordinates, or colors—connect
 views. `EventSequence` is event identity and never a substitute for time.
 
-## 8. Derived models and caches
+## 9. Derived models and caches
 
 ### Architecture graph
 
@@ -315,7 +344,7 @@ visible endpoints and extrema without modifying the stored series.
 Functional-model recreation and snapshot ownership are specified by
 [ADR-0021](../adr/0021-recreate-functional-models-and-copy-observations-for-gui-runs.md).
 
-## 9. Immediate-mode rendering
+## 10. Immediate-mode rendering
 
 Dear ImGui redraws widgets every frame. Persistent values therefore live in an
 owner outside the draw function:
@@ -345,7 +374,7 @@ const auto row = ImGui::GetTextLineHeightWithSpacing();
 This preserves automatic current-monitor DPI scaling and user-controlled text
 scaling.
 
-## 10. Dependencies, threading, and persistence
+## 11. Dependencies, threading, and persistence
 
 Dear ImGui and the header-only portable-file-dialog adapter are pinned and
 built only when `CPSSIM_BUILD_GUI=ON`. Platform APIs remain behind the
@@ -370,7 +399,7 @@ minimal versioned workspace and the separate recent-project preference file
 are presentation-only. Invalid workspace content uses safe defaults with a
 diagnostic and must not silently become run semantics.
 
-## 11. Testing strategy
+## 12. Testing strategy
 
 Test the earliest graphics-independent boundary that proves a behavior:
 
@@ -387,7 +416,7 @@ Normal completion commands are documented in the
 [command handbook](../COMMANDS.md). Rendering smoke tests remain intentionally
 small because window-system tests are environment-sensitive.
 
-## 12. Change-location and ADR checklist
+## 13. Change-location and ADR checklist
 
 Before editing, ask:
 

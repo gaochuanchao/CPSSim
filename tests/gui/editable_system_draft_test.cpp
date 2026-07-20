@@ -68,6 +68,15 @@ TEST_CASE("minimal system draft is valid and allocates deterministic positive ID
     REQUIRE((first.add_resource() == ResourceId{2}));
 }
 
+TEST_CASE("system draft dirty state clears when typed edits return to the baseline",
+          "[gui][system-builder][dirty]") {
+    auto draft = EditableSystemDraft{make_config()};
+    draft.set_resource_name(0, "temporary name");
+    REQUIRE(draft.dirty());
+    draft.set_resource_name(0, "local");
+    REQUIRE_FALSE(draft.dirty());
+}
+
 TEST_CASE("resource and task edits preserve IDs while duplicates copy profiles",
           "[gui][system-builder][mutation]") {
     auto draft = EditableSystemDraft{make_config()};
