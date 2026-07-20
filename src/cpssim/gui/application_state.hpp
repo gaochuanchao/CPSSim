@@ -97,7 +97,7 @@ class GuiApplicationState {
         workbench_ = std::move(replacement);
     }
 
-    void clear_session() noexcept { workbench_.emplace<std::monostate>(); }
+    void clear_session() { workbench_.emplace<std::monostate>(); }
 
   private:
     std::variant<std::monostate, std::unique_ptr<GuiSimulationSession>,

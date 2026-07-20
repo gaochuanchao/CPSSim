@@ -202,6 +202,9 @@ cpssim_enable_sanitizers(cpssim_cli)
 add_library(
     cpssim_gui_support STATIC
     src/cpssim/application/project/project.cpp
+    src/cpssim/application/project/project_template.cpp
+    src/cpssim/application/project/project_workflow.cpp
+    src/cpssim/application/recent_projects.cpp
     src/cpssim/gui/architecture_graph.cpp
     src/cpssim/gui/display_scale.cpp
     src/cpssim/gui/draft_run_plan.cpp
@@ -222,6 +225,25 @@ target_link_libraries(cpssim_gui_support PRIVATE nlohmann_json::nlohmann_json)
 cpssim_set_project_warnings(cpssim_gui_support)
 cpssim_enable_sanitizers(cpssim_gui_support)
 
+add_library(
+    cpssim_bosch_gui_application STATIC
+    src/cpssim/application/bosch_project_factory.cpp
+)
+target_link_libraries(
+    cpssim_bosch_gui_application
+    PUBLIC
+        cpssim_bosch_fmi2_adapter
+        cpssim_bosch_reference
+        cpssim_gui_support
+)
+target_include_directories(
+    cpssim_bosch_gui_application
+    SYSTEM PRIVATE ${CPSSIM_NLOHMANN_INCLUDE_DIRECTORIES}
+)
+target_link_libraries(cpssim_bosch_gui_application PRIVATE nlohmann_json::nlohmann_json)
+cpssim_set_project_warnings(cpssim_bosch_gui_application)
+cpssim_enable_sanitizers(cpssim_bosch_gui_application)
+
 if(CPSSIM_BUILD_GUI)
     find_package(OpenGL REQUIRED)
     find_package(glfw3 3.3 CONFIG REQUIRED)
@@ -239,6 +261,14 @@ if(CPSSIM_BUILD_GUI)
         DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     )
     FetchContent_MakeAvailable(imgui)
+
+    FetchContent_Declare(
+        portable_file_dialogs
+        GIT_REPOSITORY https://github.com/samhocevar/portable-file-dialogs.git
+        GIT_TAG c12ea8c9a727f5320a2b4570aee863bbede2a204
+        GIT_SHALLOW FALSE
+    )
+    FetchContent_MakeAvailable(portable_file_dialogs)
 
     add_library(
         cpssim_imgui STATIC
@@ -261,6 +291,7 @@ if(CPSSIM_BUILD_GUI)
         cpssim_gui
         apps/gui/gui_application.cpp
         apps/gui/main.cpp
+        apps/gui/native_file_dialog.cpp
         apps/gui/views/architecture_view.cpp
         apps/gui/views/event_view.cpp
         apps/gui/views/experiment_explorer.cpp
@@ -271,7 +302,11 @@ if(CPSSIM_BUILD_GUI)
         apps/gui/views/timeline_view.cpp
         apps/gui/views/toolbar_view.cpp
     )
-    target_link_libraries(cpssim_gui PRIVATE cpssim_gui_support cpssim_imgui)
+    target_include_directories(cpssim_gui SYSTEM PRIVATE "${portable_file_dialogs_SOURCE_DIR}")
+    target_link_libraries(
+        cpssim_gui
+        PRIVATE cpssim_gui_support cpssim_bosch_gui_application cpssim_imgui
+    )
 
     cpssim_set_project_warnings(cpssim_gui)
     cpssim_enable_sanitizers(cpssim_gui)
@@ -427,9 +462,33 @@ if(BUILD_TESTING)
 
     cpssim_add_catch_tests(
         cpssim_project_tests
-        SOURCES tests/application/project/project_persistence_test.cpp
+        SOURCES
+            tests/application/project/project_persistence_test.cpp
+            tests/application/recent_projects_test.cpp
         LIBRARIES cpssim_gui_support
         LABEL project
+    )
+
+    add_executable(
+        cpssim_bosch_project_tests
+        tests/application/bosch_project_factory_test.cpp
+    )
+    set_target_properties(cpssim_bosch_project_tests PROPERTIES CXX_CLANG_TIDY "")
+    target_link_libraries(
+        cpssim_bosch_project_tests
+        PRIVATE cpssim_bosch_gui_application Catch2::Catch2WithMain
+    )
+    add_dependencies(cpssim_bosch_project_tests cpssim_bosch_fmu_linux)
+    cpssim_set_project_warnings(cpssim_bosch_project_tests)
+    cpssim_enable_sanitizers(cpssim_bosch_project_tests)
+    catch_discover_tests(
+        cpssim_bosch_project_tests
+        TEST_PREFIX "project-bosch: "
+        DISCOVERY_MODE PRE_TEST
+        PROPERTIES
+            ENVIRONMENT
+                "CPSSIM_G1_BOSCH_FMU_LIBRARY=$<TARGET_FILE:cpssim_bosch_fmu_linux>"
+            LABELS project
     )
 
     cpssim_add_catch_tests(

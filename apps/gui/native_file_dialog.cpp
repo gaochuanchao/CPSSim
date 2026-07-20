@@ -32,23 +32,21 @@ FileDialogResult open_json(std::string title, const std::filesystem::path& initi
 
 } // namespace
 
-FileDialogResult NativeFileDialog::open_project(
-    const std::filesystem::path& initial_directory) {
+FileDialogResult NativeFileDialog::open_project(const std::filesystem::path& initial_directory) {
     return open_json("Open CPSSim Project", initial_directory);
 }
 
-FileDialogResult NativeFileDialog::choose_project_parent(
-    const std::filesystem::path& initial_directory) {
+FileDialogResult
+NativeFileDialog::choose_project_parent(const std::filesystem::path& initial_directory) {
     return select_folder("Choose Project Parent Directory", initial_directory);
 }
 
-FileDialogResult NativeFileDialog::choose_trajectory_directory(
-    const std::filesystem::path& initial_directory) {
+FileDialogResult
+NativeFileDialog::choose_trajectory_directory(const std::filesystem::path& initial_directory) {
     return select_folder("Choose Bosch Trajectory Directory", initial_directory);
 }
 
-FileDialogResult NativeFileDialog::open_run_plan(
-    const std::filesystem::path& initial_directory) {
+FileDialogResult NativeFileDialog::open_run_plan(const std::filesystem::path& initial_directory) {
     return open_json("Load CPSSim Run Plan", initial_directory);
 }
 
@@ -66,8 +64,8 @@ FileDialogResult NativeFileDialog::save_run_plan(const std::filesystem::path& su
     }
 }
 
-FileDialogResult NativeFileDialog::select_folder(
-    std::string title, const std::filesystem::path& initial_directory) {
+FileDialogResult NativeFileDialog::select_folder(std::string title,
+                                                 const std::filesystem::path& initial_directory) {
     if (!pfd::settings::available()) {
         return unavailable();
     }

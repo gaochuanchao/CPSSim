@@ -22,17 +22,14 @@ struct ProjectWorkflowResult {
     std::string diagnostic;
 };
 
-ProjectWorkflowResult open_project_from_dialog(
-    GuiApplicationState& state, FileDialog& dialogs,
-    const std::filesystem::path& initial_directory,
-    const ProjectRuntimeResolver& runtime_resolver = {});
+ProjectWorkflowResult open_project_from_dialog(GuiApplicationState& state, FileDialog& dialogs,
+                                               const std::filesystem::path& initial_directory,
+                                               const ProjectRuntimeResolver& runtime_resolver = {});
 
-ProjectWorkflowResult load_run_plan_from_dialog(GuiSimulationSession& session,
-                                                FileDialog& dialogs,
+ProjectWorkflowResult load_run_plan_from_dialog(GuiSimulationSession& session, FileDialog& dialogs,
                                                 const std::filesystem::path& initial_directory);
 
-ProjectWorkflowResult save_run_plan_from_dialog(GuiSimulationSession& session,
-                                                FileDialog& dialogs,
+ProjectWorkflowResult save_run_plan_from_dialog(GuiSimulationSession& session, FileDialog& dialogs,
                                                 const std::filesystem::path& suggested_path);
 
 } // namespace cpssim

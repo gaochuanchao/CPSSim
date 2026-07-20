@@ -6,6 +6,7 @@
  ***/
 
 #include "cpssim/application/project/project.hpp"
+#include "cpssim/application/project/project_workflow.hpp"
 #include "cpssim/config/json_config.hpp"
 #include "cpssim/config/json_run_plan.hpp"
 #include "cpssim/gui/application_state.hpp"
@@ -54,6 +55,25 @@ class TemporaryDirectory {
     std::filesystem::path root_;
 };
 
+class StubFileDialog final : public FileDialog {
+  public:
+    FileDialogResult project_result;
+
+    FileDialogResult open_project(const std::filesystem::path&) override { return project_result; }
+    FileDialogResult choose_project_parent(const std::filesystem::path&) override {
+        return FileDialogResult::cancelled();
+    }
+    FileDialogResult choose_trajectory_directory(const std::filesystem::path&) override {
+        return FileDialogResult::cancelled();
+    }
+    FileDialogResult open_run_plan(const std::filesystem::path&) override {
+        return FileDialogResult::cancelled();
+    }
+    FileDialogResult save_run_plan(const std::filesystem::path&) override {
+        return FileDialogResult::cancelled();
+    }
+};
+
 ExperimentConfig make_project_config(std::string resource_name = "local") {
     return ExperimentConfig{
         std::chrono::nanoseconds{100'000},
@@ -84,6 +104,7 @@ ProjectCreationRequest make_request(const std::filesystem::path& parent, std::st
                                   .name = std::move(name),
                                   .system = std::move(system),
                                   .default_run_plan = std::move(plan),
+                                  .scenario_file = std::nullopt,
                                   .scenario_kind = "generic",
                                   .workspace = {}};
 }
@@ -156,6 +177,7 @@ TEST_CASE("project metadata and minimal workspace JSON round trip strictly",
                                    .system_file = "definitions/system.json",
                                    .workspace_file = "ui/workspace.json",
                                    .default_run_plan = "plans/main.json",
+                                   .scenario_file = std::nullopt,
                                    .scenario_kind = "generic"};
 
     REQUIRE((parse_project_metadata_json(serialize_project_metadata_json(metadata)) == metadata));
@@ -183,6 +205,7 @@ TEST_CASE("project loading resolves valid nested relative references",
                                    .system_file = "definitions/system.json",
                                    .workspace_file = "ui/workspace.json",
                                    .default_run_plan = "plans/main.json",
+                                   .scenario_file = std::nullopt,
                                    .scenario_kind = "generic"};
     write_text(root / "project.json", serialize_project_metadata_json(metadata));
 
@@ -294,6 +317,83 @@ TEST_CASE("project creation validates names and never reuses an existing root",
     REQUIRE_THROWS_AS(create_project(make_request(temporary.root(), "existing")),
                       std::runtime_error);
     REQUIRE(std::filesystem::is_regular_file(created->root() / "project.json"));
+}
+
+TEST_CASE("dialog cancellation and invalid selection preserve the active project",
+          "[project][dialog][atomic]") {
+    TemporaryDirectory temporary;
+    auto retained = create_project(make_request(temporary.root(), "retained-dialog"));
+    GuiApplicationState state{std::move(retained)};
+    const auto* retained_session = &state.active_session();
+    StubFileDialog dialogs;
+
+    dialogs.project_result = FileDialogResult::cancelled();
+    REQUIRE((open_project_from_dialog(state, dialogs, temporary.root()).status ==
+             ProjectWorkflowStatus::Cancelled));
+    REQUIRE((&state.active_session() == retained_session));
+
+    dialogs.project_result = FileDialogResult::selected(temporary.root() / "missing.json");
+    const auto invalid = open_project_from_dialog(state, dialogs, temporary.root());
+    REQUIRE((invalid.status == ProjectWorkflowStatus::Failed));
+    REQUIRE_FALSE(invalid.diagnostic.empty());
+    REQUIRE((&state.active_session() == retained_session));
+
+    auto replacement = create_project(make_request(temporary.root(), "selected-dialog"));
+    dialogs.project_result = FileDialogResult::selected(replacement->root() / "project.json");
+    REQUIRE((open_project_from_dialog(state, dialogs, temporary.root()).status ==
+             ProjectWorkflowStatus::Applied));
+    REQUIRE((state.active_project().metadata().name == "selected-dialog"));
+}
+
+TEST_CASE("Save Project As validates the copy before returning a replacement",
+          "[project][save-as][atomic]") {
+    TemporaryDirectory temporary;
+    auto source = create_project(make_request(temporary.root(), "source"));
+    auto copy = save_project_as(*source, temporary.root(), "copy");
+
+    REQUIRE((copy->metadata().name == "copy"));
+    REQUIRE((copy->root() == std::filesystem::weakly_canonical(temporary.root() / "copy")));
+    REQUIRE(std::filesystem::is_regular_file(copy->root() / "project.json"));
+    REQUIRE((copy->session().snapshot().run_state == GuiRunState::Paused));
+    REQUIRE((source->metadata().name == "source"));
+}
+
+TEST_CASE("project save and Save As persist the accepted run plan", "[project][save-as][plan]") {
+    TemporaryDirectory temporary;
+    auto source = create_project(make_request(temporary.root(), "accepted-plan"));
+    REQUIRE(source->session().set_draft_stop_tick(321));
+    REQUIRE(source->session().apply_draft());
+
+    save_project(*source);
+    const auto reloaded = load_project(source->root() / "project.json");
+    REQUIRE(reloaded->default_run_plan().stop_tick() == 321);
+
+    auto copy = save_project_as(*source, temporary.root(), "accepted-plan-copy");
+    REQUIRE(copy->default_run_plan().stop_tick() == 321);
+}
+
+TEST_CASE("failed project content preparation removes the incomplete directory",
+          "[project][create][cleanup]") {
+    TemporaryDirectory temporary;
+    const auto request = make_request(temporary.root(), "will-fail");
+    REQUIRE_THROWS_AS(
+        create_project(request, {},
+                       [](const auto&) { throw std::runtime_error{"injected content failure"}; }),
+        std::runtime_error);
+    REQUIRE_FALSE(std::filesystem::exists(temporary.root() / "will-fail"));
+}
+
+TEST_CASE("invalid optional workspace uses defaults without changing simulation input",
+          "[project][workspace][fallback]") {
+    TemporaryDirectory temporary;
+    auto created = create_project(make_request(temporary.root(), "workspace-fallback"));
+    const auto expected_system = serialize_experiment_config_json(created->session().config());
+    write_text(created->root() / "workspace.json", R"({"schema_version":99})");
+
+    const auto loaded = load_project(created->root() / "project.json");
+    REQUIRE((loaded->workspace() == ProjectWorkspace{}));
+    REQUIRE(loaded->workspace_diagnostic().has_value());
+    REQUIRE((serialize_experiment_config_json(loaded->session().config()) == expected_system));
 }
 
 } // namespace

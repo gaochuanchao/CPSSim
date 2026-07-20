@@ -265,6 +265,19 @@ Acceptance:
 - selected paths are displayed clearly;
 - default location is `projects/`.
 
+Implemented boundary:
+
+- `FileDialog` is a GUI-neutral, injectable application interface; the GUI-only
+  adapter uses portable-file-dialogs pinned to commit
+  `c12ea8c9a727f5320a2b4570aee863bbede2a204`;
+- project open, project-parent selection, run-plan load/save, and custom Bosch
+  trajectory selection use platform dialogs, while cancellation is a distinct
+  no-change result;
+- Home and the File menu share atomic project loading, strict run-plan
+  persistence, Save Project, validated Save Project As, and Close Project;
+- Create New Project uses a small built-in generic system/run-plan template and
+  does not introduce the Goal 2 System Builder.
+
 ### G1.4 — Bosch project wizard
 
 Inspect first:
@@ -283,9 +296,34 @@ Acceptance:
 - bundled FMU path is resolved automatically;
 - invalid selections show a local error without closing the wizard.
 
+Implemented boundary:
+
+- the five-step wizard selects a supplied or custom trajectory, dedicated or
+  shared-cloud scheduling, complete or bounded horizon, and project location;
+- `create_bosch_project` loads and validates the trajectory and reference
+  inputs, builds the run plan and functional-model factory, resolves the FMU
+  beside the GUI executable, and returns a paused `ProjectContext` without
+  running the simulation;
+- Bosch settings are stored in project-owned `bosch.json`, and the selected
+  trajectory is copied into `trajectory/` so project reopening is independent
+  of the original selected directory;
+- project creation removes its new directory on any failure and writes
+  `project.json` only after scenario content succeeds.
+
 ### G1.5 — Recent projects and workspace loading
 
 Limit recent-project history to a small fixed number. Missing projects should be removable from the list.
+
+Implemented boundary:
+
+- the GUI preference file stores at most eight normalized project marker paths,
+  moves reopened projects first, removes duplicates, and keeps missing entries
+  visible and removable;
+- recents are updated only after successful create/open and use the same atomic
+  loader as explicit Open Project;
+- the versioned minimal workspace is loaded into `ProjectContext`; malformed or
+  unavailable optional workspace presentation state falls back to version-1
+  defaults with a local diagnostic and never changes system/run-plan input.
 
 ## Tests
 

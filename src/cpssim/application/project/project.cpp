@@ -154,9 +154,10 @@ bool path_is_within(const std::filesystem::path& root, const std::filesystem::pa
     return true;
 }
 
-std::filesystem::path resolve_internal_path(const std::filesystem::path& root,
-                                            const std::filesystem::path& relative,
-                                            const std::string& field_path) {
+std::filesystem::path resolve_internal_path(
+    // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+    const std::filesystem::path& root, const std::filesystem::path& relative,
+    const std::string& field_path) {
     const auto normalized = validate_internal_path(relative, field_path);
     const auto resolved_root = std::filesystem::weakly_canonical(root);
     const auto resolved = std::filesystem::weakly_canonical(resolved_root / normalized);
@@ -217,6 +218,11 @@ template <typename Loader> auto load_component(const std::string& field_path, Lo
     }
 }
 
+const RunPlan& accepted_project_plan(const ProjectContext& project) {
+    const auto* active = project.session().active_plan();
+    return active != nullptr ? *active : project.default_run_plan();
+}
+
 } // namespace
 
 ProjectContext::ProjectContext(std::filesystem::path root, ProjectMetadata metadata,
@@ -275,11 +281,10 @@ ProjectMetadata parse_project_metadata_json(std::string_view json_text) {
         .default_run_plan = read_nonempty_string(require_field(document, "default_run_plan", "$"),
                                                  "$.default_run_plan"),
         .scenario_file = std::nullopt,
-        .scenario_kind = read_nonempty_string(require_field(scenario, "kind", "$.scenario"),
-                                              "$.scenario.kind")};
+        .scenario_kind =
+            read_nonempty_string(require_field(scenario, "kind", "$.scenario"), "$.scenario.kind")};
     if (const auto scenario_file = scenario.find("file"); scenario_file != scenario.end()) {
-        metadata.scenario_file =
-            read_nonempty_string(*scenario_file, "$.scenario.file");
+        metadata.scenario_file = read_nonempty_string(*scenario_file, "$.scenario.file");
     }
     validate_metadata(metadata);
     return metadata;
@@ -309,8 +314,8 @@ ProjectWorkspace parse_project_workspace_json(std::string_view json_text) {
 }
 
 std::unique_ptr<ProjectContext>
-make_project_context(std::filesystem::path root, ProjectMetadata metadata, ExperimentConfig system,
-                     RunPlan default_run_plan, ProjectWorkspace workspace,
+make_project_context(const std::filesystem::path& root, ProjectMetadata metadata,
+                     ExperimentConfig system, RunPlan default_run_plan, ProjectWorkspace workspace,
                      ProjectRuntimeInputs runtime_inputs,
                      std::optional<std::string> workspace_diagnostic) {
     validate_metadata(metadata);
@@ -320,15 +325,14 @@ make_project_context(std::filesystem::path root, ProjectMetadata metadata, Exper
     if (!session->replace_draft(default_run_plan) || !session->apply_draft()) {
         throw std::runtime_error{"project default run plan could not construct a GUI session"};
     }
-    return std::make_unique<ProjectContext>(std::filesystem::weakly_canonical(root),
-                                            std::move(metadata), std::move(default_run_plan),
-                                            workspace, std::move(session), std::move(runtime_inputs),
-                                            std::move(workspace_diagnostic));
+    return std::make_unique<ProjectContext>(
+        std::filesystem::weakly_canonical(root), std::move(metadata), std::move(default_run_plan),
+        workspace, std::move(session), std::move(runtime_inputs), std::move(workspace_diagnostic));
 }
 
 std::unique_ptr<ProjectContext> create_project(const ProjectCreationRequest& request,
                                                ProjectRuntimeInputs runtime_inputs,
-                                               ProjectContentWriter content_writer) {
+                                               const ProjectContentWriter& content_writer) {
     if (request.parent_directory.empty()) {
         fail_project("$.root", "parent directory must not be empty");
     }
@@ -356,9 +360,9 @@ std::unique_ptr<ProjectContext> create_project(const ProjectCreationRequest& req
         std::filesystem::create_directory(root / "run-plans");
         std::filesystem::create_directory(root / "results");
 
-        auto context = make_project_context(root, metadata, request.system,
-                                            request.default_run_plan, request.workspace,
-                                            runtime_inputs);
+        auto context =
+            make_project_context(root, metadata, request.system, request.default_run_plan,
+                                 request.workspace, std::move(runtime_inputs));
         write_text_atomically(root / metadata.system_file, system_json);
         write_text_atomically(root / metadata.default_run_plan, run_plan_json);
         write_text_atomically(root / metadata.workspace_file, workspace_json);
@@ -374,9 +378,8 @@ std::unique_ptr<ProjectContext> create_project(const ProjectCreationRequest& req
     }
 }
 
-std::unique_ptr<ProjectContext>
-load_project(const std::filesystem::path& project_file,
-             const ProjectRuntimeResolver& runtime_resolver) {
+std::unique_ptr<ProjectContext> load_project(const std::filesystem::path& project_file,
+                                             const ProjectRuntimeResolver& runtime_resolver) {
     const auto project_path = std::filesystem::absolute(project_file).lexically_normal();
     const auto root = std::filesystem::weakly_canonical(project_path.parent_path());
     const auto metadata = parse_project_metadata_json(read_text_file(project_path, "$.project"));
@@ -405,8 +408,8 @@ load_project(const std::filesystem::path& project_file,
     ProjectWorkspace workspace;
     std::optional<std::string> workspace_diagnostic;
     try {
-        workspace = parse_project_workspace_json(
-            read_text_file(workspace_path, "$.workspace_file"));
+        workspace =
+            parse_project_workspace_json(read_text_file(workspace_path, "$.workspace_file"));
     } catch (const std::exception& error) {
         workspace = {};
         workspace_diagnostic = std::string{"Workspace defaults used: "} + error.what();
@@ -422,10 +425,10 @@ load_project(const std::filesystem::path& project_file,
                                 std::move(workspace_diagnostic));
 }
 
-std::unique_ptr<ProjectContext>
-save_project_as(const ProjectContext& project,
-                const std::filesystem::path& parent_directory, std::string new_name,
-                const ProjectRuntimeResolver& runtime_resolver) {
+std::unique_ptr<ProjectContext> save_project_as(const ProjectContext& project,
+                                                const std::filesystem::path& parent_directory,
+                                                std::string new_name,
+                                                const ProjectRuntimeResolver& runtime_resolver) {
     validate_project_name(new_name);
     if (parent_directory.empty()) {
         fail_project("$.root", "parent directory must not be empty");
@@ -447,6 +450,13 @@ save_project_as(const ProjectContext& project,
         }
         auto metadata = project.metadata();
         metadata.name = std::move(new_name);
+        write_text_atomically(target / metadata.system_file,
+                              serialize_experiment_config_json(project.session().config()));
+        write_text_atomically(
+            target / metadata.default_run_plan,
+            serialize_run_plan_json(project.session().config(), accepted_project_plan(project)));
+        write_text_atomically(target / metadata.workspace_file,
+                              serialize_project_workspace_json(project.workspace()));
         write_text_atomically(target / "project.json", serialize_project_metadata_json(metadata));
         return load_project(target / "project.json", runtime_resolver);
     } catch (...) {
@@ -468,7 +478,7 @@ void save_project(const ProjectContext& project) {
 
     const auto system_json = serialize_experiment_config_json(project.session().config());
     const auto run_plan_json =
-        serialize_run_plan_json(project.session().config(), project.default_run_plan());
+        serialize_run_plan_json(project.session().config(), accepted_project_plan(project));
     const auto workspace_json = serialize_project_workspace_json(project.workspace());
     const auto project_json = serialize_project_metadata_json(metadata);
 

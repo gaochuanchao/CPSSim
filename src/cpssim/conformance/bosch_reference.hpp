@@ -62,8 +62,8 @@ std::string_view bosch_reference_scenario_name(BoschReferenceScenario scenario);
  ***/
 BoschReferenceScenario parse_bosch_reference_scenario(std::string_view name);
 
-BoschReferenceInputs load_bosch_reference_inputs(
-    const std::filesystem::path& reference_root, BoschReferenceScenario scenario);
+BoschReferenceInputs load_bosch_reference_inputs(const std::filesystem::path& reference_root,
+                                                 BoschReferenceScenario scenario);
 
 /***
  * Loads one pinned scenario below reference_root, runs CPSSim through the

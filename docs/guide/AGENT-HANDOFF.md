@@ -29,6 +29,12 @@ extraction, extrema-preserving visual downsampling, and a custom live
 Functional signals plot synchronized with the scheduling timeline's time
 selection. `cpssim_gui` accepts
 `--mock-functional` as a dependency-free demonstration source.
+The GUI now starts on a session-free Home screen and owns an optional project
+context. Native/platform-neutral dialogs drive generic project creation,
+atomic open/save-as, run-plan load/save, and custom Bosch trajectory selection.
+The Bosch GUI factory builds a validated paused project without executing the
+simulation; recent projects live in a separate bounded user-preference file,
+and invalid minimal workspace presentation state falls back safely.
 The repository command surface is limited to `make`, `make run-cli`,
 `make run-gui`, `make test`, `make clean`, and `make help`. The CLI provides a
 registered persistent shell and direct commands; its Bosch wizard/direct path
@@ -120,6 +126,9 @@ these rules.
 | `GuiTimelineCache` | disposable validated timeline prefix and derived lifecycle presentation |
 | `GuiSignalCache` | disposable validated functional schema and full-resolution derived scalar series |
 | `GuiApplication` | panel visibility, view state, text scale, fixed workbench layout, and About-dialog state |
+| `GuiApplicationState` | Home or one owned standalone/project Workbench context |
+| `ProjectContext` | project root/metadata, loaded specifications/workspace, runtime factory inputs, and sole GUI session |
+| `RecentProjects` | normalized bounded GUI user-preference history |
 
 ## Task protocol
 
@@ -161,8 +170,8 @@ the C++ behavior silently.
   in [ADR-0011](../adr/0011-plan-user-configured-task-channels.md);
 - multiple servers/scheduling domains, resource capacity sharing, migration,
   richer networks, and richer GUI analysis need explicit designs;
-- the current fixed GUI workbench has no docking, saved layout, native file
-  dialog, unit-grouped/multiple signal axes, or background thread; timeline and
+- the current fixed GUI workbench has no docking, saved layout,
+  unit-grouped/multiple signal axes, or background thread; timeline and
   signal viewport/filter preferences are not persisted; run-plan fields may be
   edited or loaded only while no run exists or the active run is
   Paused/Finished;
@@ -179,6 +188,22 @@ the C++ behavior silently.
 End every handoff with exact commands/results, changed documents, limitations,
 and the next permitted task. Update this page whenever the implemented project
 boundary changes.
+
+## Latest Goal 1 project-workflow validation
+
+The completed Goal 1 workflow was validated on 2026-07-20 with:
+
+- `cmake --build --preset gui --target cpssim_gui -j2`: passed;
+- `ctest --test-dir build/dev --output-on-failure -L "^(gui|project)$"`:
+  68/68 focused GUI and project tests passed, including DPI/monitor behavior;
+- `./scripts/verify.sh full`: formatting and all 202 tests passed under Debug,
+  ASan/UBSan, Release, Clang, and clang-tidy; and
+- `git diff --check`: passed.
+
+The automated environment has no usable X11 display, so the native dialogs and
+visual monitor switching require a manual desktop smoke test. No additional
+development package is required: portable-file-dialogs is pinned and fetched
+only for the GUI build.
 
 ## Latest command-interface validation
 

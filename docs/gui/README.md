@@ -174,8 +174,9 @@ Cursor text retains the original scalar type. Floating-point conversion is
 used only for drawing. Visual downsampling preserves visible endpoints and
 bucket extrema; it never changes full-resolution observations.
 
-The current plot uses one shared value axis. Unit-grouped axes, saved signal
-choices, and workspace persistence are future work.
+The current plot uses one shared value axis. Unit-grouped axes and saved signal
+choices are future work. Goal 1 persists only the minimal versioned workspace
+schema; it does not yet persist plot choices or other Goal 3 settings.
 
 ### Resources and canonical events
 

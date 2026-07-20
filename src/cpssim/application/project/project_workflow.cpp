@@ -16,16 +16,15 @@ ProjectWorkflowResult dialog_failure(const FileDialogResult& selection) {
     }
     return {.status = ProjectWorkflowStatus::Failed,
             .selected_path = {},
-            .diagnostic = selection.diagnostic.empty() ? "File dialog failed"
-                                                       : selection.diagnostic};
+            .diagnostic =
+                selection.diagnostic.empty() ? "File dialog failed" : selection.diagnostic};
 }
 
 } // namespace
 
-ProjectWorkflowResult open_project_from_dialog(
-    GuiApplicationState& state, FileDialog& dialogs,
-    const std::filesystem::path& initial_directory,
-    const ProjectRuntimeResolver& runtime_resolver) {
+ProjectWorkflowResult open_project_from_dialog(GuiApplicationState& state, FileDialog& dialogs,
+                                               const std::filesystem::path& initial_directory,
+                                               const ProjectRuntimeResolver& runtime_resolver) {
     const auto selection = dialogs.open_project(initial_directory);
     if (selection.status != FileDialogStatus::Selected) {
         return dialog_failure(selection);
@@ -43,8 +42,7 @@ ProjectWorkflowResult open_project_from_dialog(
     }
 }
 
-ProjectWorkflowResult load_run_plan_from_dialog(GuiSimulationSession& session,
-                                                FileDialog& dialogs,
+ProjectWorkflowResult load_run_plan_from_dialog(GuiSimulationSession& session, FileDialog& dialogs,
                                                 const std::filesystem::path& initial_directory) {
     const auto selection = dialogs.open_run_plan(initial_directory);
     if (selection.status != FileDialogStatus::Selected) {
@@ -65,8 +63,7 @@ ProjectWorkflowResult load_run_plan_from_dialog(GuiSimulationSession& session,
     }
 }
 
-ProjectWorkflowResult save_run_plan_from_dialog(GuiSimulationSession& session,
-                                                FileDialog& dialogs,
+ProjectWorkflowResult save_run_plan_from_dialog(GuiSimulationSession& session, FileDialog& dialogs,
                                                 const std::filesystem::path& suggested_path) {
     const auto selection = dialogs.save_run_plan(suggested_path);
     if (selection.status != FileDialogStatus::Selected) {
@@ -74,10 +71,10 @@ ProjectWorkflowResult save_run_plan_from_dialog(GuiSimulationSession& session,
     }
     try {
         const auto& validation = session.validate_draft();
-        if (!validation.valid()) {
+        if (!validation.plan.has_value() || !validation.diagnostics.empty()) {
             throw std::invalid_argument{"pending run plan is invalid"};
         }
-        save_run_plan(selection.path, session.config(), *validation.plan);
+        save_run_plan(selection.path, session.config(), validation.plan.value());
         return {.status = ProjectWorkflowStatus::Applied,
                 .selected_path = selection.path,
                 .diagnostic = {}};

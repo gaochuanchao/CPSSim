@@ -155,6 +155,7 @@ void GuiApplication::update_active_session() {
 bool GuiApplication::draw_main_menu() {
     auto& session = application_state_.active_session();
     bool close_requested = false;
+    bool open_requested = false;
     if (!ImGui::BeginMenuBar()) {
         return true;
     }
@@ -165,7 +166,7 @@ bool GuiApplication::draw_main_menu() {
             request_project_modal_ = true;
         }
         if (ImGui::MenuItem("Open Existing Project...")) {
-            open_project_dialog();
+            open_requested = true;
         }
         if (ImGui::MenuItem("Bosch Challenge Example...")) {
             bosch_step_ = BoschWizardStep::Trajectory;
@@ -186,8 +187,7 @@ bool GuiApplication::draw_main_menu() {
             project_parent_ = paths_.projects_directory;
             std::fill(project_name_.begin(), project_name_.end(), '\0');
             const auto suggested = application_state_.active_project().metadata().name + "-copy";
-            std::copy_n(suggested.begin(),
-                        std::min(suggested.size(), project_name_.size() - 1),
+            std::copy_n(suggested.begin(), std::min(suggested.size(), project_name_.size() - 1),
                         project_name_.begin());
             request_project_modal_ = true;
         }
@@ -240,6 +240,10 @@ bool GuiApplication::draw_main_menu() {
     }
 
     ImGui::EndMenuBar();
+    if (open_requested) {
+        open_project_dialog();
+        return false;
+    }
     return true;
 }
 
@@ -248,13 +252,11 @@ void GuiApplication::open_project_dialog() {
         set_status("File dialogs are unavailable.", true);
         return;
     }
-    const auto result = open_project_from_dialog(application_state_, *dialogs_,
-                                                 paths_.projects_directory,
-                                                 project_runtime_resolver());
+    const auto result = open_project_from_dialog(
+        application_state_, *dialogs_, paths_.projects_directory, project_runtime_resolver());
     if (result.status == ProjectWorkflowStatus::Applied) {
         selection_.select_experiment();
-        set_status("Opened project '" +
-                       application_state_.active_project().metadata().name + "'.",
+        set_status("Opened project '" + application_state_.active_project().metadata().name + "'.",
                    false);
         record_active_project();
     } else if (result.status == ProjectWorkflowStatus::Failed) {
@@ -300,8 +302,7 @@ void GuiApplication::draw_project_dialog() {
         ImGui::OpenPopup("Project location");
         request_project_modal_ = false;
     }
-    if (!ImGui::BeginPopupModal("Project location", nullptr,
-                                ImGuiWindowFlags_AlwaysAutoResize)) {
+    if (!ImGui::BeginPopupModal("Project location", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
         return;
     }
     const auto save_as = project_dialog_kind_ == ProjectDialogKind::SaveAs;
@@ -334,8 +335,7 @@ void GuiApplication::draw_project_dialog() {
                     make_generic_project_template(project_parent_, project_name_.data()));
             }
             replace_project(std::move(replacement));
-            set_status(save_as ? "Project saved under its new name."
-                               : "Generic project created.",
+            set_status(save_as ? "Project saved under its new name." : "Generic project created.",
                        false);
             record_active_project();
             ImGui::CloseCurrentPopup();
@@ -376,8 +376,8 @@ void GuiApplication::draw_bosch_wizard() {
         ImGui::RadioButton("Custom trajectory directory", &bosch_trajectory_, 3);
         if (bosch_trajectory_ == 3) {
             ImGui::TextWrapped("%s", bosch_custom_trajectory_.empty()
-                                          ? "No custom directory selected"
-                                          : bosch_custom_trajectory_.string().c_str());
+                                         ? "No custom directory selected"
+                                         : bosch_custom_trajectory_.string().c_str());
             if (ImGui::Button("Choose trajectory...")) {
                 if (dialogs_ == nullptr) {
                     set_status("File dialogs are unavailable.", true);
@@ -410,8 +410,7 @@ void GuiApplication::draw_bosch_wizard() {
         }
     } else if (bosch_step_ == BoschWizardStep::Project) {
         ImGui::TextUnformatted("Project");
-        ImGui::InputText("Project name", bosch_project_name_.data(),
-                         bosch_project_name_.size());
+        ImGui::InputText("Project name", bosch_project_name_.data(), bosch_project_name_.size());
         ImGui::TextWrapped("Parent: %s", bosch_parent_.string().c_str());
         if (ImGui::Button("Choose parent...")) {
             if (dialogs_ == nullptr) {
@@ -428,15 +427,15 @@ void GuiApplication::draw_bosch_wizard() {
     } else {
         static constexpr std::array<std::string_view, 3> trajectories{
             "example_v_10", "example_v_12_5", "example_v_15"};
-        const auto trajectory_name = bosch_trajectory_ == 3
-                                         ? bosch_custom_trajectory_.string()
-                                         : std::string{trajectories[static_cast<std::size_t>(
-                                               bosch_trajectory_)]};
+        const auto trajectory_name =
+            bosch_trajectory_ == 3
+                ? bosch_custom_trajectory_.string()
+                : std::string{trajectories[static_cast<std::size_t>(bosch_trajectory_)]};
         ImGui::TextUnformatted("Review and Create");
         ImGui::Text("Trajectory: %s", trajectory_name.c_str());
         ImGui::Text("Scenario: %s", bosch_scenario_ == 0 ? "dedicated" : "shared_cloud");
-        ImGui::Text("Horizon: %s", bosch_complete_horizon_ ? "complete trajectory"
-                                                           : bosch_stop_tick_.data());
+        ImGui::Text("Horizon: %s",
+                    bosch_complete_horizon_ ? "complete trajectory" : bosch_stop_tick_.data());
         ImGui::Text("Project: %s", bosch_project_name_.data());
         ImGui::TextWrapped("Parent: %s", bosch_parent_.string().c_str());
     }
@@ -461,11 +460,11 @@ void GuiApplication::draw_bosch_wizard() {
         try {
             static constexpr std::array<std::string_view, 3> trajectories{
                 "example_v_10", "example_v_12_5", "example_v_15"};
-            const auto trajectory = bosch_trajectory_ == 3
-                                        ? bosch_custom_trajectory_
-                                        : paths_.examples_directory /
-                                              trajectories[static_cast<std::size_t>(
-                                                  bosch_trajectory_)];
+            const auto trajectory =
+                bosch_trajectory_ == 3
+                    ? bosch_custom_trajectory_
+                    : paths_.examples_directory /
+                          trajectories[static_cast<std::size_t>(bosch_trajectory_)];
             std::optional<Tick> stop_tick;
             if (!bosch_complete_horizon_) {
                 const std::string_view text{bosch_stop_tick_.data()};
@@ -722,19 +721,17 @@ void GuiApplication::draw_home_screen() {
         ImGui::Spacing();
         ImGui::SetCursorPosX(left);
         ImGui::TextUnformatted("Recent projects");
+        std::optional<std::filesystem::path> recent_to_open;
         for (const auto& entry : recent_projects_.entries()) {
             ImGui::PushID(entry.project_file.string().c_str());
             ImGui::SetCursorPosX(left);
             ImGui::BeginDisabled(!entry.available);
-            if (ImGui::Button(entry.project_file.parent_path().filename().string().c_str(),
-                              ImVec2{scaled_button_width * 0.78F, 0.0F})) {
-                try {
-                    auto replacement = load_project(entry.project_file, project_runtime_resolver());
-                    replace_project(std::move(replacement));
-                    record_active_project();
-                } catch (const std::exception& error) {
-                    set_status(error.what(), true);
-                }
+            auto recent_label = entry.project_file.parent_path().filename().string();
+            if (!entry.available) {
+                recent_label += " (unavailable)";
+            }
+            if (ImGui::Button(recent_label.c_str(), ImVec2{scaled_button_width * 0.78F, 0.0F})) {
+                recent_to_open = entry.project_file;
             }
             ImGui::EndDisabled();
             ImGui::SameLine();
@@ -749,6 +746,15 @@ void GuiApplication::draw_home_screen() {
                 ImGui::SetTooltip("Project is unavailable");
             }
             ImGui::PopID();
+        }
+        if (recent_to_open.has_value()) {
+            try {
+                auto replacement = load_project(*recent_to_open, project_runtime_resolver());
+                replace_project(std::move(replacement));
+                record_active_project();
+            } catch (const std::exception& error) {
+                set_status(error.what(), true);
+            }
         }
     }
 

@@ -31,8 +31,8 @@ class GuiApplication {
     GuiApplication();
     GuiApplication(std::unique_ptr<GuiSimulationSession> session,
                    std::unique_ptr<FileDialog> dialogs, GuiApplicationPaths paths);
-    GuiApplication(std::unique_ptr<ProjectContext> project,
-                   std::unique_ptr<FileDialog> dialogs, GuiApplicationPaths paths);
+    GuiApplication(std::unique_ptr<ProjectContext> project, std::unique_ptr<FileDialog> dialogs,
+                   GuiApplicationPaths paths);
 
     GuiApplicationScreen screen() const noexcept { return application_state_.screen(); }
     bool has_active_session() const noexcept { return application_state_.has_active_session(); }

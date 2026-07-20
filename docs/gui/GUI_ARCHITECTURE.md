@@ -144,6 +144,9 @@ Use this table before adding a field:
 | Detached experiment/runtime/trace/functional copy | `SimulationSnapshot` |
 | Selected entity and inclusive tick range | `GuiSelection` |
 | Derived graph/timeline/signal data | corresponding GUI-support builder/cache |
+| Home/Workbench and optional active project/session | `GuiApplicationState` |
+| Project specifications, workspace metadata, and sole session | `ProjectContext` |
+| Recent-project history | GUI user-preference file through `RecentProjects` |
 | Panel visibility, viewport, filters, text scale | `GuiApplication` or view-state struct |
 | Current monitor scale, base style, last valid framebuffer density | native loop in `main.cpp` |
 
@@ -344,7 +347,9 @@ scaling.
 
 ## 10. Dependencies, threading, and persistence
 
-Dear ImGui is pinned and built only when `CPSSIM_BUILD_GUI=ON`. A new graph or
+Dear ImGui and the header-only portable-file-dialog adapter are pinned and
+built only when `CPSSIM_BUILD_GUI=ON`. Platform APIs remain behind the
+project-owned `FileDialog` interface. A new graph or
 plotting dependency needs separate evidence, a reviewed version/hash, a GUI-only
 CMake boundary, and an ADR when it materially changes architecture.
 
@@ -353,14 +358,17 @@ simulation would add synchronization, cancellation, shutdown, FMU ownership,
 and snapshot-publication decisions. Measure a real responsiveness problem and
 write an ADR before introducing it.
 
-Three persistence domains remain separate:
+Four persistence domains remain separate:
 
-1. experiment configuration;
-2. run plan; and
-3. GUI workspace preferences.
+1. project metadata and project-owned relative references;
+2. experiment configuration;
+3. run plan; and
+4. GUI workspace and user preferences.
 
-Only the first two affect simulation input. Workspace preferences are not yet
-persisted and must not silently become run semantics.
+Only experiment configuration and run plan affect simulation input. The
+minimal versioned workspace and the separate recent-project preference file
+are presentation-only. Invalid workspace content uses safe defaults with a
+diagnostic and must not silently become run semantics.
 
 ## 11. Testing strategy
 

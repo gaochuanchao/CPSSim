@@ -37,21 +37,18 @@ bool same_path(const std::filesystem::path& left, const std::filesystem::path& r
 
 void RecentProjects::add(const std::filesystem::path& project_file) {
     const auto normalized = normalize(project_file);
-    std::erase_if(entries_, [&](const auto& entry) {
-        return same_path(entry.project_file, normalized);
-    });
-    entries_.insert(entries_.begin(),
-                    {.project_file = normalized,
-                     .available = std::filesystem::is_regular_file(normalized)});
+    std::erase_if(entries_,
+                  [&](const auto& entry) { return same_path(entry.project_file, normalized); });
+    entries_.insert(entries_.begin(), {.project_file = normalized,
+                                       .available = std::filesystem::is_regular_file(normalized)});
     if (entries_.size() > maximum_recent_projects) {
         entries_.resize(maximum_recent_projects);
     }
 }
 
 void RecentProjects::remove(const std::filesystem::path& project_file) {
-    std::erase_if(entries_, [&](const auto& entry) {
-        return same_path(entry.project_file, project_file);
-    });
+    std::erase_if(entries_,
+                  [&](const auto& entry) { return same_path(entry.project_file, project_file); });
 }
 
 void RecentProjects::refresh_availability() {

@@ -117,7 +117,8 @@ int run_gui(std::unique_ptr<cpssim::GuiSimulationSession> session,
 
     auto dialogs = std::make_unique<cpssim::gui::NativeFileDialog>();
     cpssim::gui::GuiApplication application{
-        std::move(session), std::move(dialogs),
+        std::move(session),
+        std::move(dialogs),
         {.projects_directory = repository_root / "projects",
          .preferences_file = cpssim::default_gui_preferences_file(),
          .examples_directory = repository_root / "examples",

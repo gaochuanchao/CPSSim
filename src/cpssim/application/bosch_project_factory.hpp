@@ -28,14 +28,13 @@ struct BoschProjectRequest {
 
 void validate_bosch_project_request(const BoschProjectRequest& request);
 
-std::filesystem::path resolve_bundled_bosch_fmu(
-    const std::filesystem::path& executable_path);
+std::filesystem::path resolve_bundled_bosch_fmu(const std::filesystem::path& executable_path);
 
 std::unique_ptr<ProjectContext> create_bosch_project(const BoschProjectRequest& request);
 
-ProjectRuntimeInputs resolve_bosch_project_runtime(
-    const std::filesystem::path& project_root, const ProjectMetadata& metadata,
-    const std::filesystem::path& reference_root,
-    const std::filesystem::path& shared_library);
+ProjectRuntimeInputs resolve_bosch_project_runtime(const std::filesystem::path& project_root,
+                                                   const ProjectMetadata& metadata,
+                                                   const std::filesystem::path& reference_root,
+                                                   const std::filesystem::path& shared_library);
 
 } // namespace cpssim

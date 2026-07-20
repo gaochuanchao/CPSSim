@@ -76,9 +76,7 @@ class ProjectContext {
     const ProjectMetadata& metadata() const { return metadata_; }
     const RunPlan& default_run_plan() const { return default_run_plan_; }
     const ProjectWorkspace& workspace() const { return workspace_; }
-    const std::optional<std::string>& workspace_diagnostic() const {
-        return workspace_diagnostic_;
-    }
+    const std::optional<std::string>& workspace_diagnostic() const { return workspace_diagnostic_; }
     const ProjectRuntimeInputs& runtime_inputs() const { return runtime_inputs_; }
     GuiSimulationSession& session() { return *session_; }
     const GuiSimulationSession& session() const { return *session_; }
@@ -101,26 +99,24 @@ ProjectWorkspace parse_project_workspace_json(std::string_view json_text);
 
 // Constructs and applies the validated default plan before returning ownership.
 std::unique_ptr<ProjectContext>
-make_project_context(std::filesystem::path root, ProjectMetadata metadata, ExperimentConfig system,
-                     RunPlan default_run_plan, ProjectWorkspace workspace = {},
-                     ProjectRuntimeInputs runtime_inputs = {},
+make_project_context(const std::filesystem::path& root, ProjectMetadata metadata,
+                     ExperimentConfig system, RunPlan default_run_plan,
+                     ProjectWorkspace workspace = {}, ProjectRuntimeInputs runtime_inputs = {},
                      std::optional<std::string> workspace_diagnostic = std::nullopt);
 
 // Creates <parent>/<name>, writes project.json last, and returns an active context.
 std::unique_ptr<ProjectContext> create_project(const ProjectCreationRequest& request,
                                                ProjectRuntimeInputs runtime_inputs = {},
-                                               ProjectContentWriter content_writer = {});
+                                               const ProjectContentWriter& content_writer = {});
 
 // Loads, validates, and constructs a complete replacement without changing GUI state.
-std::unique_ptr<ProjectContext>
-load_project(const std::filesystem::path& project_file,
-             const ProjectRuntimeResolver& runtime_resolver = {});
+std::unique_ptr<ProjectContext> load_project(const std::filesystem::path& project_file,
+                                             const ProjectRuntimeResolver& runtime_resolver = {});
 
 // Copies, validates, and constructs a complete replacement before returning it.
 std::unique_ptr<ProjectContext>
-save_project_as(const ProjectContext& project,
-                const std::filesystem::path& parent_directory, std::string new_name,
-                const ProjectRuntimeResolver& runtime_resolver = {});
+save_project_as(const ProjectContext& project, const std::filesystem::path& parent_directory,
+                std::string new_name, const ProjectRuntimeResolver& runtime_resolver = {});
 
 // Saves specifications, the default plan, workspace, and metadata only.
 void save_project(const ProjectContext& project);

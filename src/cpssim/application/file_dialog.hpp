@@ -24,15 +24,12 @@ struct FileDialogResult {
     std::string diagnostic;
 
     static FileDialogResult selected(std::filesystem::path path) {
-        return {.status = FileDialogStatus::Selected,
-                .path = std::move(path),
-                .diagnostic = {}};
+        return {.status = FileDialogStatus::Selected, .path = std::move(path), .diagnostic = {}};
     }
     static FileDialogResult cancelled() { return {}; }
     static FileDialogResult failed(std::string diagnostic) {
-        return {.status = FileDialogStatus::Failed,
-                .path = {},
-                .diagnostic = std::move(diagnostic)};
+        return {
+            .status = FileDialogStatus::Failed, .path = {}, .diagnostic = std::move(diagnostic)};
     }
 };
 
@@ -42,10 +39,10 @@ class FileDialog {
     virtual ~FileDialog() = default;
 
     virtual FileDialogResult open_project(const std::filesystem::path& initial_directory) = 0;
-    virtual FileDialogResult choose_project_parent(
-        const std::filesystem::path& initial_directory) = 0;
-    virtual FileDialogResult choose_trajectory_directory(
-        const std::filesystem::path& initial_directory) = 0;
+    virtual FileDialogResult
+    choose_project_parent(const std::filesystem::path& initial_directory) = 0;
+    virtual FileDialogResult
+    choose_trajectory_directory(const std::filesystem::path& initial_directory) = 0;
     virtual FileDialogResult open_run_plan(const std::filesystem::path& initial_directory) = 0;
     virtual FileDialogResult save_run_plan(const std::filesystem::path& suggested_path) = 0;
 };
