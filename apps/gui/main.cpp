@@ -9,7 +9,10 @@
  ***/
 
 #include "gui_application.hpp"
+#include "native_file_dialog.hpp"
 
+#include "cpssim/application/bosch_project_factory.hpp"
+#include "cpssim/application/recent_projects.hpp"
 #include "cpssim/config/json_config.hpp"
 #include "cpssim/functional/mock_functional_model.hpp"
 #include "cpssim/gui/display_scale.hpp"
@@ -62,7 +65,9 @@ void apply_display_scale(const ImGuiStyle& base_style, float display_scale) {
 }
 
 /*** Owns the native window and immediate-mode render loop. ***/
-int run_gui(std::unique_ptr<cpssim::GuiSimulationSession> session) {
+int run_gui(std::unique_ptr<cpssim::GuiSimulationSession> session,
+            const std::filesystem::path& executable_path,
+            const std::filesystem::path& repository_root) {
     glfwSetErrorCallback(glfw_error_callback);
     if (glfwInit() == GLFW_FALSE) {
         throw std::runtime_error{"GLFW initialization failed"};
@@ -110,7 +115,14 @@ int run_gui(std::unique_ptr<cpssim::GuiSimulationSession> session) {
         ImGui_ImplGlfw_GetContentScaleForWindow(window), display_scale);
     apply_display_scale(base_style, display_scale);
 
-    cpssim::gui::GuiApplication application{std::move(session)};
+    auto dialogs = std::make_unique<cpssim::gui::NativeFileDialog>();
+    cpssim::gui::GuiApplication application{
+        std::move(session), std::move(dialogs),
+        {.projects_directory = repository_root / "projects",
+         .preferences_file = cpssim::default_gui_preferences_file(),
+         .examples_directory = repository_root / "examples",
+         .bosch_reference_directory = repository_root / "experiments/bosch_v10_reference",
+         .bosch_fmu_library = cpssim::resolve_bundled_bosch_fmu(executable_path)}};
     ImVec2 last_framebuffer_scale{1.0F, 1.0F};
 
     while (glfwWindowShouldClose(window) == GLFW_FALSE) {
@@ -199,7 +211,8 @@ int main(int argc, char* argv[]) {
                                                                      std::move(functional_factory),
                                                                      std::move(signal_registry));
         }
-        return run_gui(std::move(session));
+        return run_gui(std::move(session), std::filesystem::absolute(argv[0]),
+                       std::filesystem::current_path());
     } catch (const std::exception& error) {
         std::cerr << "cpssim_gui: " << error.what() << '\n';
         return EXIT_FAILURE;
