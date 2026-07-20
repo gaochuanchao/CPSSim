@@ -406,6 +406,7 @@ if(BUILD_TESTING)
     cpssim_add_catch_tests(
         cpssim_gui_tests
         SOURCES
+            tests/gui/application_state_test.cpp
             tests/gui/architecture_graph_test.cpp
             tests/gui/display_scale_test.cpp
             tests/gui/draft_run_plan_test.cpp

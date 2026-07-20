@@ -1,6 +1,6 @@
 /***
  * File: apps/gui/gui_application.cpp
- * Purpose: Render the fixed, resize-aware CPSSim workbench shell.
+ * Purpose: Render the fixed, resize-aware CPSSim home and workbench shell.
  * Creator: Chuanchao Gao
  * Documentation date: 2026-07-19
  * Notes: Docking and persistent layouts remain outside G02. Panel visibility
@@ -31,15 +31,47 @@
 
 namespace cpssim::gui {
 
-/*** Captures the command boundary and selects the experiment root initially. ***/
-GuiApplication::GuiApplication(GuiSimulationSession& session) : session_{session} {
+GuiApplication::GuiApplication() { initialize_presentation_state(); }
+
+GuiApplication::GuiApplication(std::unique_ptr<GuiSimulationSession> session) {
+    if (session != nullptr) {
+        application_state_.replace_session(std::move(session));
+    }
+    initialize_presentation_state();
+}
+
+/*** Establishes presentation defaults shared by Home and Workbench startup. ***/
+void GuiApplication::initialize_presentation_state() {
     selection_.select_experiment();
     constexpr std::string_view default_plan_path{"run-plan.json"};
     std::copy(default_plan_path.begin(), default_plan_path.end(), run_plan_path_.begin());
 }
 
+/*** Replaces the active session only after its caller has constructed it. ***/
+void GuiApplication::replace_session(std::unique_ptr<GuiSimulationSession> session) {
+    application_state_.replace_session(std::move(session));
+    selection_.select_experiment();
+    run_plan_file_status_.clear();
+}
+
+/*** Returns the application to Home without retaining a session reference. ***/
+void GuiApplication::clear_session() {
+    application_state_.clear_session();
+    selection_.select_experiment();
+    run_plan_file_status_.clear();
+    open_run_plan_file_dialog_ = false;
+}
+
+/*** Advances queued simulation commands only when a session is active. ***/
+void GuiApplication::update_active_session() {
+    if (application_state_.has_active_session()) {
+        application_state_.active_session().update();
+    }
+}
+
 /*** Updates menu-owned visibility and opens the static About dialog. ***/
 void GuiApplication::draw_main_menu() {
+    auto& session = application_state_.active_session();
     if (!ImGui::BeginMenuBar()) {
         return;
     }
@@ -50,7 +82,7 @@ void GuiApplication::draw_main_menu() {
         ImGui::MenuItem("Save workspace");
         ImGui::EndDisabled();
         ImGui::Separator();
-        ImGui::BeginDisabled(!session_.draft_editable());
+        ImGui::BeginDisabled(!session.draft_editable());
         if (ImGui::MenuItem("Load run plan...")) {
             run_plan_file_action_ = RunPlanFileAction::Load;
             run_plan_file_status_.clear();
@@ -97,6 +129,7 @@ void GuiApplication::draw_main_menu() {
 
 /*** Loads or saves through the shared strict persistence API. ***/
 void GuiApplication::draw_run_plan_file_dialog() {
+    auto& session = application_state_.active_session();
     if (open_run_plan_file_dialog_) {
         ImGui::OpenPopup("Run plan file");
         open_run_plan_file_dialog_ = false;
@@ -128,15 +161,15 @@ void GuiApplication::draw_run_plan_file_dialog() {
                 throw std::invalid_argument{"run plan path: must not be empty"};
             }
             if (loading) {
-                const auto plan = load_run_plan(path, session_.config());
-                if (!session_.replace_draft(plan)) {
+                const auto plan = load_run_plan(path, session.config());
+                if (!session.replace_draft(plan)) {
                     throw std::runtime_error{
                         "run plan $: the draft cannot be replaced while the run is Running"};
                 }
                 run_plan_file_status_ =
                     "Loaded into the pending draft. Use Apply and reset to activate it.";
             } else {
-                const auto& validation = session_.validate_draft();
+                const auto& validation = session.validate_draft();
                 if (!validation.valid()) {
                     const auto& diagnostic = validation.diagnostics.front();
                     auto location = std::string{"draft"};
@@ -151,7 +184,7 @@ void GuiApplication::draw_run_plan_file_dialog() {
                     throw std::invalid_argument{location + ": " + diagnostic.message +
                                                 ". See the highlighted Run plan field."};
                 }
-                save_run_plan(path, session_.config(), *validation.plan);
+                save_run_plan(path, session.config(), *validation.plan);
                 run_plan_file_status_ = "Saved run plan to '" + path.string() + "'.";
             }
             run_plan_file_error_ = false;
@@ -189,6 +222,7 @@ void GuiApplication::draw_about_dialog() {
 
 /*** Draws G04/G05 analysis tabs plus the existing runtime/event stack. ***/
 void GuiApplication::draw_center_panels(const SimulationSnapshot& snapshot) {
+    auto& session = application_state_.active_session();
     auto available_height = ImGui::GetContentRegionAvail().y;
     if (show_architecture_ || show_timeline_ || show_signals_) {
         const auto has_lower_panel = show_resources_ || show_events_;
@@ -204,7 +238,7 @@ void GuiApplication::draw_center_panels(const SimulationSnapshot& snapshot) {
         if (ImGui::BeginTabBar("Analysis views")) {
             if (show_architecture_ && ImGui::BeginTabItem("Architecture")) {
                 const auto graph = build_architecture_graph(snapshot.experiment);
-                if (draw_architecture_view(graph, session_, snapshot, selection_,
+                if (draw_architecture_view(graph, session, snapshot, selection_,
                                            architecture_view_state_)) {
                     show_inspector_ = true;
                 }
@@ -265,27 +299,16 @@ void GuiApplication::draw_center_panels(const SimulationSnapshot& snapshot) {
     }
 }
 
-/*** Fills the native window with toolbar and shared-selection workbench. ***/
-void GuiApplication::draw_frame(const SimulationSnapshot& snapshot) {
-    ImGui::GetStyle().FontScaleMain = text_scale_;
+/*** Draws the existing shared-selection workbench for an active session. ***/
+void GuiApplication::draw_workbench(const SimulationSnapshot& snapshot) {
+    auto& session = application_state_.active_session();
     synchronize_selection(selection_, snapshot);
-
-    const auto* viewport = ImGui::GetMainViewport();
-    ImGui::SetNextWindowPos(viewport->WorkPos);
-    ImGui::SetNextWindowSize(viewport->WorkSize);
-
-    constexpr auto workbench_flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
-                                     ImGuiWindowFlags_NoSavedSettings |
-                                     ImGuiWindowFlags_NoBringToFrontOnFocus |
-                                     ImGuiWindowFlags_NoNavFocus | ImGuiWindowFlags_MenuBar;
-    ImGui::Begin("CPSSim Workbench", nullptr, workbench_flags);
-
     draw_main_menu();
 
     const auto toolbar_height = 2.0F * ImGui::GetFrameHeightWithSpacing();
     ImGui::BeginChild("Simulation toolbar", ImVec2{0.0F, toolbar_height}, ImGuiChildFlags_Borders,
                       ImGuiWindowFlags_HorizontalScrollbar);
-    draw_toolbar(session_, snapshot);
+    draw_toolbar(session, snapshot);
     ImGui::EndChild();
 
     const auto column_count =
@@ -328,7 +351,7 @@ void GuiApplication::draw_frame(const SimulationSnapshot& snapshot) {
             ImGui::BeginChild("Inspector panel", ImVec2{0.0F, 0.0F}, ImGuiChildFlags_Borders);
             ImGui::TextUnformatted("Inspector");
             ImGui::Separator();
-            draw_run_plan_editor(session_, snapshot);
+            draw_run_plan_editor(session, snapshot);
             ImGui::Separator();
             draw_inspector_view(snapshot, selection_);
             ImGui::EndChild();
@@ -336,10 +359,79 @@ void GuiApplication::draw_frame(const SimulationSnapshot& snapshot) {
         ImGui::EndTable();
     }
     ImGui::PopID();
+}
+
+/*** Draws the session-free startup choices reserved for later G1 tasks. ***/
+void GuiApplication::draw_home_screen() {
+    const auto available = ImGui::GetContentRegionAvail();
+    constexpr float button_width = 20.0F;
+    const auto scaled_button_width = button_width * ImGui::GetFontSize();
+    const auto content_left = ImGui::GetCursorPosX();
+    const auto left = content_left + std::max(0.0F, (available.x - scaled_button_width) * 0.5F);
+    const auto top = std::max(0.0F, available.y * 0.18F);
+    ImGui::SetCursorPosY(ImGui::GetCursorPosY() + top);
+
+    const auto title = std::string_view{"CPSSim"};
+    const auto title_width = ImGui::CalcTextSize(title.data(), title.data() + title.size()).x;
+    ImGui::SetCursorPosX(content_left + std::max(0.0F, (available.x - title_width) * 0.5F));
+    ImGui::TextUnformatted(title.data(), title.data() + title.size());
+
+    const auto subtitle = std::string_view{"Start a simulation project"};
+    const auto subtitle_width =
+        ImGui::CalcTextSize(subtitle.data(), subtitle.data() + subtitle.size()).x;
+    ImGui::SetCursorPosX(content_left + std::max(0.0F, (available.x - subtitle_width) * 0.5F));
+    ImGui::TextDisabled("%.*s", static_cast<int>(subtitle.size()), subtitle.data());
+    ImGui::Spacing();
+
+    const auto placeholder = [this, left, scaled_button_width](const char* label,
+                                                               const char* message) {
+        ImGui::SetCursorPosX(left);
+        if (ImGui::Button(label, ImVec2{scaled_button_width, 0.0F})) {
+            home_action_status_ = message;
+        }
+    };
+    placeholder("Create New Project", "Project creation will be implemented in G1.2.");
+    placeholder("Open Existing Project", "Project opening will be implemented in G1.2.");
+    placeholder("Bosch Challenge Example", "The Bosch project wizard will be implemented in G1.4.");
+
+    if (!home_action_status_.empty()) {
+        ImGui::Spacing();
+        ImGui::SetCursorPosX(left);
+        ImGui::PushTextWrapPos(left + scaled_button_width);
+        ImGui::TextDisabled("%s", home_action_status_.c_str());
+        ImGui::PopTextWrapPos();
+    }
+}
+
+/*** Fills the native window with Home or a detached-snapshot workbench. ***/
+void GuiApplication::draw_frame() {
+    ImGui::GetStyle().FontScaleMain = text_scale_;
+
+    const auto* viewport = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(viewport->WorkPos);
+    ImGui::SetNextWindowSize(viewport->WorkSize);
+
+    auto window_flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+                        ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus |
+                        ImGuiWindowFlags_NoNavFocus;
+    const auto workbench_active = application_state_.screen() == GuiApplicationScreen::Workbench;
+    if (workbench_active) {
+        window_flags |= ImGuiWindowFlags_MenuBar;
+    }
+    ImGui::Begin("CPSSim", nullptr, window_flags);
+
+    if (!workbench_active) {
+        draw_home_screen();
+    } else {
+        const auto snapshot = application_state_.active_session().snapshot();
+        draw_workbench(snapshot);
+    }
 
     ImGui::End();
-    draw_about_dialog();
-    draw_run_plan_file_dialog();
+    if (workbench_active) {
+        draw_about_dialog();
+        draw_run_plan_file_dialog();
+    }
 }
 
 } // namespace cpssim::gui

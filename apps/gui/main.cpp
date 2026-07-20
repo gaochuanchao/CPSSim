@@ -62,7 +62,7 @@ void apply_display_scale(const ImGuiStyle& base_style, float display_scale) {
 }
 
 /*** Owns the native window and immediate-mode render loop. ***/
-int run_gui(cpssim::GuiSimulationSession& session) {
+int run_gui(std::unique_ptr<cpssim::GuiSimulationSession> session) {
     glfwSetErrorCallback(glfw_error_callback);
     if (glfwInit() == GLFW_FALSE) {
         throw std::runtime_error{"GLFW initialization failed"};
@@ -110,12 +110,12 @@ int run_gui(cpssim::GuiSimulationSession& session) {
         ImGui_ImplGlfw_GetContentScaleForWindow(window), display_scale);
     apply_display_scale(base_style, display_scale);
 
-    cpssim::gui::GuiApplication application{session};
+    cpssim::gui::GuiApplication application{std::move(session)};
     ImVec2 last_framebuffer_scale{1.0F, 1.0F};
 
     while (glfwWindowShouldClose(window) == GLFW_FALSE) {
         glfwPollEvents();
-        session.update();
+        application.update_active_session();
 
         const auto reported_display_scale = ImGui_ImplGlfw_GetContentScaleForWindow(window);
         if (cpssim::gui_display_scale_changed(display_scale, reported_display_scale)) {
@@ -132,8 +132,6 @@ int run_gui(cpssim::GuiSimulationSession& session) {
             continue;
         }
 
-        const auto snapshot = session.snapshot();
-
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         auto& io = ImGui::GetIO();
@@ -144,7 +142,7 @@ int run_gui(cpssim::GuiSimulationSession& session) {
         last_framebuffer_scale = io.DisplayFramebufferScale;
         ImGui::NewFrame();
 
-        application.draw_frame(snapshot);
+        application.draw_frame();
 
         ImGui::Render();
         glViewport(0, 0, display_width, display_height);
@@ -165,8 +163,8 @@ int run_gui(cpssim::GuiSimulationSession& session) {
 } // namespace
 
 /***
- * Loads an experiment and launches the optional GUI. Arguments are an optional
- * configuration path and inclusive stop tick; --help needs no display server.
+ * Launches Home by default or loads a supplied experiment. Arguments are an
+ * optional configuration path and inclusive stop tick; --help needs no display.
  ***/
 int main(int argc, char* argv[]) {
     try {
@@ -177,30 +175,31 @@ int main(int argc, char* argv[]) {
         if (argc > 4) {
             throw std::invalid_argument{"too many arguments; use --help for usage"};
         }
-        const std::filesystem::path config_path =
-            argc > 1 ? std::filesystem::path{argv[1]}
-                     : std::filesystem::path{"config/examples/basic.json"};
-        const cpssim::Tick stop_tick = argc > 2 ? std::stoll(argv[2]) : 300;
-        const auto use_mock_functional = argc > 3;
-        if (use_mock_functional && std::string{argv[3]} != "--mock-functional") {
-            throw std::invalid_argument{"third argument must be --mock-functional"};
-        }
+        std::unique_ptr<cpssim::GuiSimulationSession> session;
+        if (argc > 1) {
+            const std::filesystem::path config_path{argv[1]};
+            const cpssim::Tick stop_tick = argc > 2 ? std::stoll(argv[2]) : 300;
+            const auto use_mock_functional = argc > 3;
+            if (use_mock_functional && std::string{argv[3]} != "--mock-functional") {
+                throw std::invalid_argument{"third argument must be --mock-functional"};
+            }
 
-        auto config = cpssim::load_experiment_config(config_path);
-        cpssim::GuiFunctionalModelFactory functional_factory;
-        std::vector<cpssim::GuiSignalDescriptor> signal_registry;
-        if (use_mock_functional) {
-            functional_factory = [] { return std::make_unique<cpssim::MockFunctionalModel>(); };
-            signal_registry = {{.id = {cpssim::GuiSignalScalarType::Real, "mock_state"},
-                                .path = "Functional/Mock/State",
-                                .display_name = "Mock state",
-                                .unit = "",
-                                .source = "mock"}};
+            auto config = cpssim::load_experiment_config(config_path);
+            cpssim::GuiFunctionalModelFactory functional_factory;
+            std::vector<cpssim::GuiSignalDescriptor> signal_registry;
+            if (use_mock_functional) {
+                functional_factory = [] { return std::make_unique<cpssim::MockFunctionalModel>(); };
+                signal_registry = {{.id = {cpssim::GuiSignalScalarType::Real, "mock_state"},
+                                    .path = "Functional/Mock/State",
+                                    .display_name = "Mock state",
+                                    .unit = "",
+                                    .source = "mock"}};
+            }
+            session = std::make_unique<cpssim::GuiSimulationSession>(std::move(config), stop_tick,
+                                                                     std::move(functional_factory),
+                                                                     std::move(signal_registry));
         }
-        cpssim::GuiSimulationSession session{std::move(config), stop_tick,
-                                             std::move(functional_factory),
-                                             std::move(signal_registry)};
-        return run_gui(session);
+        return run_gui(std::move(session));
     } catch (const std::exception& error) {
         std::cerr << "cpssim_gui: " << error.what() << '\n';
         return EXIT_FAILURE;
