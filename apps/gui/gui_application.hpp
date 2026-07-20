@@ -3,7 +3,9 @@
 #pragma once
 
 #include "views/architecture_view.hpp"
+#include "views/event_view.hpp"
 #include "views/experiment_explorer.hpp"
+#include "views/resource_view.hpp"
 #include "views/signal_view.hpp"
 #include "views/system_builder.hpp"
 #include "views/timeline_view.hpp"
@@ -12,6 +14,7 @@
 #include "cpssim/application/recent_projects.hpp"
 #include "cpssim/gui/application_state.hpp"
 #include "cpssim/gui/selection_model.hpp"
+#include "cpssim/gui/workspace_state.hpp"
 
 #include <array>
 #include <filesystem>
@@ -40,6 +43,7 @@ class GuiApplication {
     GuiApplicationScreen screen() const noexcept { return application_state_.screen(); }
     bool has_active_session() const noexcept { return application_state_.has_active_session(); }
     bool has_active_project() const noexcept { return application_state_.has_active_project(); }
+    GuiTheme theme() const noexcept { return workspace_state_.theme; }
     void replace_session(std::unique_ptr<GuiSimulationSession> session);
     void replace_project(std::unique_ptr<ProjectContext> project);
     void load_project_file(const std::filesystem::path& project_file);
@@ -78,6 +82,8 @@ class GuiApplication {
     void validate_system_draft();
     void apply_system_draft();
     void synchronize_system_assignments();
+    void load_workspace_state();
+    void synchronize_project_workspace();
 
     bool draw_main_menu();
     void draw_home_screen();
@@ -97,14 +103,7 @@ class GuiApplication {
     GuiSelection runtime_selection_;
     SystemExplorerInteraction system_explorer_interaction_;
     ExperimentExplorerViewState explorer_view_state_;
-    bool show_explorer_{true};
-    bool show_inspector_{true};
-    bool show_architecture_{true};
-    bool show_system_builder_{true};
-    bool show_timeline_{true};
-    bool show_signals_{true};
-    bool show_resources_{true};
-    bool show_events_{true};
+    GuiWorkspaceState workspace_state_;
     bool open_about_{false};
     bool request_project_modal_{false};
     ProjectDialogKind project_dialog_kind_{ProjectDialogKind::None};
@@ -133,8 +132,9 @@ class GuiApplication {
     ArchitectureViewState architecture_view_state_;
     TimelineViewState timeline_view_state_;
     SignalViewState signal_view_state_;
-    float left_sidebar_ratio_{0.52F};
-    float right_sidebar_ratio_{0.48F};
+    ResourceViewState resource_view_state_;
+    EventViewState event_view_state_;
+    bool restore_analysis_tab_{true};
     float text_scale_{1.0F};
 };
 

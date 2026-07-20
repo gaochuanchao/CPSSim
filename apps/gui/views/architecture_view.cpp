@@ -257,7 +257,7 @@ void draw_task_node(ImDrawList* draw_list, const GuiGraphNode& node,
         {rect.minimum.x + 10.0F * transform.zoom, rect.minimum.y + 8.0F * transform.zoom},
         ImGui::GetColorU32(ImGuiCol_Text), node.label.c_str());
     if (draft_changed && draft_resource.has_value()) {
-        const auto draft_label = "Draft R" + std::to_string(draft_resource->value());
+        const auto draft_label = "Resource R" + std::to_string(draft_resource->value());
         draw_list->AddText(
             nullptr, sanitize_gui_font_size(ImGui::GetFontSize() * 0.82F * transform.zoom),
             {rect.minimum.x + 10.0F * transform.zoom, rect.maximum.y - 21.0F * transform.zoom},
@@ -391,9 +391,10 @@ bool draw_architecture_view(const GuiArchitectureGraph& graph, GuiSimulationSess
                                 "resource R" + std::to_string(resource_id.value()) +
                                     " could not be written to the pending draft");
                 } else {
-                    state.status = "Draft assignment updated: T" + std::to_string(task_id.value()) +
-                                   " -> R" + std::to_string(resource_id.value()) +
-                                   ". Use Apply and reset to activate it.";
+                    state.status = "Pending assignment updated: T" +
+                                   std::to_string(task_id.value()) + " -> R" +
+                                   std::to_string(resource_id.value()) +
+                                   ". Use Apply and restart to activate it.";
                     state.status_error = false;
                 }
             }

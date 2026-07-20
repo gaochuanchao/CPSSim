@@ -111,14 +111,34 @@ RunConfigurationAction draw_run_configuration(GuiSimulationSession& session,
                                               const EditableSystemDraft* system_draft,
                                               std::vector<DraftTaskAssignment>& system_assignments,
                                               bool system_changes_dirty) {
-    ImGui::Text("State: %s", system_changes_dirty || session.draft_dirty() ? "Pending changes"
-                                                                           : "Matches applied");
-    ImGui::TextDisabled("Scheduling policy: Fixed priority");
+    static_cast<void>(system_changes_dirty);
     auto stop_tick = session.draft().stop_tick();
     ImGui::BeginDisabled(!session.draft_editable());
-    ImGui::SetNextItemWidth(-1.0F);
-    if (ImGui::InputScalar("Stop tick", ImGuiDataType_S64, &stop_tick)) {
-        session.set_draft_stop_tick(stop_tick);
+    if (ImGui::BeginTable("Run properties", 2,
+                          ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV)) {
+        ImGui::TableSetupColumn("Property", ImGuiTableColumnFlags_WidthFixed,
+                                9.0F * ImGui::GetFontSize());
+        ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        ImGui::TextUnformatted("Currently applied");
+        ImGui::TableSetColumnIndex(1);
+        ImGui::Text("Stop tick %lld", static_cast<long long>(snapshot.stop_tick));
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        ImGui::TextUnformatted("Policy");
+        ImGui::TableSetColumnIndex(1);
+        ImGui::TextUnformatted("Fixed priority");
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        ImGui::TextUnformatted("Stop tick");
+        ImGui::TableSetColumnIndex(1);
+        ImGui::SetNextItemWidth(
+            std::min(12.0F * ImGui::GetFontSize(), ImGui::GetContentRegionAvail().x));
+        if (ImGui::InputScalar("##stop_tick", ImGuiDataType_S64, &stop_tick)) {
+            session.set_draft_stop_tick(stop_tick);
+        }
+        ImGui::EndTable();
     }
     if (system_draft != nullptr) {
         draw_system_assignments(*system_draft, system_assignments);
@@ -131,7 +151,7 @@ RunConfigurationAction draw_run_configuration(GuiSimulationSession& session,
         action = RunConfigurationAction::ValidateChanges;
     }
     ImGui::SameLine();
-    if (ImGui::Button(system_draft != nullptr ? "Apply and restart" : "Apply and reset")) {
+    if (ImGui::Button("Apply and restart")) {
         action = RunConfigurationAction::ApplyAndRestart;
     }
     ImGui::EndDisabled();

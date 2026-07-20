@@ -52,7 +52,7 @@ void apply_action(const SystemExplorerActionResult& result, ExperimentExplorerVi
     state.expand_section = result.expand_section;
     state.scroll_to = result.scroll_to;
     state.focus_request = result.focus;
-    state.status = result.changed ? "Draft structure updated." : std::string{};
+    state.status = result.changed ? "System structure updated." : std::string{};
     state.status_error = false;
 }
 

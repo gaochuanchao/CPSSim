@@ -7,6 +7,8 @@
 
 #include "resource_view.hpp"
 
+#include "cpssim/gui/resource_presentation.hpp"
+
 #include "imgui.h"
 
 #include <string>
@@ -24,8 +26,8 @@ std::string job_name(const JobIdentity& identity) {
 } // namespace
 
 /*** Draws copied resource rows with strong-ID resource and job selection. ***/
-void draw_resource_view(const SimulationSnapshot& snapshot, GuiSelection& selection) {
-    if (ImGui::BeginTable("resources", 5,
+void draw_resource_state(const SimulationSnapshot& snapshot, GuiSelection& selection) {
+    if (ImGui::BeginTable("resources", 6,
                           ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
                               ImGuiTableFlags_SizingStretchProp)) {
         ImGui::TableSetupColumn("Resource");
@@ -33,6 +35,7 @@ void draw_resource_view(const SimulationSnapshot& snapshot, GuiSelection& select
         ImGui::TableSetupColumn("Ready");
         ImGui::TableSetupColumn("Busy ticks");
         ImGui::TableSetupColumn("Idle ticks");
+        ImGui::TableSetupColumn("Utilization");
         ImGui::TableHeadersRow();
 
         for (const auto& resource : snapshot.resources) {
@@ -84,25 +87,65 @@ void draw_resource_view(const SimulationSnapshot& snapshot, GuiSelection& select
             ImGui::Text("%lld", static_cast<long long>(resource.busy_ticks));
             ImGui::TableSetColumnIndex(4);
             ImGui::Text("%lld", static_cast<long long>(resource.idle_ticks));
+            ImGui::TableSetColumnIndex(5);
+            ImGui::Text("%.1f%%", 100.0 * calculate_resource_utilization(resource.busy_ticks,
+                                                                         resource.idle_ticks));
         }
         ImGui::EndTable();
     }
+}
 
-    std::vector<float> busy_ratios;
-    busy_ratios.reserve(snapshot.resources.size());
-    for (const auto& resource : snapshot.resources) {
-        const auto observed = resource.busy_ticks + resource.idle_ticks;
-        const auto ratio =
-            observed == 0 ? 0.0F
-                          : static_cast<float>(resource.busy_ticks) / static_cast<float>(observed);
-        busy_ratios.push_back(ratio);
+void draw_utilization(const SimulationSnapshot& snapshot, GuiSelection& selection) {
+    const auto rows = build_resource_presentation(snapshot);
+    if (rows.empty()) {
+        ImGui::TextDisabled("No resources are available.");
+        return;
     }
-    if (!busy_ratios.empty()) {
-        const auto histogram_height = 6.0F * ImGui::GetTextLineHeightWithSpacing();
-        ImGui::PlotHistogram("Resource busy ratio", busy_ratios.data(),
-                             static_cast<int>(busy_ratios.size()), 0, nullptr, 0.0F, 1.0F,
-                             ImVec2{-1.0F, histogram_height});
+    for (const auto& row : rows) {
+        ImGui::PushID(static_cast<int>(row.id.value()));
+        const auto selected = selection.resource_id() == row.id;
+        if (ImGui::Selectable(
+                row.name.c_str(), selected, ImGuiSelectableFlags_None,
+                ImVec2{std::min(16.0F * ImGui::GetFontSize(), ImGui::GetContentRegionAvail().x),
+                       0.0F})) {
+            selection.select_resource(row.id);
+        }
+        if (ImGui::IsItemHovered() && ImGui::BeginItemTooltip()) {
+            ImGui::TextUnformatted(row.name.c_str());
+            ImGui::EndTooltip();
+        }
+        ImGui::SameLine();
+        const auto overlay = std::to_string(static_cast<int>(row.utilization * 100.0 + 0.5)) + "%";
+        ImGui::ProgressBar(static_cast<float>(row.utilization), ImVec2{-1.0F, 0.0F},
+                           overlay.c_str());
+        ImGui::PopID();
     }
+}
+
+void draw_resource_view(const SimulationSnapshot& snapshot, GuiSelection& selection,
+                        GuiResourceTab& active_tab, ResourceViewState& state) {
+    if (!ImGui::BeginTabBar("Resource views")) {
+        return;
+    }
+    const auto state_flags = state.restore_active_tab && active_tab == GuiResourceTab::ResourceState
+                                 ? ImGuiTabItemFlags_SetSelected
+                                 : ImGuiTabItemFlags_None;
+    if (ImGui::BeginTabItem("Resource State", nullptr, state_flags)) {
+        active_tab = GuiResourceTab::ResourceState;
+        draw_resource_state(snapshot, selection);
+        ImGui::EndTabItem();
+    }
+    const auto utilization_flags =
+        state.restore_active_tab && active_tab == GuiResourceTab::Utilization
+            ? ImGuiTabItemFlags_SetSelected
+            : ImGuiTabItemFlags_None;
+    if (ImGui::BeginTabItem("Utilization", nullptr, utilization_flags)) {
+        active_tab = GuiResourceTab::Utilization;
+        draw_utilization(snapshot, selection);
+        ImGui::EndTabItem();
+    }
+    state.restore_active_tab = false;
+    ImGui::EndTabBar();
 }
 
 } // namespace cpssim::gui

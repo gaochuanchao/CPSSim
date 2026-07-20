@@ -64,6 +64,16 @@ void apply_display_scale(const ImGuiStyle& base_style, float display_scale) {
     ImGui::GetStyle().FontScaleDpi = display_scale;
 }
 
+ImGuiStyle make_base_style(cpssim::GuiTheme theme) {
+    if (theme == cpssim::GuiTheme::Light) {
+        ImGui::StyleColorsLight();
+    } else {
+        ImGui::StyleColorsDark();
+    }
+    ImGui::GetStyle().FontSizeBase = default_font_size;
+    return ImGui::GetStyle();
+}
+
 /*** Owns the native window and immediate-mode render loop. ***/
 int run_gui(std::unique_ptr<cpssim::GuiSimulationSession> session,
             const std::filesystem::path& executable_path,
@@ -93,9 +103,8 @@ int run_gui(std::unique_ptr<cpssim::GuiSimulationSession> session,
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
-    ImGui::StyleColorsDark();
-    ImGui::GetStyle().FontSizeBase = default_font_size;
-    const ImGuiStyle base_style = ImGui::GetStyle();
+    auto applied_theme = cpssim::GuiTheme::Dark;
+    auto base_style = make_base_style(applied_theme);
     auto display_scale = startup_display_scale;
     apply_display_scale(base_style, display_scale);
     if (!ImGui_ImplGlfw_InitForOpenGL(window, true)) {
@@ -124,6 +133,9 @@ int run_gui(std::unique_ptr<cpssim::GuiSimulationSession> session,
          .examples_directory = repository_root / "examples",
          .bosch_reference_directory = repository_root / "experiments/bosch_v10_reference",
          .bosch_fmu_library = cpssim::resolve_bundled_bosch_fmu(executable_path)}};
+    applied_theme = application.theme();
+    base_style = make_base_style(applied_theme);
+    apply_display_scale(base_style, display_scale);
     ImVec2 last_framebuffer_scale{1.0F, 1.0F};
 
     while (glfwWindowShouldClose(window) == GLFW_FALSE) {
@@ -131,7 +143,12 @@ int run_gui(std::unique_ptr<cpssim::GuiSimulationSession> session,
         application.update_active_session();
 
         const auto reported_display_scale = ImGui_ImplGlfw_GetContentScaleForWindow(window);
-        if (cpssim::gui_display_scale_changed(display_scale, reported_display_scale)) {
+        if (cpssim::gui_presentation_style_changed(applied_theme, application.theme(),
+                                                   display_scale, reported_display_scale)) {
+            if (applied_theme != application.theme()) {
+                applied_theme = application.theme();
+                base_style = make_base_style(applied_theme);
+            }
             display_scale =
                 cpssim::sanitize_gui_display_scale(reported_display_scale, display_scale);
             apply_display_scale(base_style, display_scale);
@@ -159,7 +176,8 @@ int run_gui(std::unique_ptr<cpssim::GuiSimulationSession> session,
 
         ImGui::Render();
         glViewport(0, 0, display_width, display_height);
-        glClearColor(0.08F, 0.09F, 0.11F, 1.0F);
+        const auto clear_color = cpssim::gui_theme_clear_color(application.theme());
+        glClearColor(clear_color.red, clear_color.green, clear_color.blue, clear_color.alpha);
         glClear(GL_COLOR_BUFFER_BIT);
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
         glfwSwapBuffers(window);
