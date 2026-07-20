@@ -19,6 +19,7 @@
 #include "cpssim/policy/resource_allocator.hpp"
 
 #include <deque>
+#include <chrono>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -44,6 +45,40 @@ enum class GuiRunState {
     Paused,
     Running,
     Finished,
+};
+
+enum class GuiRunMode { Live, Fast };
+enum class GuiFastBatchUnit { Events, Ticks };
+
+struct GuiExecutionSettings {
+    GuiRunMode mode{GuiRunMode::Live};
+    GuiFastBatchUnit batch_unit{GuiFastBatchUnit::Events};
+    std::uint64_t event_batch_size{1000};
+    std::uint64_t tick_batch_size{1000};
+    std::chrono::milliseconds wall_clock_budget{25};
+};
+
+struct SimulationProgress {
+    GuiRunState run_state{GuiRunState::NotConfigured};
+    Tick current_tick{};
+    Tick stop_tick{};
+    std::uint64_t event_count{};
+};
+
+struct GuiControllerUpdateResult {
+    bool reset{false};
+    bool paused{false};
+    bool finished{false};
+    std::uint64_t transitions{};
+};
+
+struct RunPerformanceSummary {
+    std::chrono::nanoseconds wall_clock_duration{};
+    double events_per_second{};
+    double ticks_per_second{};
+    GuiRunMode mode{GuiRunMode::Live};
+    GuiFastBatchUnit batch_unit{GuiFastBatchUnit::Events};
+    std::uint64_t batch_size{1};
 };
 
 /*** Stores GUI commands until the controller reaches a safe update boundary. ***/
@@ -108,7 +143,7 @@ class SimulationController {
      * Applies all waiting commands in FIFO order. If still Running afterward,
      * processes one complete logical event tick, independent of render timing.
      ***/
-    void update();
+    GuiControllerUpdateResult update(const GuiExecutionSettings& settings = {});
 
     // Returns detached experiment, runtime, and trace presentation values.
     SimulationSnapshot snapshot() const;
@@ -118,6 +153,8 @@ class SimulationController {
 
     // Returns controller state without copying the detached trace snapshot.
     GuiRunState run_state() const { return run_state_; }
+    SimulationProgress progress() const;
+    RunPerformanceSummary performance_summary() const;
 
   private:
     // Reconstructs policy and engine from stored immutable experiment input.
@@ -137,6 +174,8 @@ class SimulationController {
     std::unique_ptr<FixedPriorityPolicy> policy_;
     std::unique_ptr<FunctionalModel> functional_model_;
     std::unique_ptr<SimulationEngine> engine_;
+    std::chrono::nanoseconds running_wall_time_{};
+    GuiExecutionSettings last_execution_settings_{};
 };
 
 } // namespace cpssim

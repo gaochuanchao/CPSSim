@@ -57,6 +57,19 @@ TEST_CASE("workspace normalization repairs duplicate and missing center tabs",
     REQUIRE(workspace.upper_tabs.size() + workspace.lower_tabs.size() == 6);
 }
 
+TEST_CASE("Fast settings keep independent defaults and reject zero during normalization",
+          "[gui][workspace][fast]") {
+    GuiWorkspaceState workspace;
+    REQUIRE(workspace.run_mode == GuiRunMode::Live);
+    REQUIRE(workspace.fast_event_batch_size == 1000);
+    REQUIRE(workspace.fast_tick_batch_size == 1000);
+    workspace.fast_event_batch_size = 0;
+    workspace.fast_tick_batch_size = 27;
+    normalize_workspace_state(workspace);
+    REQUIRE(workspace.fast_event_batch_size == 1000);
+    REQUIRE(workspace.fast_tick_batch_size == 27);
+}
+
 TEST_CASE("vertical split preserves both panels in narrow layouts", "[gui][workspace][layout]") {
     const auto regular = calculate_vertical_split(600.0F, 6.0F, 0.7F, 120.0F, 150.0F);
     REQUIRE(regular.first_height >= 120.0F);

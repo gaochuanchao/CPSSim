@@ -107,6 +107,7 @@ bool GuiSimulationSession::apply_draft() {
                                                                   functional_model_factory_,
                                                                   functional_signal_registry_);
         controller_ = std::move(replacement);
+        ++run_generation_;
         return true;
     } catch (const std::exception& error) {
         last_validation_->plan.reset();
@@ -127,10 +128,25 @@ bool GuiSimulationSession::enqueue(GuiCommand command) {
     return true;
 }
 
-void GuiSimulationSession::update() {
+GuiControllerUpdateResult GuiSimulationSession::update(const GuiExecutionSettings& settings) {
     if (controller_ != nullptr) {
-        controller_->update();
+        auto result = controller_->update(settings);
+        if (result.reset) {
+            ++run_generation_;
+        }
+        return result;
     }
+    return {};
+}
+
+SimulationProgress GuiSimulationSession::progress() const {
+    return controller_ != nullptr
+               ? controller_->progress()
+               : SimulationProgress{GuiRunState::NotConfigured, 0, draft_.stop_tick(), 0};
+}
+
+RunPerformanceSummary GuiSimulationSession::performance_summary() const {
+    return controller_ != nullptr ? controller_->performance_summary() : RunPerformanceSummary{};
 }
 
 SimulationSnapshot GuiSimulationSession::snapshot() const {

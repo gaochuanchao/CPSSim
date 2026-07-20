@@ -3,6 +3,7 @@
 #pragma once
 
 #include "cpssim/gui/signal_series.hpp"
+#include "cpssim/gui/simulation_controller.hpp"
 #include "cpssim/model/categories.hpp"
 
 #include <cstdint>
@@ -16,8 +17,6 @@ inline constexpr std::uint32_t current_gui_workspace_schema_version = 4;
 
 enum class GuiTheme { Dark, Light };
 enum class GuiCenterTab { Architecture, Timeline, Signals, Results, Resources, Events };
-enum class GuiRunMode { Live, Fast };
-enum class GuiFastBatchUnit { Events, Ticks };
 enum class GuiPlotXAxisUnit { Ticks, Seconds };
 enum class GuiPlotRangeMode { Full, Selected, Custom };
 

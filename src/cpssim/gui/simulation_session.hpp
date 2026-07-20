@@ -47,8 +47,11 @@ class GuiSimulationSession {
 
     // Delegates active-run controls; returns false before the first Apply.
     bool enqueue(GuiCommand command);
-    void update();
+    GuiControllerUpdateResult update(const GuiExecutionSettings& settings = {});
     SimulationSnapshot snapshot() const;
+    SimulationProgress progress() const;
+    RunPerformanceSummary performance_summary() const;
+    std::uint64_t run_generation() const { return run_generation_; }
 
   private:
     void draft_changed();
@@ -60,6 +63,7 @@ class GuiSimulationSession {
     RunPlanDraft draft_;
     std::optional<RunPlanBuildResult> last_validation_;
     std::unique_ptr<SimulationController> controller_;
+    std::uint64_t run_generation_{0};
 };
 
 } // namespace cpssim

@@ -117,6 +117,9 @@ class GuiApplication {
     SystemExplorerInteraction system_explorer_interaction_;
     ExperimentExplorerViewState explorer_view_state_;
     GuiWorkspaceState workspace_state_;
+    std::optional<SimulationSnapshot> presentation_snapshot_;
+    SimulationProgress progress_;
+    GuiRunMode last_run_mode_{GuiRunMode::Live};
     bool open_about_{false};
     bool request_project_modal_{false};
     ProjectDialogKind project_dialog_kind_{ProjectDialogKind::None};

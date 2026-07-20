@@ -145,6 +145,11 @@ void GuiApplication::initialize_presentation_state() {
     load_workspace_state();
     initialize_system_draft();
     initialize_imgui_layout();
+    if (application_state_.has_active_session()) {
+        presentation_snapshot_ = application_state_.active_session().snapshot();
+        progress_ = application_state_.active_session().progress();
+    }
+    last_run_mode_ = workspace_state_.run_mode;
 }
 
 void GuiApplication::initialize_imgui_layout() {
@@ -338,6 +343,9 @@ void GuiApplication::replace_session(std::unique_ptr<GuiSimulationSession> sessi
     runtime_selection_.clear();
     application_status_.clear();
     activate_imgui_layout();
+    presentation_snapshot_ = application_state_.active_session().snapshot();
+    progress_ = application_state_.active_session().progress();
+    last_run_mode_ = workspace_state_.run_mode;
 }
 
 /*** Activates one fully constructed project and its uniquely owned session. ***/
@@ -349,6 +357,9 @@ void GuiApplication::replace_project(std::unique_ptr<ProjectContext> project) {
     runtime_selection_.clear();
     application_status_.clear();
     activate_imgui_layout();
+    presentation_snapshot_ = application_state_.active_session().snapshot();
+    progress_ = application_state_.active_session().progress();
+    last_run_mode_ = workspace_state_.run_mode;
 }
 
 /*** Loads completely before replacing the current project or standalone session. ***/
@@ -374,12 +385,26 @@ void GuiApplication::clear_session() {
     runtime_selection_.clear();
     application_status_.clear();
     activate_imgui_layout();
+    presentation_snapshot_.reset();
+    progress_ = {};
 }
 
 /*** Advances queued simulation commands only when a session is active. ***/
 void GuiApplication::update_active_session() {
     if (application_state_.has_active_session()) {
-        application_state_.active_session().update();
+        auto& session = application_state_.active_session();
+        const auto settings = GuiExecutionSettings{.mode = workspace_state_.run_mode,
+                                                   .batch_unit = workspace_state_.fast_batch_unit,
+                                                   .event_batch_size = workspace_state_.fast_event_batch_size,
+                                                   .tick_batch_size = workspace_state_.fast_tick_batch_size};
+        const auto update = session.update(settings);
+        progress_ = session.progress();
+        const auto switched_to_live = last_run_mode_ == GuiRunMode::Fast && workspace_state_.run_mode == GuiRunMode::Live;
+        if (workspace_state_.run_mode == GuiRunMode::Live || update.paused || update.finished ||
+            update.reset || switched_to_live || !presentation_snapshot_.has_value()) {
+            presentation_snapshot_ = session.snapshot();
+        }
+        last_run_mode_ = workspace_state_.run_mode;
     }
 }
 
@@ -1468,7 +1493,7 @@ void GuiApplication::draw_workbench(const SimulationSnapshot& snapshot) {
     const auto toolbar_height = 2.0F * ImGui::GetFrameHeightWithSpacing();
     ImGui::BeginChild("Simulation toolbar", ImVec2{0.0F, toolbar_height}, ImGuiChildFlags_Borders,
                       ImGuiWindowFlags_HorizontalScrollbar);
-    draw_toolbar(session, snapshot);
+    draw_toolbar(session, progress_, workspace_state_);
     ImGui::EndChild();
 
     if (!application_status_.empty()) {
@@ -1636,8 +1661,10 @@ void GuiApplication::draw_frame() {
     if (!workbench_active) {
         draw_home_screen();
     } else {
-        const auto snapshot = application_state_.active_session().snapshot();
-        draw_workbench(snapshot);
+        if (!presentation_snapshot_.has_value()) {
+            presentation_snapshot_ = application_state_.active_session().snapshot();
+        }
+        draw_workbench(*presentation_snapshot_);
     }
 
     ImGui::End();

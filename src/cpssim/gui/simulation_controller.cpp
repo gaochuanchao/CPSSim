@@ -12,6 +12,9 @@
 #include "cpssim/gui/simulation_controller.hpp"
 
 #include <stdexcept>
+#include <algorithm>
+#include <chrono>
+#include <limits>
 #include <utility>
 
 namespace cpssim {
@@ -103,7 +106,12 @@ void SimulationController::step_once() {
 }
 
 /*** Applies queued controls in insertion order and advances a running session. ***/
-void SimulationController::update() {
+GuiControllerUpdateResult SimulationController::update(const GuiExecutionSettings& settings) {
+    if (settings.event_batch_size == 0 || settings.tick_batch_size == 0) {
+        throw std::invalid_argument{"GUI execution batch sizes must be positive"};
+    }
+    GuiControllerUpdateResult result;
+    const auto state_before = run_state_;
     while (const auto command = commands_.pop()) {
         switch (*command) {
         case GuiCommand::Run:
@@ -114,10 +122,13 @@ void SimulationController::update() {
         case GuiCommand::Pause:
             if (!engine_->finished()) {
                 run_state_ = GuiRunState::Paused;
+                result.paused = true;
             }
             break;
         case GuiCommand::Reset:
             reset();
+            running_wall_time_ = {};
+            result.reset = true;
             break;
         case GuiCommand::StepNextEvent:
             if (!engine_->finished()) {
@@ -128,9 +139,59 @@ void SimulationController::update() {
         }
     }
 
+    last_execution_settings_ = settings;
     if (run_state_ == GuiRunState::Running) {
-        step_once();
+        const auto started = std::chrono::steady_clock::now();
+        if (settings.mode == GuiRunMode::Live) {
+            step_once();
+            result.transitions = 1;
+        } else {
+            const auto start_tick = engine_->current_tick();
+            const auto remaining = std::numeric_limits<Tick>::max() - start_tick;
+            const auto tick_budget = static_cast<Tick>(std::min<std::uint64_t>(
+                settings.tick_batch_size, static_cast<std::uint64_t>(remaining)));
+            const auto target_tick = start_tick + tick_budget;
+            while (run_state_ == GuiRunState::Running) {
+                if (settings.batch_unit == GuiFastBatchUnit::Events &&
+                    result.transitions >= settings.event_batch_size) {
+                    break;
+                }
+                if (settings.batch_unit == GuiFastBatchUnit::Ticks &&
+                    result.transitions > 0 && engine_->current_tick() >= target_tick) {
+                    break;
+                }
+                if (std::chrono::steady_clock::now() - started >= settings.wall_clock_budget) {
+                    break;
+                }
+                step_once();
+                ++result.transitions;
+            }
+        }
+        running_wall_time_ += std::chrono::steady_clock::now() - started;
     }
+    result.finished = state_before != GuiRunState::Finished && run_state_ == GuiRunState::Finished;
+    return result;
+}
+
+SimulationProgress SimulationController::progress() const {
+    return {.run_state = run_state_,
+            .current_tick = engine_->current_tick(),
+            .stop_tick = run_plan_.stop_tick(),
+            .event_count = engine_->trace().size()};
+}
+
+RunPerformanceSummary SimulationController::performance_summary() const {
+    const auto seconds = std::chrono::duration<double>(running_wall_time_).count();
+    const auto progress_value = progress();
+    const auto batch_size = last_execution_settings_.batch_unit == GuiFastBatchUnit::Events
+                                ? last_execution_settings_.event_batch_size
+                                : last_execution_settings_.tick_batch_size;
+    return {.wall_clock_duration = running_wall_time_,
+            .events_per_second = seconds > 0.0 ? static_cast<double>(progress_value.event_count) / seconds : 0.0,
+            .ticks_per_second = seconds > 0.0 ? static_cast<double>(progress_value.current_tick) / seconds : 0.0,
+            .mode = last_execution_settings_.mode,
+            .batch_unit = last_execution_settings_.batch_unit,
+            .batch_size = batch_size};
 }
 
 /*** Copies experiment, trace, and public runtime views into presentation data. ***/

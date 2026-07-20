@@ -25,6 +25,9 @@ using cpssim::ExperimentConfig;
 using cpssim::FixedPriorityPolicy;
 using cpssim::GuiCommand;
 using cpssim::GuiCommandQueue;
+using cpssim::GuiExecutionSettings;
+using cpssim::GuiFastBatchUnit;
+using cpssim::GuiRunMode;
 using cpssim::GuiRunState;
 using cpssim::MockFunctionalModel;
 using cpssim::PeriodicTimingSpec;
@@ -142,6 +145,49 @@ TEST_CASE("GUI enabled and headless runs produce identical traces", "[gui][deter
 
     REQUIRE(
         (serialize_trace(controller.snapshot().event_log) == serialize_trace(headless.trace())));
+}
+
+TEST_CASE("Fast event and tick batches preserve deterministic final output",
+          "[gui][controller][fast][determinism]") {
+    const auto config = make_gui_test_config();
+    SimulationController live{config, make_gui_test_plan(config, 100)};
+    SimulationController events{config, make_gui_test_plan(config, 100)};
+    SimulationController ticks{config, make_gui_test_plan(config, 100)};
+    live.enqueue(GuiCommand::Run);
+    events.enqueue(GuiCommand::Run);
+    ticks.enqueue(GuiCommand::Run);
+    while (live.run_state() != GuiRunState::Finished) live.update();
+    const GuiExecutionSettings event_settings{.mode = GuiRunMode::Fast,
+                                               .batch_unit = GuiFastBatchUnit::Events,
+                                               .event_batch_size = 3,
+                                               .tick_batch_size = 7};
+    const GuiExecutionSettings tick_settings{.mode = GuiRunMode::Fast,
+                                              .batch_unit = GuiFastBatchUnit::Ticks,
+                                              .event_batch_size = 3,
+                                              .tick_batch_size = 7};
+    while (events.run_state() != GuiRunState::Finished) events.update(event_settings);
+    while (ticks.run_state() != GuiRunState::Finished) ticks.update(tick_settings);
+    REQUIRE(serialize_trace(events.snapshot().event_log) == serialize_trace(live.snapshot().event_log));
+    REQUIRE(serialize_trace(ticks.snapshot().event_log) == serialize_trace(live.snapshot().event_log));
+    REQUIRE(events.snapshot().resources[0].busy_ticks == live.snapshot().resources[0].busy_ticks);
+    REQUIRE(ticks.progress().current_tick == live.progress().current_tick);
+}
+
+TEST_CASE("Fast batching validates sizes and exposes lightweight progress",
+          "[gui][controller][fast][progress]") {
+    const auto config = make_gui_test_config();
+    SimulationController controller{config, make_gui_test_plan(config, 100)};
+    controller.enqueue(GuiCommand::Run);
+    const GuiExecutionSettings settings{.mode = GuiRunMode::Fast,
+                                         .batch_unit = GuiFastBatchUnit::Events,
+                                         .event_batch_size = 2,
+                                         .tick_batch_size = 1000};
+    const auto update = controller.update(settings);
+    REQUIRE(update.transitions == 2);
+    REQUIRE(controller.progress().event_count > 0);
+    auto invalid = settings;
+    invalid.event_batch_size = 0;
+    REQUIRE_THROWS_AS(controller.update(invalid), std::invalid_argument);
 }
 
 /*** Verifies G06 copies functional rows and recreates their owner on Reset. ***/
