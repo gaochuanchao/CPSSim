@@ -107,7 +107,7 @@ bool GuiSimulationSession::apply_draft() {
                                                                   functional_model_factory_,
                                                                   functional_signal_registry_);
         controller_ = std::move(replacement);
-        ++run_generation_;
+        ++runtime_generation_;
         return true;
     } catch (const std::exception& error) {
         last_validation_->plan.reset();
@@ -132,7 +132,7 @@ GuiControllerUpdateResult GuiSimulationSession::update(const GuiExecutionSetting
     if (controller_ != nullptr) {
         auto result = controller_->update(settings);
         if (result.reset) {
-            ++run_generation_;
+            ++runtime_generation_;
         }
         return result;
     }

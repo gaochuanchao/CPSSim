@@ -387,7 +387,7 @@ std::string serialize_signals_csv(const RunResult& result, std::optional<GuiTick
                 continue;
             }
             output << sample.tick << ','
-                   << physical_seconds(sample.tick, result.snapshot.experiment.tick_period) << ','
+                   << physical_seconds(sample.tick, result.snapshot().experiment.tick_period) << ','
                    << type << ',' << csv_cell(series.descriptor.id.source_name) << ','
                    << csv_cell(series.descriptor.path) << ','
                    << csv_cell(series.descriptor.display_name) << ','
@@ -443,13 +443,13 @@ RunExportArtifacts export_run_result(const ProjectContext& project, const RunRes
             .scenario = options.scenario};
         const auto exported_metrics =
             range.has_value() ? derive_run_metrics(select_run_result_range(
-                                    result.snapshot, range->begin_tick, range->end_tick))
+                                    result.snapshot(), range->begin_tick, range->end_tick))
                               : result.metrics;
 
         write_file(temporary / "system.json", system_json);
         write_file(temporary / "run-plan.json", plan_json);
-        write_file(temporary / "events.jsonl", serialize_events_jsonl(result.snapshot, range));
-        write_file(temporary / "events.csv", serialize_events_csv(result.snapshot, range));
+        write_file(temporary / "events.jsonl", serialize_events_jsonl(result.snapshot(), range));
+        write_file(temporary / "events.csv", serialize_events_csv(result.snapshot(), range));
         write_file(temporary / "signals.csv", serialize_signals_csv(result, range));
         write_file(temporary / "metrics.json", serialize_run_metrics_json(exported_metrics));
         write_file(temporary / "metrics.csv", serialize_run_metrics_csv(exported_metrics));
@@ -463,7 +463,7 @@ RunExportArtifacts export_run_result(const ProjectContext& project, const RunRes
         std::filesystem::rename(temporary, target);
         return {.run_directory = target,
                 .manifest = manifest,
-                .event_rows = count_events(result.snapshot, range),
+                .event_rows = count_events(result.snapshot(), range),
                 .signal_rows = count_signals(result, range)};
     } catch (...) {
         std::error_code ignored;

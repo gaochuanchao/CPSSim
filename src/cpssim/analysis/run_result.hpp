@@ -6,6 +6,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -68,16 +69,26 @@ struct RunMetrics {
     bool operator==(const RunMetrics&) const = default;
 };
 
-/*** Owns one immutable detached run used identically by views and exporters. ***/
+struct CompletedRunData {
+    std::uint64_t runtime_generation{};
+    std::uint64_t simulation_data_generation{};
+    SimulationSnapshot snapshot;
+};
+
+/*** References one shared immutable detached run used identically by views and exporters. ***/
 struct RunResult {
     std::string scenario_kind;
-    SimulationSnapshot snapshot;
+    std::shared_ptr<const CompletedRunData> completed_data;
     GuiSignalBuildResult signals;
     RunMetrics metrics;
+
+    const SimulationSnapshot& snapshot() const noexcept { return completed_data->snapshot; }
 };
 
 RunMetrics derive_run_metrics(const SimulationSnapshot& snapshot);
 RunResult build_run_result(SimulationSnapshot snapshot, std::string scenario_kind);
+RunResult build_run_result(std::shared_ptr<const CompletedRunData> completed_data,
+                           std::string scenario_kind);
 
 std::string_view canonical_event_type_name(EventType type);
 std::string_view canonical_event_phase_name(EventPhase phase);

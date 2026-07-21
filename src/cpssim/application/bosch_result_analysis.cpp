@@ -64,7 +64,7 @@ BoschResultAnalysis derive_bosch_result_analysis(const RunResult& result) {
             analysis.critical_intervals.push_back({*beginning, last_true});
         }
     }
-    for (const auto& event : result.snapshot.event_log) {
+    for (const auto& event : result.snapshot().event_log) {
         if (event.type() == EventType::DeadlineMiss) {
             analysis.deadline_miss_ticks.push_back(event.tick());
         }

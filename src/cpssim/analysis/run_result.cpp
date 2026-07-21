@@ -194,11 +194,22 @@ RunMetrics derive_run_metrics(const SimulationSnapshot& snapshot) {
 }
 
 RunResult build_run_result(SimulationSnapshot snapshot, std::string scenario_kind) {
+    auto completed = std::make_shared<const CompletedRunData>(
+        CompletedRunData{0, 0, std::move(snapshot)});
+    return build_run_result(std::move(completed), std::move(scenario_kind));
+}
+
+RunResult build_run_result(std::shared_ptr<const CompletedRunData> completed_data,
+                           std::string scenario_kind) {
+    if (completed_data == nullptr) {
+        throw std::invalid_argument{"completed run data must not be null"};
+    }
+    const auto& snapshot = completed_data->snapshot;
     auto signals =
         build_signal_model(snapshot.functional_observations, snapshot.functional_signal_registry);
     auto metrics = derive_run_metrics(snapshot);
     return {.scenario_kind = std::move(scenario_kind),
-            .snapshot = std::move(snapshot),
+            .completed_data = std::move(completed_data),
             .signals = std::move(signals),
             .metrics = std::move(metrics)};
 }

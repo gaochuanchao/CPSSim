@@ -20,6 +20,8 @@ class CompletedRunResultCache {
   public:
     bool publish_finished(std::uint64_t generation, const SimulationSnapshot& snapshot,
                           std::string scenario_kind, RunPerformanceSummary performance);
+    bool publish_finished(std::shared_ptr<const CompletedRunData> completed_data,
+                          std::string scenario_kind, RunPerformanceSummary performance);
     void invalidate() noexcept { completed_.reset(); }
     const CompletedRunResult* get() const noexcept { return completed_ ? &*completed_ : nullptr; }
     std::size_t build_count() const noexcept { return build_count_; }

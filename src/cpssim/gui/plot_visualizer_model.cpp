@@ -49,11 +49,11 @@ GuiPlotRange resolve_plot_range(const RunResult& result, GuiPlotRangeMode mode,
                                 Tick custom_end) {
     if (mode == GuiPlotRangeMode::Selected && selected.has_value())
         return {std::max<Tick>(0, selected->begin_tick),
-                std::min(result.snapshot.current_tick, selected->end_tick)};
+                std::min(result.snapshot().current_tick, selected->end_tick)};
     if (mode == GuiPlotRangeMode::Custom && custom_begin >= 0 && custom_end >= custom_begin)
-        return {std::min(custom_begin, result.snapshot.current_tick),
-                std::min(custom_end, result.snapshot.current_tick)};
-    return {0, result.snapshot.current_tick};
+        return {std::min(custom_begin, result.snapshot().current_tick),
+                std::min(custom_end, result.snapshot().current_tick)};
+    return {0, result.snapshot().current_tick};
 }
 
 double plot_tick_coordinate(Tick tick, GuiPlotXAxisUnit unit, PhysicalDuration tick_period) {

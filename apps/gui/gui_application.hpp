@@ -19,6 +19,7 @@
 #include "cpssim/gui/application_state.hpp"
 #include "cpssim/gui/frame_scheduler.hpp"
 #include "cpssim/gui/gui_profiler.hpp"
+#include "cpssim/gui/presentation_publication.hpp"
 #include "cpssim/gui/selection_model.hpp"
 #include "cpssim/gui/workspace_state.hpp"
 
@@ -115,6 +116,7 @@ class GuiApplication {
     void capture_current_imgui_layout();
     void save_active_imgui_layout();
     void restore_default_imgui_layout();
+    void publish_complete_snapshot(bool publish_finished_result);
 
     bool draw_main_menu();
     void draw_home_screen();
@@ -138,7 +140,8 @@ class GuiApplication {
     SystemExplorerInteraction system_explorer_interaction_;
     ExperimentExplorerViewState explorer_view_state_;
     GuiWorkspaceState workspace_state_;
-    std::optional<SimulationSnapshot> presentation_snapshot_;
+    std::shared_ptr<const SimulationSnapshot> presentation_snapshot_;
+    GuiPresentationPublicationPolicy publication_policy_;
     SimulationProgress progress_;
     GuiRunMode last_run_mode_{GuiRunMode::Live};
     CompletedRunResultCache completed_results_;

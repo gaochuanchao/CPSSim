@@ -51,6 +51,10 @@ class GuiSimulationSession {
     SimulationSnapshot snapshot() const;
     SimulationProgress progress() const;
     RunPerformanceSummary performance_summary() const;
+    std::uint64_t runtime_generation() const { return runtime_generation_; }
+    std::uint64_t simulation_data_generation() const noexcept {
+        return controller_ != nullptr ? controller_->simulation_data_generation() : 0;
+    }
     GuiRunState run_state() const {
         return controller_ != nullptr ? controller_->run_state() : GuiRunState::NotConfigured;
     }
@@ -62,7 +66,7 @@ class GuiSimulationSession {
                (controller_->run_state() == GuiRunState::Running ||
                 controller_->has_queued_commands());
     }
-    std::uint64_t run_generation() const { return run_generation_; }
+    std::uint64_t run_generation() const { return runtime_generation(); }
 
   private:
     void draft_changed();
@@ -74,7 +78,7 @@ class GuiSimulationSession {
     RunPlanDraft draft_;
     std::optional<RunPlanBuildResult> last_validation_;
     std::unique_ptr<SimulationController> controller_;
-    std::uint64_t run_generation_{0};
+    std::uint64_t runtime_generation_{0};
 };
 
 } // namespace cpssim

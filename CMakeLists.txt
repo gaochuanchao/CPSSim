@@ -263,6 +263,7 @@ add_library(
     src/cpssim/gui/system_builder_interaction.cpp
     src/cpssim/gui/presentation_model.cpp
     src/cpssim/gui/plot_visualizer_model.cpp
+    src/cpssim/gui/presentation_publication.cpp
     src/cpssim/gui/resource_presentation.cpp
     src/cpssim/gui/selection_model.cpp
     src/cpssim/gui/signal_series.cpp
@@ -536,6 +537,7 @@ if(BUILD_TESTING)
             tests/gui/event_table_model_test.cpp
             tests/gui/frame_scheduler_test.cpp
             tests/gui/presentation_model_test.cpp
+            tests/gui/presentation_publication_test.cpp
             tests/gui/resource_presentation_test.cpp
             tests/gui/selection_model_test.cpp
             tests/gui/system_builder_interaction_test.cpp

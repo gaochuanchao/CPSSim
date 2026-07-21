@@ -126,4 +126,16 @@ TEST_CASE("completed results build once only after finish and invalidate explici
     REQUIRE(cache.build_count() == 2);
 }
 
+TEST_CASE("run result shares immutable completed data without another snapshot copy",
+          "[analysis][result][ownership]") {
+    auto value = snapshot();
+    value.run_state = GuiRunState::Finished;
+    auto data = std::make_shared<const CompletedRunData>(CompletedRunData{4, 9, value});
+    const auto result = build_run_result(data, "generic");
+    REQUIRE(result.completed_data == data);
+    REQUIRE(&result.snapshot() == &data->snapshot);
+    REQUIRE(result.completed_data->runtime_generation == 4);
+    REQUIRE(result.completed_data->simulation_data_generation == 9);
+}
+
 } // namespace

@@ -95,11 +95,13 @@ void SimulationController::reset() {
     policy_ = std::move(replacement_policy);
     engine_ = std::move(replacement_engine);
     run_state_ = GuiRunState::Paused;
+    ++simulation_data_generation_;
 }
 
 /*** Delegates one logical-tick transition and reflects terminal state. ***/
 void SimulationController::step_once() {
     engine_->step_to_next_event();
+    ++simulation_data_generation_;
     if (engine_->finished()) {
         run_state_ = GuiRunState::Finished;
     }
@@ -113,6 +115,7 @@ GuiControllerUpdateResult SimulationController::update(const GuiExecutionSetting
     GuiControllerUpdateResult result;
     const auto state_before = run_state_;
     while (const auto command = commands_.pop()) {
+        result.command_processed = true;
         switch (*command) {
         case GuiCommand::Run:
             if (!engine_->finished()) {
@@ -134,6 +137,8 @@ GuiControllerUpdateResult SimulationController::update(const GuiExecutionSetting
             if (!engine_->finished()) {
                 run_state_ = GuiRunState::Paused;
                 step_once();
+                result.step_completed = true;
+                ++result.transitions;
             }
             break;
         }

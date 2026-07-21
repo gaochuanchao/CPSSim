@@ -228,7 +228,7 @@ void draw_lane(const RunResult& result, const GuiPlotLane& lane, GuiWorkspaceSta
             }
             ImGui::EndTooltip();
             if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
-                selection.select_tick(std::clamp<Tick>(tick, 0, result.snapshot.current_tick));
+                selection.select_tick(std::clamp<Tick>(tick, 0, result.snapshot().current_tick));
         }
         ImPlot::EndPlot();
     }

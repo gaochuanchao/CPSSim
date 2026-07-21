@@ -69,6 +69,8 @@ struct GuiControllerUpdateResult {
     bool reset{false};
     bool paused{false};
     bool finished{false};
+    bool step_completed{false};
+    bool command_processed{false};
     std::uint64_t transitions{};
 };
 
@@ -157,6 +159,9 @@ class SimulationController {
     bool has_queued_commands() const noexcept { return !commands_.empty(); }
     SimulationProgress progress() const;
     RunPerformanceSummary performance_summary() const;
+    std::uint64_t simulation_data_generation() const noexcept {
+        return simulation_data_generation_;
+    }
 
   private:
     // Reconstructs policy and engine from stored immutable experiment input.
@@ -178,6 +183,7 @@ class SimulationController {
     std::unique_ptr<SimulationEngine> engine_;
     std::chrono::nanoseconds running_wall_time_{};
     GuiExecutionSettings last_execution_settings_{};
+    std::uint64_t simulation_data_generation_{};
 };
 
 } // namespace cpssim

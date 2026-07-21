@@ -155,7 +155,7 @@ void GuiApplication::initialize_presentation_state() {
     initialize_system_draft();
     initialize_imgui_layout();
     if (application_state_.has_active_session()) {
-        presentation_snapshot_ = application_state_.active_session().snapshot();
+        publish_complete_snapshot(false);
         progress_ = application_state_.active_session().progress();
     }
     last_run_mode_ = workspace_state_.run_mode;
@@ -356,7 +356,7 @@ void GuiApplication::replace_session(std::unique_ptr<GuiSimulationSession> sessi
     runtime_selection_.clear();
     application_status_.clear();
     activate_imgui_layout();
-    presentation_snapshot_ = application_state_.active_session().snapshot();
+    publish_complete_snapshot(false);
     progress_ = application_state_.active_session().progress();
     last_run_mode_ = workspace_state_.run_mode;
 }
@@ -371,7 +371,7 @@ void GuiApplication::replace_project(std::unique_ptr<ProjectContext> project) {
     runtime_selection_.clear();
     application_status_.clear();
     activate_imgui_layout();
-    presentation_snapshot_ = application_state_.active_session().snapshot();
+    publish_complete_snapshot(false);
     progress_ = application_state_.active_session().progress();
     last_run_mode_ = workspace_state_.run_mode;
 }
@@ -404,6 +404,36 @@ void GuiApplication::clear_session() {
     progress_ = {};
 }
 
+void GuiApplication::publish_complete_snapshot(bool publish_finished_result) {
+    auto& session = application_state_.active_session();
+    GuiScopedProfileTimer timer{profiler_, GuiProfileTimer::SnapshotBuild};
+    auto snapshot = session.snapshot();
+    profiler_.increment(GuiProfileCounter::SnapshotBuild);
+    if (publish_finished_result && snapshot.run_state == GuiRunState::Finished) {
+        auto data = std::make_shared<const CompletedRunData>(CompletedRunData{
+            session.runtime_generation(), session.simulation_data_generation(),
+            std::move(snapshot)});
+        presentation_snapshot_ =
+            std::shared_ptr<const SimulationSnapshot>{data, &data->snapshot};
+        const auto scenario = application_state_.has_active_project()
+                                  ? application_state_.active_project().metadata().scenario_kind
+                                  : std::string{"generic"};
+        if (completed_results_.publish_finished(data, scenario, session.performance_summary())) {
+            profiler_.increment(GuiProfileCounter::ResultBuild);
+        }
+    } else {
+        presentation_snapshot_ = std::make_shared<const SimulationSnapshot>(std::move(snapshot));
+    }
+    publication_policy_.published(
+        {.mode = workspace_state_.run_mode,
+         .update = {},
+         .switched_fast_to_live = false,
+         .missing_snapshot = false,
+         .runtime_generation = session.runtime_generation(),
+         .simulation_data_generation = session.simulation_data_generation(),
+         .now = std::chrono::steady_clock::now()});
+}
+
 /*** Advances queued simulation commands only when a session is active. ***/
 bool GuiApplication::update_active_session() {
     if (application_state_.has_active_session() &&
@@ -419,20 +449,19 @@ bool GuiApplication::update_active_session() {
         progress_ = session.progress();
         const auto switched_to_live =
             last_run_mode_ == GuiRunMode::Fast && workspace_state_.run_mode == GuiRunMode::Live;
-        if (workspace_state_.run_mode == GuiRunMode::Live || update.paused || update.finished ||
-            update.reset || switched_to_live || !presentation_snapshot_.has_value()) {
-            presentation_snapshot_ = session.snapshot();
+        const auto publication = GuiPresentationPublicationInput{
+            .mode = workspace_state_.run_mode,
+            .update = update,
+            .switched_fast_to_live = switched_to_live,
+            .missing_snapshot = presentation_snapshot_ == nullptr,
+            .runtime_generation = session.runtime_generation(),
+            .simulation_data_generation = session.simulation_data_generation(),
+            .now = std::chrono::steady_clock::now()};
+        if (publication_policy_.should_publish(publication)) {
+            publish_complete_snapshot(update.finished);
         }
         if (update.reset) {
             completed_results_.invalidate();
-        }
-        if (update.finished && presentation_snapshot_.has_value()) {
-            const auto scenario = application_state_.has_active_project()
-                                      ? application_state_.active_project().metadata().scenario_kind
-                                      : std::string{"generic"};
-            static_cast<void>(completed_results_.publish_finished(session.run_generation(),
-                                                                  *presentation_snapshot_, scenario,
-                                                                  session.performance_summary()));
         }
         last_run_mode_ = workspace_state_.run_mode;
         return update.reset || update.paused || update.finished || update.transitions != 0 ||
@@ -676,7 +705,7 @@ void GuiApplication::open_project_dialog() {
         initialize_system_draft();
         structural_selection_.select_system();
         runtime_selection_.clear();
-        presentation_snapshot_ = application_state_.active_session().snapshot();
+        publish_complete_snapshot(false);
         progress_ = application_state_.active_session().progress();
         last_run_mode_ = workspace_state_.run_mode;
         set_status("Opened project '" + application_state_.active_project().metadata().name + "'.",
@@ -864,7 +893,7 @@ void GuiApplication::apply_system_draft() {
         apply_system_project_draft(application_state_, *system_draft_, &run_configuration);
     if (result.valid()) {
         completed_results_.invalidate();
-        presentation_snapshot_ = application_state_.active_session().snapshot();
+        publish_complete_snapshot(false);
         progress_ = application_state_.active_session().progress();
         structural_selection_.select_system();
         runtime_selection_.clear();
@@ -1420,7 +1449,7 @@ void GuiApplication::draw_right_sidebar(const SimulationSnapshot& snapshot) {
             apply_system_draft_requested_ = true;
         } else if (application_state_.active_session().apply_draft()) {
             completed_results_.invalidate();
-            presentation_snapshot_ = application_state_.active_session().snapshot();
+            publish_complete_snapshot(false);
             progress_ = application_state_.active_session().progress();
             runtime_selection_.clear();
             set_status("Run configuration applied and restarted.", false);
@@ -1627,8 +1656,8 @@ void GuiApplication::draw_frame() {
     if (!workbench_active) {
         draw_home_screen();
     } else {
-        if (!presentation_snapshot_.has_value()) {
-            presentation_snapshot_ = application_state_.active_session().snapshot();
+        if (presentation_snapshot_ == nullptr) {
+            publish_complete_snapshot(false);
         }
         draw_workbench(*presentation_snapshot_);
     }

@@ -77,7 +77,7 @@ bool selected(Tick tick, const std::optional<GuiTickRange>& range) {
 std::vector<const Event*> selected_events(const RunResult& result,
                                           const std::optional<GuiTickRange>& range) {
     std::vector<const Event*> rows;
-    for (const auto& event : result.snapshot.event_log) {
+    for (const auto& event : result.snapshot().event_log) {
         if (selected(event.tick(), range)) {
             rows.push_back(&event);
         }
@@ -114,7 +114,7 @@ void write_summary(lxw_workbook* workbook, const ProjectContext& project, const 
     const std::array<std::pair<std::string, std::string>, 8> rows{{
         {"Project", project.metadata().name},
         {"Scenario", result.scenario_kind},
-        {"Run state", result.snapshot.run_state == GuiRunState::Finished ? "finished" : "paused"},
+        {"Run state", result.snapshot().run_state == GuiRunState::Finished ? "finished" : "paused"},
         {"Horizon tick", std::to_string(result.metrics.horizon_tick)},
         {"Event count", std::to_string(result.metrics.event_count)},
         {"Completed jobs", std::to_string(result.metrics.completed_jobs)},
@@ -186,7 +186,7 @@ void write_events(lxw_workbook* workbook, const RunResult& result,
             const auto row = static_cast<lxw_row_t>(offset + 1);
             exact_integer(sheet, row, 0, event.sequence().value());
             exact_integer(sheet, row, 1, event.tick());
-            number(sheet, row, 2, seconds(event.tick(), result.snapshot.experiment.tick_period));
+            number(sheet, row, 2, seconds(event.tick(), result.snapshot().experiment.tick_period));
             text(sheet, row, 3, canonical_event_type_name(event.type()));
             text(sheet, row, 4, canonical_event_phase_name(event.phase()));
             const auto& entities = event.entities();
@@ -219,7 +219,7 @@ void write_signals(lxw_workbook* workbook, const RunResult& result,
             const auto row = static_cast<lxw_row_t>(offset + 1);
             exact_integer(sheet, row, 0, source.sample->tick);
             number(sheet, row, 1,
-                   seconds(source.sample->tick, result.snapshot.experiment.tick_period));
+                   seconds(source.sample->tick, result.snapshot().experiment.tick_period));
             const auto type = source.series->descriptor.id.scalar_type;
             text(sheet, row, 2,
                  type == GuiSignalScalarType::Real      ? "real"
