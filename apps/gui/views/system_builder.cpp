@@ -501,11 +501,46 @@ void draw_validation(const SystemDraftBuildResult& validation) {
     }
 }
 
+void draw_connection(const EditableSystemDraft& draft, const StructuralSelection& selection,
+                     ProjectSystemEditPolicy edit_policy) {
+    const auto connection = selection.connection();
+    if (!connection.has_value() || !begin_properties("connection properties")) {
+        return;
+    }
+    property_label("Source");
+    ImGui::TextUnformatted(task_label(draft, connection->source_task_id).c_str());
+    property_label("Destination");
+    ImGui::TextUnformatted(task_label(draft, connection->destination_task_id).c_str());
+    property_label("Kind");
+    ImGui::TextUnformatted(connection->kind == GuiConnectionKind::Logical ? "Logical"
+                                                                          : "Communication");
+    property_label("Displayed latency");
+    Tick latency = 0;
+    if (connection->kind == GuiConnectionKind::Communication) {
+        const auto index = route_index(
+            draft, {connection->source_task_id, connection->destination_task_id});
+        if (edit_policy == ProjectSystemEditPolicy::BoschCompatible) {
+            latency = 80;
+        } else if (index.has_value()) {
+            latency = draft.routes()[*index].delay;
+        }
+    }
+    ImGui::Text("%lld ticks", static_cast<long long>(latency));
+    ImGui::TableNextRow();
+    ImGui::TableSetColumnIndex(0);
+    ImGui::TableSetColumnIndex(1);
+    ImGui::TextWrapped(connection->kind == GuiConnectionKind::Logical
+                           ? "Logical dependencies are presentation-only and create no messages, delays, or canonical network events."
+                           : "Communication latency describes the visible network delay. The Bosch adapter's internal one-tick send handoff is intentionally hidden.");
+    ImGui::EndTable();
+}
+
 } // namespace
 
 void draw_system_builder(EditableSystemDraft& draft, const SystemDraftBuildResult& validation,
                          std::vector<DraftTaskAssignment>& assignments,
-                         StructuralSelection& selection, bool editing_enabled,
+                         StructuralSelection& selection,
+                         const ExperimentPresentationSnapshot&, bool editing_enabled,
                          ProjectSystemEditPolicy edit_policy, std::string_view project_name,
                          SystemBuilderViewState& state) {
     ImGui::BeginDisabled(!editing_enabled);
@@ -543,10 +578,13 @@ void draw_system_builder(EditableSystemDraft& draft, const SystemDraftBuildResul
         draw_route(draft, validation, selection, state,
                    edit_policy == ProjectSystemEditPolicy::BoschCompatible);
         break;
+    case StructuralSelectionKind::Connection:
+        draw_connection(draft, selection, edit_policy);
+        break;
     }
     ImGui::EndDisabled();
     if (!editing_enabled) {
-        ImGui::TextWrapped("Pause or reset the active run before editing system structure.");
+        ImGui::TextWrapped("Pause the simulation to edit the system.");
     }
     ImGui::SeparatorText("Validation");
     draw_validation(validation);

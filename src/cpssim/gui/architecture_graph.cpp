@@ -144,7 +144,8 @@ GuiGraphNodeId resource_graph_node_id(ResourceId resource_id) {
 
 GuiArchitectureGraph
 build_architecture_graph(const ExperimentPresentationSnapshot& experiment,
-                         const std::vector<GuiFunctionalDependency>& functional_dependencies) {
+                         const std::vector<GuiFunctionalDependency>& functional_dependencies,
+                         bool bosch_latency_presentation) {
     auto resources = experiment.resources;
     auto tasks = experiment.tasks;
     auto routes = experiment.routes;
@@ -235,7 +236,15 @@ build_architecture_graph(const ExperimentPresentationSnapshot& experiment,
                                 .destination = destination,
                                 .route_reference = std::nullopt,
                                 .functional_reference = dependency,
-                                .assignment_reference = std::nullopt});
+                                .assignment_reference = std::nullopt,
+                                .connection = GuiConnectionPresentation{
+                                    .id = {GuiConnectionKind::Logical,
+                                           dependency.source_task_id,
+                                           dependency.destination_task_id},
+                                    .label = dependency.label,
+                                    .displayed_latency = 0,
+                                    .creates_network_events = false,
+                                    .protected_semantics = bosch_latency_presentation}});
     }
     for (const auto& route : routes) {
         const auto source = task_graph_node_id(route.identity.source_task_id);
@@ -263,7 +272,16 @@ build_architecture_graph(const ExperimentPresentationSnapshot& experiment,
                                 .destination = destination,
                                 .route_reference = route.identity,
                                 .functional_reference = std::nullopt,
-                                .assignment_reference = std::nullopt});
+                                .assignment_reference = std::nullopt,
+                                .connection = GuiConnectionPresentation{
+                                    .id = {GuiConnectionKind::Communication,
+                                           route.identity.source_task_id,
+                                           route.identity.destination_task_id},
+                                    .label = "Communication",
+                                    .displayed_latency =
+                                        bosch_latency_presentation ? Tick{80} : route.delay,
+                                    .creates_network_events = true,
+                                    .protected_semantics = bosch_latency_presentation}});
     }
     for (const auto& assignment : assignments) {
         const auto source = task_graph_node_id(assignment.task_id);
@@ -287,7 +305,8 @@ build_architecture_graph(const ExperimentPresentationSnapshot& experiment,
                                 .destination = destination,
                                 .route_reference = std::nullopt,
                                 .functional_reference = std::nullopt,
-                                .assignment_reference = assignment});
+                                .assignment_reference = assignment,
+                                .connection = std::nullopt});
     }
     return result;
 }
@@ -309,7 +328,7 @@ bool graph_assignment_accessible(const ExperimentPresentationSnapshot& experimen
                        });
 }
 
-void select_graph_node(GuiSelection& selection, const GuiGraphNode& node) {
+void select_graph_node(StructuralSelection& selection, const GuiGraphNode& node) {
     switch (node.kind) {
     case GuiGraphNodeKind::Task:
         selection.select_task(std::get<TaskId>(node.entity));
@@ -320,24 +339,19 @@ void select_graph_node(GuiSelection& selection, const GuiGraphNode& node) {
     }
 }
 
-void select_graph_edge(GuiSelection& selection, const GuiGraphEdge& edge) {
-    switch (edge.kind) {
-    case GuiGraphEdgeKind::FunctionalDependency:
-        selection.select_task(TaskId{edge.destination.entity_value});
+void select_graph_edge(StructuralSelection& selection, const GuiGraphEdge& edge) {
+    if (edge.connection.has_value()) {
+        selection.select_connection(edge.connection->id);
         return;
-    case GuiGraphEdgeKind::MessageRoute:
-        if (!edge.route_reference.has_value()) {
-            throw std::logic_error{"message-route graph edge has no route reference"};
-        }
-        selection.select_route(edge.route_reference.value());
-        return;
-    case GuiGraphEdgeKind::Assignment:
+    }
+    if (edge.kind == GuiGraphEdgeKind::Assignment) {
         if (!edge.assignment_reference.has_value()) {
             throw std::logic_error{"assignment graph edge has no assignment reference"};
         }
         selection.select_task(edge.assignment_reference.value().task_id);
         return;
     }
+    throw std::logic_error{"connection graph edge has no connection presentation"};
 }
 
 } // namespace cpssim

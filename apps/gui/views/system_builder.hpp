@@ -20,7 +20,8 @@ struct SystemBuilderViewState {
 /*** Draws only the editor mapped from the current structural selection. ***/
 void draw_system_builder(EditableSystemDraft& draft, const SystemDraftBuildResult& validation,
                          std::vector<DraftTaskAssignment>& assignments,
-                         StructuralSelection& selection, bool editing_enabled,
+                         StructuralSelection& selection,
+                         const ExperimentPresentationSnapshot& experiment, bool editing_enabled,
                          ProjectSystemEditPolicy edit_policy, std::string_view project_name,
                          SystemBuilderViewState& state);
 

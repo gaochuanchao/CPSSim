@@ -1257,13 +1257,6 @@ void GuiApplication::draw_center_panels(const SimulationSnapshot& snapshot) {
     const auto draw_content = [&](GuiCenterTab tab) {
         switch (tab) {
         case GuiCenterTab::Architecture: {
-            const auto region_min = ImGui::GetCursorScreenPos();
-            const auto region_size = ImGui::GetContentRegionAvail();
-            pointer_regions_.add(
-                {ImGui::GetID("Architecture interaction region"),
-                 {region_min.x, region_min.y, region_min.x + region_size.x,
-                  region_min.y + region_size.y},
-                 GuiPointerRegionBehavior::BoundarySensitive});
             auto previewing = false;
             const auto* experiment = &snapshot.experiment;
             std::optional<ExperimentPresentationSnapshot> preview;
@@ -1300,10 +1293,15 @@ void GuiApplication::draw_center_panels(const SimulationSnapshot& snapshot) {
                         application_state_.active_project().metadata().scenario_kind == "bosch"
                     ? bosch_functional_dependencies()
                     : std::vector<GuiFunctionalDependency>{};
-            const auto graph = build_architecture_graph(*experiment, functional_dependencies);
-            if (draw_architecture_view(graph, session, *experiment, runtime_selection_,
-                                       architecture_view_state_, previewing))
-                workspace_state_.panels.inspector = true;
+            const auto is_bosch = application_state_.has_active_project() &&
+                                  application_state_.active_project().metadata().scenario_kind ==
+                                      "bosch";
+            const auto graph =
+                build_architecture_graph(*experiment, functional_dependencies, is_bosch);
+            static_cast<void>(draw_architecture_view(graph, session, *experiment,
+                                                     structural_selection_,
+                                                     architecture_view_state_, previewing,
+                                                     &pointer_regions_));
             break;
         }
         case GuiCenterTab::Timeline:
@@ -1447,7 +1445,7 @@ void GuiApplication::draw_left_sidebar(const SimulationSnapshot& snapshot) {
                                           : std::string{"Standalone session"};
             draw_system_builder(
                 *system_draft_, system_validation_, system_run_assignments_, structural_selection_,
-                application_state_.active_session().draft_editable(),
+                snapshot.experiment, application_state_.active_session().draft_editable(),
                 application_state_.has_active_project()
                     ? project_system_edit_policy(application_state_.active_project().metadata())
                     : ProjectSystemEditPolicy::Generic,

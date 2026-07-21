@@ -150,19 +150,22 @@ void draw_arrow(ImDrawList* draw_list, ImVec2 start, ImVec2 finish, ImU32 color,
     draw_list->AddTriangleFilled(finish, left, right, color);
 }
 
-bool route_related_to_selected_task(const GuiGraphEdge& edge, const GuiSelection& selection) {
+bool route_related_to_selected_task(const GuiGraphEdge& edge,
+                                    const StructuralSelection& selection) {
     return edge.route_reference.has_value() && selection.task_id().has_value() &&
            (edge.route_reference->source_task_id == *selection.task_id() ||
             edge.route_reference->destination_task_id == *selection.task_id());
 }
 
-bool assignment_related_to_selected_task(const GuiGraphEdge& edge, const GuiSelection& selection) {
+bool assignment_related_to_selected_task(const GuiGraphEdge& edge,
+                                         const StructuralSelection& selection) {
     return edge.assignment_reference.has_value() && selection.task_id().has_value() &&
            edge.assignment_reference->task_id == *selection.task_id();
 }
 
 bool resource_is_selected_assignment(const ExperimentPresentationSnapshot& experiment,
-                                     const GuiSelection& selection, ResourceId resource_id) {
+                                     const StructuralSelection& selection,
+                                     ResourceId resource_id) {
     if (!selection.task_id().has_value()) {
         return false;
     }
@@ -178,11 +181,12 @@ std::optional<ResourceId> active_assignment(const ExperimentPresentationSnapshot
 }
 
 void draw_edges(ImDrawList* draw_list, const GuiArchitectureGraph& graph,
-                const ScreenTransform& transform, const GuiSelection& selection) {
+                const ScreenTransform& transform, const StructuralSelection& selection) {
     for (const auto& edge : graph.edges) {
         const auto [start, finish] = edge_points(graph, edge, transform);
         if (edge.kind == GuiGraphEdgeKind::MessageRoute) {
-            const auto selected = selection.route_id() == edge.route_reference;
+            const auto selected = edge.connection.has_value() &&
+                                  selection.connection() == edge.connection->id;
             const auto related = route_related_to_selected_task(edge, selection);
             const auto color = ImGui::GetColorU32(selected || related ? ImGuiCol_PlotLinesHovered
                                                                       : ImGuiCol_PlotLines);
@@ -213,7 +217,8 @@ void draw_edges(ImDrawList* draw_list, const GuiArchitectureGraph& graph,
 void draw_resource_node(ImDrawList* draw_list, const GuiGraphNode& node,
                         const ScreenTransform& transform,
                         const ExperimentPresentationSnapshot& experiment,
-                        const GuiSelection& selection, std::optional<ResourceId> drag_target,
+                        const StructuralSelection& selection,
+                        std::optional<ResourceId> drag_target,
                         bool valid_drag_target) {
     const auto rect = node_rect(node, transform);
     const auto resource_id = std::get<ResourceId>(node.entity);
@@ -239,7 +244,7 @@ void draw_resource_node(ImDrawList* draw_list, const GuiGraphNode& node,
 void draw_task_node(ImDrawList* draw_list, const GuiGraphNode& node,
                     const ScreenTransform& transform,
                     const ExperimentPresentationSnapshot& experiment,
-                    const GuiSimulationSession& session, const GuiSelection& selection,
+                    const GuiSimulationSession& session, const StructuralSelection& selection,
                     bool dragging, bool read_only_preview) {
     const auto rect = node_rect(node, transform);
     const auto task_id = std::get<TaskId>(node.entity);
@@ -313,8 +318,8 @@ void reject_drop(ArchitectureViewState& state, TaskId task_id, std::string reaso
 
 bool draw_architecture_view(const GuiArchitectureGraph& graph, GuiSimulationSession& session,
                             const ExperimentPresentationSnapshot& experiment,
-                            GuiSelection& selection, ArchitectureViewState& state,
-                            bool read_only_preview) {
+                            StructuralSelection& selection, ArchitectureViewState& state,
+                            bool read_only_preview, GuiPointerRegionMap* pointer_regions) {
     if (read_only_preview) {
         state.pressed_task.reset();
         state.dragging_task = false;
@@ -357,27 +362,92 @@ bool draw_architecture_view(const GuiArchitectureGraph& graph, GuiSimulationSess
 
     const ScreenTransform transform{
         .origin = canvas_origin, .pan_x = state.pan_x, .pan_y = state.pan_y, .zoom = state.zoom};
-    bool open_inspector = false;
+    if (pointer_regions != nullptr) {
+        pointer_regions->add(
+            {ImGui::GetID("Architecture passive canvas"),
+             {canvas_origin.x, canvas_origin.y, canvas_origin.x + canvas_size.x,
+              canvas_origin.y + canvas_size.y},
+             GuiPointerRegionBehavior::Passive});
+        for (const auto& edge : graph.edges) {
+            if (!edge.connection.has_value()) {
+                continue;
+            }
+            const auto [start, finish] = edge_points(graph, edge, transform);
+            constexpr float tolerance = 8.0F;
+            const auto identity = "Architecture connection " +
+                                  std::to_string(static_cast<int>(edge.connection->id.kind)) + " " +
+                                  std::to_string(edge.source.entity_value) + " " +
+                                  std::to_string(edge.destination.entity_value);
+            constexpr int segments = 12;
+            const auto region_identity = ImGui::GetID(identity.c_str());
+            for (int segment = 0; segment < segments; ++segment) {
+                const auto first = static_cast<float>(segment) / segments;
+                const auto second = static_cast<float>(segment + 1) / segments;
+                const ImVec2 segment_start{start.x + (finish.x - start.x) * first,
+                                           start.y + (finish.y - start.y) * first};
+                const ImVec2 segment_end{start.x + (finish.x - start.x) * second,
+                                         start.y + (finish.y - start.y) * second};
+                pointer_regions->add(
+                    {region_identity,
+                     {std::min(segment_start.x, segment_end.x) - tolerance,
+                      std::min(segment_start.y, segment_end.y) - tolerance,
+                      std::max(segment_start.x, segment_end.x) + tolerance,
+                      std::max(segment_start.y, segment_end.y) + tolerance},
+                     GuiPointerRegionBehavior::BoundarySensitive});
+            }
+        }
+        for (const auto& node : graph.nodes) {
+            const auto rect = node_rect(node, transform);
+            const auto identity = "Architecture node " +
+                                  std::to_string(static_cast<int>(node.kind)) + " " +
+                                  std::to_string(node.id.entity_value);
+            pointer_regions->add(
+                {ImGui::GetID(identity.c_str()),
+                 {rect.minimum.x, rect.minimum.y, rect.maximum.x, rect.maximum.y},
+                 GuiPointerRegionBehavior::BoundarySensitive});
+        }
+    }
+    bool structural_selection_changed = false;
     if (canvas_hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
         const auto* task = hit_node(graph, transform, mouse, GuiGraphNodeKind::Task);
         const auto* resource = hit_node(graph, transform, mouse, GuiGraphNodeKind::Resource);
         const auto* route = hit_relation(graph, transform, mouse);
         if (task != nullptr) {
             select_graph_node(selection, *task);
+            structural_selection_changed = true;
             if (!read_only_preview) {
                 state.pressed_task = std::get<TaskId>(task->entity);
             }
-            open_inspector = ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left);
         } else if (route != nullptr) {
             select_graph_edge(selection, *route);
+            structural_selection_changed = true;
             state.status = route->kind == GuiGraphEdgeKind::FunctionalDependency
                                ? "Selected functional dependency (presentation only; no messages)"
                                : "Selected network route (configured message delay)";
             state.status_error = false;
-            open_inspector = ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left);
         } else if (resource != nullptr) {
             select_graph_node(selection, *resource);
-            open_inspector = ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left);
+            structural_selection_changed = true;
+        }
+    }
+
+    if (canvas_hovered) {
+        if (const auto* hovered = hit_relation(graph, transform, mouse);
+            hovered != nullptr && hovered->connection.has_value()) {
+            const auto& connection = *hovered->connection;
+            ImGui::BeginTooltip();
+            ImGui::Text("%s connection", connection.id.kind == GuiConnectionKind::Logical
+                                              ? "Logical"
+                                              : "Communication");
+            ImGui::Text("T%llu -> T%llu",
+                        static_cast<unsigned long long>(connection.id.source_task_id.value()),
+                        static_cast<unsigned long long>(connection.id.destination_task_id.value()));
+            ImGui::Text("Displayed latency: %lld ticks",
+                        static_cast<long long>(connection.displayed_latency));
+            ImGui::TextDisabled("%s", connection.creates_network_events
+                                         ? "Creates canonical message events"
+                                         : "Presentation-only; creates no network events");
+            ImGui::EndTooltip();
         }
     }
 
@@ -462,7 +532,7 @@ bool draw_architecture_view(const GuiArchitectureGraph& graph, GuiSimulationSess
             3.0F);
     }
     draw_list->PopClipRect();
-    return open_inspector;
+    return structural_selection_changed;
 }
 
 } // namespace cpssim::gui

@@ -52,6 +52,8 @@ StructuralSelectionKind StructuralSelection::kind() const {
         return StructuralSelectionKind::ExecutionProfile;
     case 5:
         return StructuralSelectionKind::MessageRoute;
+    case 6:
+        return StructuralSelectionKind::Connection;
     default:
         return StructuralSelectionKind::System;
     }
@@ -65,6 +67,7 @@ void StructuralSelection::select_execution_profile(DraftExecutionProfileKey prof
     value_ = profile;
 }
 void StructuralSelection::select_message_route(DraftMessageRouteKey route) { value_ = route; }
+void StructuralSelection::select_connection(GuiConnectionId connection) { value_ = connection; }
 
 std::optional<StructuralSection> StructuralSelection::section() const {
     if (const auto* value = std::get_if<StructuralSection>(&value_)) {
@@ -96,6 +99,13 @@ std::optional<DraftExecutionProfileKey> StructuralSelection::execution_profile()
 
 std::optional<DraftMessageRouteKey> StructuralSelection::message_route() const {
     if (const auto* value = std::get_if<DraftMessageRouteKey>(&value_)) {
+        return *value;
+    }
+    return std::nullopt;
+}
+
+std::optional<GuiConnectionId> StructuralSelection::connection() const {
+    if (const auto* value = std::get_if<GuiConnectionId>(&value_)) {
         return *value;
     }
     return std::nullopt;
@@ -138,6 +148,29 @@ void synchronize_structural_selection(StructuralSelection& selection,
         if (!key.has_value() || !contains_row(draft.routes(), [&key](const auto& row) {
                 return row.source_task_id == key->source_task_id &&
                        row.destination_task_id == key->destination_task_id;
+            })) {
+            selection.select_section(StructuralSection::MessageRoutes);
+        }
+        return;
+    }
+    case StructuralSelectionKind::Connection: {
+        const auto connection = selection.connection();
+        if (!connection.has_value()) {
+            selection.select_system();
+            return;
+        }
+        const auto task_exists = [&draft](TaskId id) {
+            return contains_row(draft.tasks(), [id](const auto& row) { return row.id == id; });
+        };
+        if (!task_exists(connection->source_task_id) ||
+            !task_exists(connection->destination_task_id)) {
+            selection.select_system();
+            return;
+        }
+        if (connection->kind == GuiConnectionKind::Communication &&
+            !contains_row(draft.routes(), [&connection](const auto& row) {
+                return row.source_task_id == connection->source_task_id &&
+                       row.destination_task_id == connection->destination_task_id;
             })) {
             selection.select_section(StructuralSection::MessageRoutes);
         }

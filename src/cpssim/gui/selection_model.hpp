@@ -11,6 +11,7 @@
 #pragma once
 
 #include "cpssim/gui/editable_system_draft.hpp"
+#include "cpssim/gui/connection_model.hpp"
 #include "cpssim/gui/simulation_controller.hpp"
 
 #include <optional>
@@ -32,6 +33,7 @@ enum class StructuralSelectionKind {
     Task,
     ExecutionProfile,
     MessageRoute,
+    Connection,
 };
 
 struct StructuralSystemSelection {
@@ -49,19 +51,21 @@ class StructuralSelection {
     void select_task(TaskId task_id);
     void select_execution_profile(DraftExecutionProfileKey profile);
     void select_message_route(DraftMessageRouteKey route);
+    void select_connection(GuiConnectionId connection);
 
     std::optional<StructuralSection> section() const;
     std::optional<ResourceId> resource_id() const;
     std::optional<TaskId> task_id() const;
     std::optional<DraftExecutionProfileKey> execution_profile() const;
     std::optional<DraftMessageRouteKey> message_route() const;
+    std::optional<GuiConnectionId> connection() const;
 
     bool operator==(const StructuralSelection&) const = default;
 
   private:
-    using Value = std::variant<StructuralSystemSelection, StructuralSection, ResourceId, TaskId,
-                               DraftExecutionProfileKey, DraftMessageRouteKey>;
-    Value value_{StructuralSystemSelection{}};
+    std::variant<StructuralSystemSelection, StructuralSection, ResourceId, TaskId,
+                 DraftExecutionProfileKey, DraftMessageRouteKey, GuiConnectionId>
+        value_{StructuralSystemSelection{}};
 };
 
 // Repairs only structural identity against the detached draft.

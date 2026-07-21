@@ -159,6 +159,8 @@ TEST_CASE("architecture graph contains every stable entity and relation",
     REQUIRE((route.source == task_graph_node_id(TaskId{1})));
     REQUIRE((route.destination == task_graph_node_id(TaskId{2})));
     REQUIRE((route.route_reference == GuiRouteIdentity{TaskId{1}, TaskId{2}}));
+    REQUIRE(route.connection->id.kind == GuiConnectionKind::Communication);
+    REQUIRE(route.connection->displayed_latency == 3);
     REQUIRE_FALSE(route.assignment_reference.has_value());
 
     const auto& assignment = graph.edges.back();
@@ -206,14 +208,15 @@ TEST_CASE("architecture graph keeps disconnected and cyclic tasks visible",
 TEST_CASE("architecture graph maps entities into shared selection",
           "[gui][architecture][selection]") {
     const auto graph = build_architecture_graph(make_graph_presentation());
-    GuiSelection selection;
+    StructuralSelection selection;
 
     select_graph_node(selection, *find_graph_node(graph, task_graph_node_id(TaskId{1})));
     REQUIRE((selection.task_id() == TaskId{1}));
     select_graph_node(selection, *find_graph_node(graph, resource_graph_node_id(ResourceId{9})));
     REQUIRE((selection.resource_id() == ResourceId{9}));
     select_graph_edge(selection, graph.edges.front());
-    REQUIRE((selection.route_id() == GuiRouteIdentity{TaskId{1}, TaskId{2}}));
+    REQUIRE((selection.connection() ==
+             GuiConnectionId{GuiConnectionKind::Communication, TaskId{1}, TaskId{2}}));
     select_graph_edge(selection, graph.edges.back());
     REQUIRE((selection.task_id() == graph.edges.back().assignment_reference->task_id));
 }
@@ -252,8 +255,25 @@ TEST_CASE("functional dependencies are distinct presentation-only graph edges",
     const auto graph = build_architecture_graph(experiment, dependencies);
     REQUIRE(graph.edges.front().kind == GuiGraphEdgeKind::FunctionalDependency);
     REQUIRE(graph.edges.front().functional_reference == dependencies.front());
+    REQUIRE(graph.edges.front().connection->id.kind == GuiConnectionKind::Logical);
+    REQUIRE(graph.edges.front().connection->displayed_latency == 0);
+    REQUIRE_FALSE(graph.edges.front().connection->creates_network_events);
     REQUIRE(graph.edges.front().route_reference == std::nullopt);
     REQUIRE(experiment.routes.size() == 1);
+}
+
+TEST_CASE("Bosch connection presentation hides adapter handoff and reports latency 80",
+          "[gui][architecture][connection]") {
+    const auto graph = build_architecture_graph(
+        make_graph_presentation(), {{TaskId{2}, TaskId{3}, "logical"}}, true);
+    const auto communication = std::find_if(graph.edges.begin(), graph.edges.end(), [](const auto& edge) {
+        return edge.connection.has_value() &&
+               edge.connection->id.kind == GuiConnectionKind::Communication;
+    });
+    REQUIRE(communication != graph.edges.end());
+    REQUIRE(communication->connection->displayed_latency == 80);
+    REQUIRE(communication->connection->creates_network_events);
+    REQUIRE(communication->route_reference->source_task_id == TaskId{1});
 }
 
 } // namespace

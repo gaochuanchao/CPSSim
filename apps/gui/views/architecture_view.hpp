@@ -8,6 +8,7 @@
 #pragma once
 
 #include "cpssim/gui/architecture_graph.hpp"
+#include "cpssim/gui/frame_scheduler.hpp"
 #include "cpssim/gui/simulation_session.hpp"
 
 #include <optional>
@@ -33,7 +34,8 @@ struct ArchitectureViewState {
  ***/
 bool draw_architecture_view(const GuiArchitectureGraph& graph, GuiSimulationSession& session,
                             const ExperimentPresentationSnapshot& experiment,
-                            GuiSelection& selection, ArchitectureViewState& state,
-                            bool read_only_preview = false);
+                            StructuralSelection& selection, ArchitectureViewState& state,
+                            bool read_only_preview = false,
+                            GuiPointerRegionMap* pointer_regions = nullptr);
 
 } // namespace cpssim::gui

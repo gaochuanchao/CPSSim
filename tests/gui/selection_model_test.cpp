@@ -88,6 +88,14 @@ TEST_CASE("structural and runtime selections retain independent strong identitie
     const auto draft = EditableSystemDraft::minimal();
     synchronize_structural_selection(structural, draft);
     REQUIRE((structural.kind() == StructuralSelectionKind::ExecutionProfile));
+
+    structural.select_connection(
+        {GuiConnectionKind::Logical, TaskId{1}, TaskId{2}});
+    REQUIRE(structural.kind() == StructuralSelectionKind::Connection);
+    REQUIRE(runtime.resource_id() == ResourceId{4});
+
+    synchronize_structural_selection(structural, draft);
+    REQUIRE((structural.kind() == StructuralSelectionKind::System));
 }
 
 /*** Verifies event emphasis uses stable typed references, never labels/indexes. ***/

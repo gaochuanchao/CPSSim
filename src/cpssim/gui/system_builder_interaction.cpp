@@ -193,6 +193,7 @@ SystemExplorerActionResult SystemExplorerInteraction::duplicate(const Structural
     }
     case StructuralSelectionKind::System:
     case StructuralSelectionKind::Section:
+    case StructuralSelectionKind::Connection:
         break;
     }
     return failed_action("The selected structural entity is unavailable.");
@@ -226,6 +227,7 @@ bool SystemExplorerInteraction::request_delete(
         break;
     case StructuralSelectionKind::System:
     case StructuralSelectionKind::Section:
+    case StructuralSelectionKind::Connection:
         return false;
     }
     pending_delete_ = impact;
@@ -281,6 +283,7 @@ SystemExplorerInteraction::confirm_delete(EditableSystemDraft& draft,
     }
     case StructuralSelectionKind::System:
     case StructuralSelectionKind::Section:
+    case StructuralSelectionKind::Connection:
         break;
     }
     synchronize_structural_selection(selection, draft);

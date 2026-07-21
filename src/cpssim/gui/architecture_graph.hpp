@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "cpssim/gui/connection_model.hpp"
 #include "cpssim/gui/selection_model.hpp"
 
 #include <compare>
@@ -28,13 +29,6 @@ enum class GuiGraphEdgeKind {
     FunctionalDependency,
     MessageRoute,
     Assignment,
-};
-
-struct GuiFunctionalDependency {
-    TaskId source_task_id;
-    TaskId destination_task_id;
-    std::string label;
-    bool operator==(const GuiFunctionalDependency&) const = default;
 };
 
 /*** Identifies one graph node without depending on labels or vector positions. ***/
@@ -91,6 +85,7 @@ struct GuiGraphEdge {
     std::optional<GuiRouteIdentity> route_reference;
     std::optional<GuiFunctionalDependency> functional_reference;
     std::optional<GuiTaskAssignmentPresentation> assignment_reference;
+    std::optional<GuiConnectionPresentation> connection;
 
     bool operator==(const GuiGraphEdge&) const = default;
 };
@@ -110,7 +105,8 @@ GuiGraphNodeId resource_graph_node_id(ResourceId resource_id);
 /*** Builds canonical nodes, relations, and cycle-safe logical layout. ***/
 GuiArchitectureGraph
 build_architecture_graph(const ExperimentPresentationSnapshot& experiment,
-                         const std::vector<GuiFunctionalDependency>& functional_dependencies = {});
+                         const std::vector<GuiFunctionalDependency>& functional_dependencies = {},
+                         bool bosch_latency_presentation = false);
 
 const GuiGraphNode* find_graph_node(const GuiArchitectureGraph& graph, GuiGraphNodeId node_id);
 
@@ -119,7 +115,7 @@ bool graph_assignment_accessible(const ExperimentPresentationSnapshot& experimen
                                  ResourceId resource_id);
 
 /*** Maps graph entities back into the workbench's shared strong-ID selection. ***/
-void select_graph_node(GuiSelection& selection, const GuiGraphNode& node);
-void select_graph_edge(GuiSelection& selection, const GuiGraphEdge& edge);
+void select_graph_node(StructuralSelection& selection, const GuiGraphNode& node);
+void select_graph_edge(StructuralSelection& selection, const GuiGraphEdge& edge);
 
 } // namespace cpssim
