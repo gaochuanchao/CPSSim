@@ -10,14 +10,21 @@ The GUI may control and observe the simulator, but it does not own simulation
 semantics.
 
 ```text
-cpssim_core <- cpssim_gui_support <- cpssim_gui
+cpssim_core <- cpssim_gui_support <- WorkbenchApplication
+                                           |-- cpssim_gui (Dear ImGui)
+                                           `-- cpssim_qt_gui_support <- cpssim_qt_gui
 ```
 
 - `cpssim_core` owns validated specifications and runtime behavior.
 - `cpssim_gui_support` owns graphics-independent commands, detached
   presentation values, validation, indexes, and caches.
+- `WorkbenchApplication` owns frontend-independent project/session lifecycle,
+  publications, completed results, drafts, selections, workspace, exports,
+  and diagnostics.
 - `cpssim_gui` owns GLFW/OpenGL startup, Dear ImGui widgets, drawing, and
-  transient presentation preferences.
+  transient ImGui presentation preferences.
+- `cpssim_qt_gui_support` and `cpssim_qt_gui` own Qt bridge/models and the Qt
+  Widgets shell. QtNodes is a flat Architecture adapter, never project truth.
 
 The arrows are one-way dependencies. Core code never includes or links GUI
 headers. GUI support may use public core interfaces but does not depend on Dear
@@ -38,6 +45,11 @@ This boundary is accepted by
 [ADR-0018](../adr/0018-use-a-single-threaded-snapshot-command-gui-boundary.md).
 The same engine operation drives headless execution and GUI stepping, so the
 canonical trace cannot depend on render timing.
+
+The Qt migration and flat task/resource-assignment presentation are fixed by
+[ADR-0026](../adr/0026-use-qt-widgets-and-flat-qtnodes-adapter.md). During the
+parity period both frontends consume the same `WorkbenchApplication`; Dear
+ImGui remains buildable until Qt passes the documented migration gates.
 
 ## 2. Source map
 
