@@ -12,17 +12,11 @@
 #include "views/system_builder.hpp"
 #include "views/timeline_view.hpp"
 
-#include "cpssim/analysis/completed_run_finalizer.hpp"
-#include "cpssim/analysis/completed_run_result.hpp"
 #include "cpssim/application/file_dialog.hpp"
 #include "cpssim/application/gui_layout_store.hpp"
-#include "cpssim/application/recent_projects.hpp"
-#include "cpssim/gui/application_state.hpp"
+#include "cpssim/application/workbench_application.hpp"
 #include "cpssim/gui/frame_scheduler.hpp"
 #include "cpssim/gui/gui_profiler.hpp"
-#include "cpssim/gui/presentation_publication.hpp"
-#include "cpssim/gui/selection_model.hpp"
-#include "cpssim/gui/workspace_state.hpp"
 
 #include <array>
 #include <filesystem>
@@ -49,31 +43,17 @@ class GuiApplication {
     GuiApplication(std::unique_ptr<ProjectContext> project, std::unique_ptr<FileDialog> dialogs,
                    GuiApplicationPaths paths);
 
-    GuiApplicationScreen screen() const noexcept { return application_state_.screen(); }
-    bool has_active_session() const noexcept { return application_state_.has_active_session(); }
-    bool has_active_project() const noexcept { return application_state_.has_active_project(); }
+    GuiApplicationScreen screen() const noexcept { return workbench_.screen(); }
+    bool has_active_session() const noexcept { return workbench_.has_active_session(); }
+    bool has_active_project() const noexcept { return workbench_.has_active_project(); }
     GuiTheme theme() const noexcept { return workspace_state_.theme; }
-    GuiRunState run_state() const noexcept {
-        return application_state_.has_active_session()
-                   ? application_state_.active_session().run_state()
-                   : GuiRunState::NotConfigured;
-    }
-    bool has_queued_work() const noexcept {
-        return application_state_.has_active_session() &&
-               application_state_.active_session().has_queued_work();
-    }
-    bool needs_session_update() const noexcept {
-        return application_state_.has_active_session() &&
-               application_state_.active_session().needs_update();
-    }
+    GuiRunState run_state() const noexcept { return workbench_.run_state(); }
+    bool has_queued_work() const noexcept { return workbench_.has_queued_work(); }
+    bool needs_session_update() const noexcept { return workbench_.needs_update(); }
     CompletedResultFinalizationState finalization_state() const noexcept {
-        return completed_finalizer_ != nullptr ? completed_finalizer_->state()
-                                               : CompletedResultFinalizationState::Idle;
+        return workbench_.finalization_state();
     }
-    bool background_pending() const noexcept {
-        return completed_finalizer_ != nullptr &&
-               completed_finalizer_->state() == CompletedResultFinalizationState::Finalizing;
-    }
+    bool background_pending() const noexcept { return workbench_.background_pending(); }
     void set_background_wakeup(std::function<void()> wakeup);
     bool process_background_publications();
     void shutdown_background_work();
@@ -141,23 +121,23 @@ class GuiApplication {
     void draw_left_sidebar(const SimulationSnapshot& snapshot);
     void draw_right_sidebar(const SimulationSnapshot& snapshot);
 
-    GuiApplicationState application_state_;
+    WorkbenchApplication workbench_;
+    GuiApplicationState& application_state_;
+    RecentProjects& recent_projects_;
+    StructuralSelection& structural_selection_;
+    GuiSelection& runtime_selection_;
+    SystemExplorerInteraction& system_explorer_interaction_;
+    GuiWorkspaceState& workspace_state_;
+    const std::shared_ptr<const SimulationSnapshot>& presentation_snapshot_;
+    const SimulationProgress& progress_;
+    std::optional<EditableSystemDraft>& system_draft_;
+    SystemDraftBuildResult& system_validation_;
+    std::vector<DraftTaskAssignment>& system_run_assignments_;
     std::unique_ptr<FileDialog> dialogs_;
     GuiApplicationPaths paths_;
     std::unique_ptr<GuiLayoutStore> imgui_layout_store_;
     std::optional<std::string> pending_imgui_layout_;
-    RecentProjects recent_projects_;
-    StructuralSelection structural_selection_;
-    GuiSelection runtime_selection_;
-    SystemExplorerInteraction system_explorer_interaction_;
     ExperimentExplorerViewState explorer_view_state_;
-    GuiWorkspaceState workspace_state_;
-    std::shared_ptr<const SimulationSnapshot> presentation_snapshot_;
-    GuiPresentationPublicationPolicy publication_policy_;
-    SimulationProgress progress_;
-    GuiRunMode last_run_mode_{GuiRunMode::Live};
-    CompletedRunResultCache completed_results_;
-    std::unique_ptr<CompletedRunFinalizer> completed_finalizer_;
     bool open_about_{false};
     bool request_project_modal_{false};
     ProjectDialogKind project_dialog_kind_{ProjectDialogKind::None};
@@ -180,11 +160,6 @@ class GuiApplication {
     std::array<char, 64> bosch_stop_tick_{};
     std::array<char, 256> bosch_project_name_{};
     std::filesystem::path bosch_parent_;
-    std::string application_status_;
-    bool application_status_error_{false};
-    std::optional<EditableSystemDraft> system_draft_;
-    SystemDraftBuildResult system_validation_;
-    std::vector<DraftTaskAssignment> system_run_assignments_;
     SystemBuilderViewState system_builder_view_state_;
     bool validate_system_draft_requested_{false};
     bool apply_system_draft_requested_{false};

@@ -265,7 +265,10 @@ unchanged. The architecture decision is
 Goal 7 migrates presentation to a native Qt 6 Widgets workbench without moving
 simulation or application truth into widgets. A graphics-independent
 `WorkbenchApplication` is shared by the Dear ImGui parity frontend and the new
-Qt bridge. The Architecture editor uses upstream QtNodes at pinned commit
+Qt bridge. It owns project/session replacement, publication, progress,
+completed-result finalization/cache, drafts, selections, workspace, export,
+and diagnostics; the ImGui application now retains only toolkit view/modal and
+layout state. The Architecture editor uses upstream QtNodes at pinned commit
 `1b173f885b52e4fd9616f663ea288435ccf1d0d8` through its generic abstract graph,
 scene, and view APIs. Tasks are flat nodes; resource assignment is a stable
 accent plus visible badge and a separate model/view table. There are no

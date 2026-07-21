@@ -104,9 +104,11 @@ The view files are deliberately small boundaries:
 | [`application/result_export.*`](../../src/cpssim/application/result_export.hpp) | versioned manifest plus atomic authoritative JSON/CSV publication | [`result_export_test.cpp`](../../tests/application/result_export_test.cpp) |
 | [`application/results_workbook.*`](../../src/cpssim/application/results_workbook.hpp) | pinned-library XLSX convenience output and row-limit splitting | [`result_export_test.cpp`](../../tests/application/result_export_test.cpp) |
 | [`application/gui_layout_store.*`](../../src/cpssim/application/gui_layout_store.hpp) | immutable default layout, disposable staging, and explicit project `imgui.ini` saves | [`gui_layout_store_test.cpp`](../../tests/application/gui_layout_store_test.cpp) |
+| [`application/workbench_application.*`](../../src/cpssim/application/workbench_application.hpp) | frontend-independent project/session lifecycle, publications, completed results, drafts, selections, workspace, exports, and diagnostics | [`workbench_application_test.cpp`](../../tests/application/workbench_application_test.cpp) |
 
 If logic can be tested without opening a window, it normally belongs in
-`cpssim_gui_support`, not in an ImGui draw function.
+`cpssim_gui_support`, not in an ImGui or Qt widget. `GuiApplication` now adapts
+`WorkbenchApplication` and retains only Dear ImGui draw/modal/layout state.
 
 The fixed workbench composes `Explorer / System Builder` on the left and `Run
 Configuration / Runtime Inspector` on the right. The sidebars, analysis/lower

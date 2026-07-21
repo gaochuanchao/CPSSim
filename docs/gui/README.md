@@ -275,20 +275,24 @@ The shortest useful reading path is:
 
 1. [`apps/gui/main.cpp`](../../apps/gui/main.cpp) — native window, display
    scale, graphics backends, and frame loop.
-2. [`gui_application.hpp`](../../apps/gui/gui_application.hpp) and
-   [`gui_application.cpp`](../../apps/gui/gui_application.cpp) — workbench
-   layout and presentation-owned state.
-3. One file under [`apps/gui/views/`](../../apps/gui/views/) — immediate-mode
+2. [`workbench_application.hpp`](../../src/cpssim/application/workbench_application.hpp) —
+   graphics-independent workbench ownership and operations.
+3. [`gui_application.hpp`](../../apps/gui/gui_application.hpp) and
+   [`gui_application.cpp`](../../apps/gui/gui_application.cpp) — Dear ImGui
+   layout, modal, and transient view state.
+4. One file under [`apps/gui/views/`](../../apps/gui/views/) — immediate-mode
    widgets for one panel.
-4. The matching graphics-independent model under
+5. The matching graphics-independent model under
    [`src/cpssim/gui/`](../../src/cpssim/gui/).
-5. The matching test under [`tests/gui/`](../../tests/gui/).
+6. The matching test under [`tests/gui/`](../../tests/gui/).
 
-One frame follows this direction:
+Both frontends share the same application owner. One Dear ImGui frame follows
+this direction:
 
 ```mermaid
 flowchart LR
-    Native[GLFW/OpenGL frame] --> Update[GuiSimulationSession::update]
+    Native[GLFW/OpenGL frame] --> Workbench[WorkbenchApplication]
+    Workbench --> Update[GuiSimulationSession::update]
     Update --> Snapshot[detached SimulationSnapshot]
     Snapshot --> App[GuiApplication::draw_frame]
     App --> Views[Dear ImGui views]
@@ -297,7 +301,11 @@ flowchart LR
     Queue --> Engine[SimulationEngine at safe boundary]
 ```
 
-The renderer receives `const SimulationSnapshot&`. That type choice is an
+`WorkbenchApplication` owns project/session replacement, draft validation,
+publication generations, selections, completed results, workspace state,
+exports, and diagnostics. `GuiApplication` owns only Dear ImGui drawing,
+modal buffers, layout text, and pointer redraw tracking. The renderer receives
+`const SimulationSnapshot&`. That type choice is an
 important guardrail: a widget cannot reach through the snapshot and mutate the
 engine.
 
