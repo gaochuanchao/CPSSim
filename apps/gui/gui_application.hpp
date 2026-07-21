@@ -13,6 +13,7 @@
 #include "views/timeline_view.hpp"
 
 #include "cpssim/analysis/completed_run_result.hpp"
+#include "cpssim/analysis/completed_run_finalizer.hpp"
 #include "cpssim/application/file_dialog.hpp"
 #include "cpssim/application/gui_layout_store.hpp"
 #include "cpssim/application/recent_projects.hpp"
@@ -65,7 +66,17 @@ class GuiApplication {
         return application_state_.has_active_session() &&
                application_state_.active_session().needs_update();
     }
-    bool background_pending() const noexcept { return false; }
+    CompletedResultFinalizationState finalization_state() const noexcept {
+        return completed_finalizer_ != nullptr ? completed_finalizer_->state()
+                                               : CompletedResultFinalizationState::Idle;
+    }
+    bool background_pending() const noexcept {
+        return completed_finalizer_ != nullptr &&
+               completed_finalizer_->state() == CompletedResultFinalizationState::Finalizing;
+    }
+    void set_background_wakeup(std::function<void()> wakeup);
+    bool process_background_publications();
+    void shutdown_background_work();
     GuiRedrawTracker& redraw_tracker() noexcept { return redraw_tracker_; }
     GuiPointerRegionMap& pointer_regions() noexcept { return pointer_regions_; }
     GuiProfiler& profiler() noexcept { return profiler_; }
@@ -117,6 +128,7 @@ class GuiApplication {
     void save_active_imgui_layout();
     void restore_default_imgui_layout();
     void publish_complete_snapshot(bool publish_finished_result);
+    void invalidate_completed_results();
 
     bool draw_main_menu();
     void draw_home_screen();
@@ -145,6 +157,7 @@ class GuiApplication {
     SimulationProgress progress_;
     GuiRunMode last_run_mode_{GuiRunMode::Live};
     CompletedRunResultCache completed_results_;
+    std::unique_ptr<CompletedRunFinalizer> completed_finalizer_;
     bool open_about_{false};
     bool request_project_modal_{false};
     ProjectDialogKind project_dialog_kind_{ProjectDialogKind::None};

@@ -141,9 +141,16 @@ void bosch_summary(const RunResult& result) {
 } // namespace
 
 void draw_results_view(const SimulationProgress& progress, const CompletedRunResult* completed,
+                       CompletedResultFinalizationState finalization_state,
                        bool& open_visualizer, bool& open_export, ResultsViewState&) {
     if (completed == nullptr) {
-        ImGui::TextUnformatted("Results are generated after the simulation finishes.");
+        if (finalization_state == CompletedResultFinalizationState::Finalizing) {
+            ImGui::TextUnformatted("Finalizing completed run...");
+        } else if (finalization_state == CompletedResultFinalizationState::Failed) {
+            ImGui::TextUnformatted("Completed-run analysis failed. See the workbench diagnostic.");
+        } else {
+            ImGui::TextUnformatted("Results are generated after the simulation finishes.");
+        }
         ImGui::Text("Current tick: %lld / %lld", static_cast<long long>(progress.current_tick),
                     static_cast<long long>(progress.stop_tick));
         ImGui::Text("Run state: %s", state_name(progress.run_state));

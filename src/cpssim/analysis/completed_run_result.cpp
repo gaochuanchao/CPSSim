@@ -30,7 +30,17 @@ bool CompletedRunResultCache::publish_finished(
     }
     auto result = std::make_shared<const RunResult>(
         build_run_result(std::move(completed_data), std::move(scenario_kind)));
-    completed_ = CompletedRunResult{generation, std::move(result), performance};
+    completed_ = CompletedRunResult{generation, std::move(result), nullptr, performance, {}};
+    ++build_count_;
+    return true;
+}
+
+bool CompletedRunResultCache::publish_ready(CompletedRunResult completed) {
+    if (completed.result == nullptr || completed.result->snapshot().run_state != GuiRunState::Finished ||
+        (completed_.has_value() && completed_->run_generation == completed.run_generation)) {
+        return false;
+    }
+    completed_ = std::move(completed);
     ++build_count_;
     return true;
 }

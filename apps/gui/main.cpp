@@ -234,6 +234,7 @@ int run_gui(std::unique_ptr<cpssim::GuiSimulationSession> session,
     apply_display_scale(base_style, display_scale);
     ImVec2 last_framebuffer_scale{1.0F, 1.0F};
     loop.pointer_regions = &application.pointer_regions();
+    application.set_background_wakeup([] { glfwPostEmptyEvent(); });
     auto last_present = std::chrono::steady_clock::now() - std::chrono::milliseconds{17};
 
     while (glfwWindowShouldClose(window) == GLFW_FALSE) {
@@ -256,6 +257,10 @@ int run_gui(std::unique_ptr<cpssim::GuiSimulationSession> session,
             }
         } else {
             glfwPollEvents();
+        }
+        if (application.process_background_publications()) {
+            application.profiler().increment(cpssim::GuiProfileCounter::BackgroundWakeup);
+            loop.redraw.request();
         }
         if (application.needs_session_update()) {
             cpssim::GuiScopedProfileTimer timer{application.profiler(),
@@ -335,6 +340,7 @@ int run_gui(std::unique_ptr<cpssim::GuiSimulationSession> session,
         }
     }
 
+    application.shutdown_background_work();
     loop.pointer_regions = nullptr;
     glfwSetWindowUserPointer(window, nullptr);
     ImGui_ImplOpenGL3_Shutdown();

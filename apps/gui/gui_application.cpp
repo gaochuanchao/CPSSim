@@ -136,6 +136,26 @@ GuiApplication::GuiApplication(std::unique_ptr<ProjectContext> project,
 
 /*** Establishes presentation defaults shared by Home and Workbench startup. ***/
 void GuiApplication::initialize_presentation_state() {
+    if (completed_finalizer_ == nullptr) {
+        completed_finalizer_ = std::make_unique<CompletedRunFinalizer>(
+            [](const CompletedRunFinalizationRequest& request, std::stop_token stop) {
+                const auto started = std::chrono::steady_clock::now();
+                if (stop.stop_requested()) {
+                    return CompletedRunResult{};
+                }
+                auto result = std::make_shared<const RunResult>(
+                    build_run_result(request.data, request.scenario_kind));
+                std::shared_ptr<const BoschResultAnalysis> bosch_analysis;
+                if (!stop.stop_requested() && request.scenario_kind == "bosch") {
+                    bosch_analysis = std::make_shared<const BoschResultAnalysis>(
+                        derive_bosch_result_analysis(*result));
+                }
+                return CompletedRunResult{
+                    request.data->runtime_generation, std::move(result),
+                    std::move(bosch_analysis), request.performance,
+                    std::chrono::steady_clock::now() - started};
+            });
+    }
     structural_selection_.select_system();
     runtime_selection_.clear();
     project_parent_ = paths_.projects_directory;
@@ -159,6 +179,45 @@ void GuiApplication::initialize_presentation_state() {
         progress_ = application_state_.active_session().progress();
     }
     last_run_mode_ = workspace_state_.run_mode;
+}
+
+void GuiApplication::set_background_wakeup(std::function<void()> wakeup) {
+    completed_finalizer_->set_wakeup(std::move(wakeup));
+}
+
+bool GuiApplication::process_background_publications() {
+    if (completed_finalizer_ == nullptr || !completed_finalizer_->publication_pending()) {
+        return false;
+    }
+    if (auto completed = completed_finalizer_->take_publication(); completed.has_value()) {
+        profiler_.record(GuiProfileTimer::ResultFinalization,
+                         completed->finalization_duration);
+        profiler_.increment(GuiProfileCounter::ResultBuild);
+        if (completed->bosch_analysis != nullptr) {
+            profiler_.increment(GuiProfileCounter::BoschAnalysisBuild);
+        }
+        static_cast<void>(completed_results_.publish_ready(std::move(*completed)));
+        return true;
+    }
+    if (const auto diagnostic = completed_finalizer_->diagnostic(); diagnostic.has_value()) {
+        set_status("Completed-run finalization failed: " + *diagnostic, true);
+        return true;
+    }
+    return false;
+}
+
+void GuiApplication::shutdown_background_work() {
+    if (completed_finalizer_ != nullptr) {
+        completed_finalizer_->set_wakeup({});
+        completed_finalizer_->cancel();
+    }
+}
+
+void GuiApplication::invalidate_completed_results() {
+    if (completed_finalizer_ != nullptr) {
+        completed_finalizer_->reset();
+    }
+    completed_results_.invalidate();
 }
 
 void GuiApplication::initialize_imgui_layout() {
@@ -348,7 +407,7 @@ void GuiApplication::record_active_project() {
 
 /*** Replaces the active session only after its caller has constructed it. ***/
 void GuiApplication::replace_session(std::unique_ptr<GuiSimulationSession> session) {
-    completed_results_.invalidate();
+    invalidate_completed_results();
     application_state_.replace_session(std::move(session));
     load_workspace_state();
     initialize_system_draft();
@@ -363,7 +422,7 @@ void GuiApplication::replace_session(std::unique_ptr<GuiSimulationSession> sessi
 
 /*** Activates one fully constructed project and its uniquely owned session. ***/
 void GuiApplication::replace_project(std::unique_ptr<ProjectContext> project) {
-    completed_results_.invalidate();
+    invalidate_completed_results();
     application_state_.replace_project(std::move(project));
     load_workspace_state();
     initialize_system_draft();
@@ -392,7 +451,7 @@ void GuiApplication::save_active_project() {
 
 /*** Returns the application to Home without retaining a session reference. ***/
 void GuiApplication::clear_session() {
-    completed_results_.invalidate();
+    invalidate_completed_results();
     application_state_.clear_session();
     load_workspace_state();
     initialize_system_draft();
@@ -418,9 +477,8 @@ void GuiApplication::publish_complete_snapshot(bool publish_finished_result) {
         const auto scenario = application_state_.has_active_project()
                                   ? application_state_.active_project().metadata().scenario_kind
                                   : std::string{"generic"};
-        if (completed_results_.publish_finished(data, scenario, session.performance_summary())) {
-            profiler_.increment(GuiProfileCounter::ResultBuild);
-        }
+        static_cast<void>(completed_finalizer_->request(
+            {std::move(data), scenario, session.performance_summary()}));
     } else {
         presentation_snapshot_ = std::make_shared<const SimulationSnapshot>(std::move(snapshot));
     }
@@ -461,7 +519,7 @@ bool GuiApplication::update_active_session() {
             publish_complete_snapshot(update.finished);
         }
         if (update.reset) {
-            completed_results_.invalidate();
+            invalidate_completed_results();
         }
         last_run_mode_ = workspace_state_.run_mode;
         return update.reset || update.paused || update.finished || update.transitions != 0 ||
@@ -700,7 +758,7 @@ void GuiApplication::open_project_dialog() {
     const auto result = open_project_from_dialog(
         application_state_, *dialogs_, paths_.projects_directory, project_runtime_resolver());
     if (result.status == ProjectWorkflowStatus::Applied) {
-        completed_results_.invalidate();
+        invalidate_completed_results();
         load_workspace_state();
         initialize_system_draft();
         structural_selection_.select_system();
@@ -892,7 +950,7 @@ void GuiApplication::apply_system_draft() {
     auto result =
         apply_system_project_draft(application_state_, *system_draft_, &run_configuration);
     if (result.valid()) {
-        completed_results_.invalidate();
+        invalidate_completed_results();
         publish_complete_snapshot(false);
         progress_ = application_state_.active_session().progress();
         structural_selection_.select_system();
@@ -1265,7 +1323,8 @@ void GuiApplication::draw_center_panels(const SimulationSnapshot& snapshot) {
             draw_signal_view(snapshot, runtime_selection_, signal_view_state_);
             break;
         case GuiCenterTab::Results: {
-            draw_results_view(progress_, completed_results_.get(), open_plot_visualizer_,
+            draw_results_view(progress_, completed_results_.get(), finalization_state(),
+                              open_plot_visualizer_,
                               request_completed_export_, results_view_state_);
             break;
         }
@@ -1448,7 +1507,7 @@ void GuiApplication::draw_right_sidebar(const SimulationSnapshot& snapshot) {
         if (system_draft_.has_value()) {
             apply_system_draft_requested_ = true;
         } else if (application_state_.active_session().apply_draft()) {
-            completed_results_.invalidate();
+            invalidate_completed_results();
             publish_complete_snapshot(false);
             progress_ = application_state_.active_session().progress();
             runtime_selection_.clear();
