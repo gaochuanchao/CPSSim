@@ -3,6 +3,7 @@
 #pragma once
 
 #include "cpssim/analysis/completed_run_result.hpp"
+#include "cpssim/gui/frame_scheduler.hpp"
 #include "cpssim/gui/selection_model.hpp"
 #include "cpssim/gui/workspace_state.hpp"
 
@@ -18,6 +19,7 @@ struct PlotVisualizerViewState {
 
 void draw_plot_visualizer(bool& open, const CompletedRunResult* completed,
                           GuiWorkspaceState& workspace, GuiSelection& selection,
-                          PlotVisualizerViewState& state);
+                          PlotVisualizerViewState& state,
+                          GuiPointerRegionMap* pointer_regions = nullptr);
 
 } // namespace cpssim::gui

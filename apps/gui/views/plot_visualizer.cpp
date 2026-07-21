@@ -238,12 +238,20 @@ void draw_lane(const RunResult& result, const GuiPlotLane& lane, GuiWorkspaceSta
 
 void draw_plot_visualizer(bool& open, const CompletedRunResult* completed,
                           GuiWorkspaceState& workspace, GuiSelection& selection,
-                          PlotVisualizerViewState& state) {
+                          PlotVisualizerViewState& state, GuiPointerRegionMap* pointer_regions) {
     if (!open)
         return;
     if (!ImGui::Begin("Plot Visualizer", &open)) {
         ImGui::End();
         return;
+    }
+    if (pointer_regions != nullptr) {
+        const auto position = ImGui::GetWindowPos();
+        pointer_regions->add(
+            {ImGui::GetID("Plot visualizer canvas"),
+             {position.x, position.y, position.x + ImGui::GetWindowWidth(),
+              position.y + ImGui::GetWindowHeight()},
+             GuiPointerRegionBehavior::PositionSensitive});
     }
     if (completed == nullptr || !completed->result->signals.model.has_value()) {
         ImGui::TextDisabled("No completed run is available.");

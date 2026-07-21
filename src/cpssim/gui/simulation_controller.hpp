@@ -89,6 +89,7 @@ class GuiCommandQueue {
 
     // Removes the oldest command, or returns no value when the queue is empty.
     std::optional<GuiCommand> pop();
+    bool empty() const noexcept { return commands_.empty(); }
 
   private:
     std::deque<GuiCommand> commands_;
@@ -153,6 +154,7 @@ class SimulationController {
 
     // Returns controller state without copying the detached trace snapshot.
     GuiRunState run_state() const { return run_state_; }
+    bool has_queued_commands() const noexcept { return !commands_.empty(); }
     SimulationProgress progress() const;
     RunPerformanceSummary performance_summary() const;
 

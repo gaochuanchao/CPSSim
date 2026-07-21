@@ -51,6 +51,17 @@ class GuiSimulationSession {
     SimulationSnapshot snapshot() const;
     SimulationProgress progress() const;
     RunPerformanceSummary performance_summary() const;
+    GuiRunState run_state() const {
+        return controller_ != nullptr ? controller_->run_state() : GuiRunState::NotConfigured;
+    }
+    bool has_queued_work() const noexcept {
+        return controller_ != nullptr && controller_->has_queued_commands();
+    }
+    bool needs_update() const noexcept {
+        return controller_ != nullptr &&
+               (controller_->run_state() == GuiRunState::Running ||
+                controller_->has_queued_commands());
+    }
     std::uint64_t run_generation() const { return run_generation_; }
 
   private:

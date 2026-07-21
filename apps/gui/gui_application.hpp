@@ -17,6 +17,8 @@
 #include "cpssim/application/gui_layout_store.hpp"
 #include "cpssim/application/recent_projects.hpp"
 #include "cpssim/gui/application_state.hpp"
+#include "cpssim/gui/frame_scheduler.hpp"
+#include "cpssim/gui/gui_profiler.hpp"
 #include "cpssim/gui/selection_model.hpp"
 #include "cpssim/gui/workspace_state.hpp"
 
@@ -49,12 +51,29 @@ class GuiApplication {
     bool has_active_session() const noexcept { return application_state_.has_active_session(); }
     bool has_active_project() const noexcept { return application_state_.has_active_project(); }
     GuiTheme theme() const noexcept { return workspace_state_.theme; }
+    GuiRunState run_state() const noexcept {
+        return application_state_.has_active_session()
+                   ? application_state_.active_session().run_state()
+                   : GuiRunState::NotConfigured;
+    }
+    bool has_queued_work() const noexcept {
+        return application_state_.has_active_session() &&
+               application_state_.active_session().has_queued_work();
+    }
+    bool needs_session_update() const noexcept {
+        return application_state_.has_active_session() &&
+               application_state_.active_session().needs_update();
+    }
+    bool background_pending() const noexcept { return false; }
+    GuiRedrawTracker& redraw_tracker() noexcept { return redraw_tracker_; }
+    GuiPointerRegionMap& pointer_regions() noexcept { return pointer_regions_; }
+    GuiProfiler& profiler() noexcept { return profiler_; }
     void replace_session(std::unique_ptr<GuiSimulationSession> session);
     void replace_project(std::unique_ptr<ProjectContext> project);
     void load_project_file(const std::filesystem::path& project_file);
     void save_active_project();
     void clear_session();
-    void update_active_session();
+    bool update_active_session();
     void update_imgui_layout_persistence();
     void draw_frame();
 
@@ -164,6 +183,10 @@ class GuiApplication {
     EventViewState event_view_state_;
     bool restore_center_tabs_{true};
     float text_scale_{1.0F};
+    GuiRedrawTracker redraw_tracker_;
+    GuiPointerRegionMap pointer_regions_;
+    GuiProfiler profiler_;
+    bool open_profiler_{false};
 };
 
 } // namespace cpssim::gui

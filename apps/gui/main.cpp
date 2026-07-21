@@ -16,6 +16,7 @@
 #include "cpssim/config/json_config.hpp"
 #include "cpssim/functional/mock_functional_model.hpp"
 #include "cpssim/gui/display_scale.hpp"
+#include "cpssim/gui/frame_scheduler.hpp"
 #include "cpssim/gui/simulation_session.hpp"
 
 #include "imgui.h"
@@ -31,6 +32,7 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -40,6 +42,68 @@ constexpr int default_window_width = 1200;
 constexpr int default_window_height = 760;
 constexpr float default_font_size = 16.0F;
 constexpr float default_scrollbar_size = 8.0F;
+
+struct NativeLoopState {
+    cpssim::GuiRedrawTracker redraw;
+    cpssim::GuiPointerRedrawPolicy pointer_policy;
+    const cpssim::GuiPointerRegionMap* pointer_regions{};
+    bool pointer_button_down{false};
+    bool key_down{false};
+
+    bool interactive() const noexcept { return pointer_button_down || key_down; }
+};
+
+NativeLoopState* loop_state(GLFWwindow* window) {
+    return static_cast<NativeLoopState*>(glfwGetWindowUserPointer(window));
+}
+
+void cursor_position_callback(GLFWwindow* window, double x, double y) {
+    auto* state = loop_state(window);
+    if (state == nullptr) {
+        return;
+    }
+    if (state->pointer_regions == nullptr ||
+        state->pointer_policy.cursor_moved({static_cast<float>(x), static_cast<float>(y)},
+                                           *state->pointer_regions)) {
+        state->redraw.request();
+    }
+}
+
+void mouse_button_callback(GLFWwindow* window, int, int action, int) {
+    if (auto* state = loop_state(window); state != nullptr) {
+        state->pointer_button_down = action != GLFW_RELEASE;
+        state->pointer_policy.button_changed(state->pointer_button_down);
+        state->redraw.request();
+    }
+}
+
+void scroll_callback(GLFWwindow* window, double, double) {
+    if (auto* state = loop_state(window); state != nullptr) {
+        state->redraw.request();
+    }
+}
+
+void key_callback(GLFWwindow* window, int, int, int action, int) {
+    if (auto* state = loop_state(window); state != nullptr) {
+        state->key_down = action != GLFW_RELEASE;
+        state->redraw.request();
+    }
+}
+
+void character_callback(GLFWwindow* window, unsigned int) {
+    if (auto* state = loop_state(window); state != nullptr) {
+        state->redraw.request();
+    }
+}
+
+void invalidate_window_callback(GLFWwindow* window, int, int) {
+    if (auto* state = loop_state(window); state != nullptr) {
+        state->redraw.request();
+        if (state->pointer_regions != nullptr) {
+            const_cast<cpssim::GuiPointerRegionMap*>(state->pointer_regions)->invalidate();
+        }
+    }
+}
 
 /*** Reports GLFW errors to the application diagnostic stream. ***/
 void glfw_error_callback(int error, const char* description) {
@@ -104,6 +168,16 @@ int run_gui(std::unique_ptr<cpssim::GuiSimulationSession> session,
         throw std::runtime_error{"GLFW window creation failed"};
     }
 
+    NativeLoopState loop;
+    glfwSetWindowUserPointer(window, &loop);
+    glfwSetCursorPosCallback(window, cursor_position_callback);
+    glfwSetMouseButtonCallback(window, mouse_button_callback);
+    glfwSetScrollCallback(window, scroll_callback);
+    glfwSetKeyCallback(window, key_callback);
+    glfwSetCharCallback(window, character_callback);
+    glfwSetFramebufferSizeCallback(window, invalidate_window_callback);
+    glfwSetWindowSizeCallback(window, invalidate_window_callback);
+
     glfwMakeContextCurrent(window);
     glfwSwapInterval(1);
 
@@ -159,10 +233,37 @@ int run_gui(std::unique_ptr<cpssim::GuiSimulationSession> session,
     base_style = make_base_style(applied_theme);
     apply_display_scale(base_style, display_scale);
     ImVec2 last_framebuffer_scale{1.0F, 1.0F};
+    loop.pointer_regions = &application.pointer_regions();
+    auto last_present = std::chrono::steady_clock::now() - std::chrono::milliseconds{17};
 
     while (glfwWindowShouldClose(window) == GLFW_FALSE) {
-        glfwPollEvents();
-        application.update_active_session();
+        const auto activity = cpssim::classify_gui_frame_activity(
+            {.run_state = application.run_state(),
+             .queued_work = application.has_queued_work(),
+             .interactive = loop.interactive(),
+             .background_pending = application.background_pending()});
+        const auto wait = cpssim::gui_wait_strategy(activity);
+        if (wait == cpssim::GuiWaitStrategy::Poll) {
+            application.profiler().increment(cpssim::GuiProfileCounter::Poll);
+            glfwPollEvents();
+        } else if (!loop.redraw.pending() && !application.needs_session_update()) {
+            if (wait == cpssim::GuiWaitStrategy::WaitWithTimeout) {
+                application.profiler().increment(cpssim::GuiProfileCounter::TimedWait);
+                glfwWaitEventsTimeout(0.05);
+            } else {
+                application.profiler().increment(cpssim::GuiProfileCounter::IndefiniteWait);
+                glfwWaitEvents();
+            }
+        } else {
+            glfwPollEvents();
+        }
+        if (application.needs_session_update()) {
+            cpssim::GuiScopedProfileTimer timer{application.profiler(),
+                                                cpssim::GuiProfileTimer::ControllerUpdate};
+            if (application.update_active_session()) {
+                loop.redraw.request();
+            }
+        }
 
         const auto reported_display_scale = ImGui_ImplGlfw_GetContentScaleForWindow(window);
         if (cpssim::gui_presentation_style_changed(applied_theme, application.theme(),
@@ -174,6 +275,8 @@ int run_gui(std::unique_ptr<cpssim::GuiSimulationSession> session,
             display_scale =
                 cpssim::sanitize_gui_display_scale(reported_display_scale, display_scale);
             apply_display_scale(base_style, display_scale);
+            application.pointer_regions().invalidate();
+            loop.redraw.request();
         }
 
         int display_width = 0;
@@ -183,6 +286,22 @@ int run_gui(std::unique_ptr<cpssim::GuiSimulationSession> session,
             glfwWaitEventsTimeout(0.05);
             continue;
         }
+
+        if (!loop.redraw.pending() && activity == cpssim::GuiFrameActivity::FullyIdle) {
+            application.profiler().increment(cpssim::GuiProfileCounter::SkippedFrame);
+            continue;
+        }
+
+        if (wait == cpssim::GuiWaitStrategy::Poll) {
+            constexpr auto minimum_frame_period = std::chrono::microseconds{16'667};
+            const auto due = last_present + minimum_frame_period;
+            if (std::chrono::steady_clock::now() < due) {
+                std::this_thread::sleep_until(due);
+            }
+        }
+
+        cpssim::GuiScopedProfileTimer frame_timer{application.profiler(),
+                                                  cpssim::GuiProfileTimer::Frame};
 
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
@@ -194,7 +313,11 @@ int run_gui(std::unique_ptr<cpssim::GuiSimulationSession> session,
         last_framebuffer_scale = io.DisplayFramebufferScale;
         ImGui::NewFrame();
 
-        application.draw_frame();
+        {
+            cpssim::GuiScopedProfileTimer timer{application.profiler(),
+                                                cpssim::GuiProfileTimer::ImGuiBuild};
+            application.draw_frame();
+        }
 
         ImGui::Render();
         application.update_imgui_layout_persistence();
@@ -204,8 +327,16 @@ int run_gui(std::unique_ptr<cpssim::GuiSimulationSession> session,
         glClear(GL_COLOR_BUFFER_BIT);
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
         glfwSwapBuffers(window);
+        last_present = std::chrono::steady_clock::now();
+        loop.redraw.acknowledge();
+        application.profiler().increment(cpssim::GuiProfileCounter::RenderedFrame);
+        if (applied_theme != application.theme()) {
+            loop.redraw.request();
+        }
     }
 
+    loop.pointer_regions = nullptr;
+    glfwSetWindowUserPointer(window, nullptr);
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImPlot::DestroyContext();

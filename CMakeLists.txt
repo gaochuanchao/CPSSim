@@ -256,6 +256,8 @@ add_library(
     src/cpssim/gui/architecture_graph.cpp
     src/cpssim/gui/display_scale.cpp
     src/cpssim/gui/event_table_model.cpp
+    src/cpssim/gui/frame_scheduler.cpp
+    src/cpssim/gui/gui_profiler.cpp
     src/cpssim/gui/draft_run_plan.cpp
     src/cpssim/gui/editable_system_draft.cpp
     src/cpssim/gui/system_builder_interaction.cpp
@@ -532,6 +534,7 @@ if(BUILD_TESTING)
             tests/gui/draft_run_plan_test.cpp
             tests/gui/editable_system_draft_test.cpp
             tests/gui/event_table_model_test.cpp
+            tests/gui/frame_scheduler_test.cpp
             tests/gui/presentation_model_test.cpp
             tests/gui/resource_presentation_test.cpp
             tests/gui/selection_model_test.cpp

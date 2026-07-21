@@ -63,12 +63,20 @@ void remove_vertical_item_spacing() {
 }
 
 void draw_horizontal_splitter(const char* identity, float available_height, float splitter_height,
-                              float& ratio) {
+                              float& ratio, GuiPointerRegionMap* pointer_regions = nullptr) {
     const auto usable = std::max(0.0F, available_height - splitter_height);
     const auto desired_minimum = 6.0F * ImGui::GetTextLineHeightWithSpacing();
     const auto minimum = std::min(desired_minimum, usable * 0.45F);
     remove_vertical_item_spacing();
     ImGui::InvisibleButton(identity, ImVec2{-1.0F, splitter_height});
+    if (pointer_regions != nullptr) {
+        const auto item_minimum = ImGui::GetItemRectMin();
+        const auto item_maximum = ImGui::GetItemRectMax();
+        pointer_regions->add(
+            {ImGui::GetID(identity),
+             {item_minimum.x, item_minimum.y, item_maximum.x, item_maximum.y},
+             GuiPointerRegionBehavior::DragHandle});
+    }
     if (ImGui::IsItemHovered() || ImGui::IsItemActive()) {
         ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
     }
@@ -397,8 +405,10 @@ void GuiApplication::clear_session() {
 }
 
 /*** Advances queued simulation commands only when a session is active. ***/
-void GuiApplication::update_active_session() {
-    if (application_state_.has_active_session()) {
+bool GuiApplication::update_active_session() {
+    if (application_state_.has_active_session() &&
+        application_state_.active_session().needs_update()) {
+        const auto previous = progress_;
         auto& session = application_state_.active_session();
         const auto settings =
             GuiExecutionSettings{.mode = workspace_state_.run_mode,
@@ -425,7 +435,12 @@ void GuiApplication::update_active_session() {
                                                                   session.performance_summary()));
         }
         last_run_mode_ = workspace_state_.run_mode;
+        return update.reset || update.paused || update.finished || update.transitions != 0 ||
+               progress_.run_state != previous.run_state ||
+               progress_.current_tick != previous.current_tick ||
+               progress_.event_count != previous.event_count;
     }
+    return false;
 }
 
 void GuiApplication::update_imgui_layout_persistence() {
@@ -540,6 +555,13 @@ bool GuiApplication::draw_main_menu() {
         }
         ImGui::EndMenu();
     }
+
+#if !defined(NDEBUG)
+    if (ImGui::BeginMenu("Debug")) {
+        ImGui::MenuItem("GUI Profiler", nullptr, &open_profiler_);
+        ImGui::EndMenu();
+    }
+#endif
 
     ImGui::EndMenuBar();
     if (pending_project_action_ != PendingProjectAction::None) {
@@ -1148,6 +1170,13 @@ void GuiApplication::draw_center_panels(const SimulationSnapshot& snapshot) {
     const auto draw_content = [&](GuiCenterTab tab) {
         switch (tab) {
         case GuiCenterTab::Architecture: {
+            const auto region_min = ImGui::GetCursorScreenPos();
+            const auto region_size = ImGui::GetContentRegionAvail();
+            pointer_regions_.add(
+                {ImGui::GetID("Architecture interaction region"),
+                 {region_min.x, region_min.y, region_min.x + region_size.x,
+                  region_min.y + region_size.y},
+                 GuiPointerRegionBehavior::BoundarySensitive});
             auto previewing = false;
             const auto* experiment = &snapshot.experiment;
             std::optional<ExperimentPresentationSnapshot> preview;
@@ -1191,6 +1220,15 @@ void GuiApplication::draw_center_panels(const SimulationSnapshot& snapshot) {
             break;
         }
         case GuiCenterTab::Timeline:
+            {
+                const auto region_min = ImGui::GetCursorScreenPos();
+                const auto region_size = ImGui::GetContentRegionAvail();
+                pointer_regions_.add(
+                    {ImGui::GetID("Timeline interaction region"),
+                     {region_min.x, region_min.y, region_min.x + region_size.x,
+                      region_min.y + region_size.y},
+                     GuiPointerRegionBehavior::PositionSensitive});
+            }
             if (draw_timeline_view(snapshot, runtime_selection_, timeline_view_state_))
                 workspace_state_.panels.inspector = true;
             break;
@@ -1255,7 +1293,7 @@ void GuiApplication::draw_center_panels(const SimulationSnapshot& snapshot) {
                    workspace_state_.active_upper_tab, true);
         ImGui::EndChild();
         draw_horizontal_splitter("Center panel splitter", available_height, splitter_height,
-                                 workspace_state_.center_split_ratio);
+                                 workspace_state_.center_split_ratio, &pointer_regions_);
         ImGui::BeginChild("Lower center panel", ImVec2{0.0F, 0.0F}, ImGuiChildFlags_Borders);
         draw_group("Lower center tabs", workspace_state_.lower_tabs,
                    workspace_state_.active_lower_tab, false);
@@ -1342,7 +1380,7 @@ void GuiApplication::draw_left_sidebar(const SimulationSnapshot& snapshot) {
         draw_explorer();
         ImGui::EndChild();
         draw_horizontal_splitter("Explorer Builder splitter", available_height, splitter_height,
-                                 workspace_state_.left_sidebar_ratio);
+                                 workspace_state_.left_sidebar_ratio, &pointer_regions_);
         ImGui::BeginChild("Builder lower", ImVec2{0.0F, 0.0F});
         draw_builder();
         ImGui::EndChild();
@@ -1393,7 +1431,7 @@ void GuiApplication::draw_right_sidebar(const SimulationSnapshot& snapshot) {
     ImGui::EndChild();
     ImGui::EndChild();
     draw_horizontal_splitter("Run Inspector splitter", available_height, splitter_height,
-                             workspace_state_.right_sidebar_ratio);
+                             workspace_state_.right_sidebar_ratio, &pointer_regions_);
     ImGui::BeginChild("Runtime Inspector lower", ImVec2{0.0F, 0.0F});
     ImGui::BeginChild("Runtime Inspector panel", ImVec2{0.0F, 0.0F}, ImGuiChildFlags_Borders);
     ImGui::TextUnformatted("Runtime Inspector");
@@ -1415,6 +1453,12 @@ void GuiApplication::draw_workbench(const SimulationSnapshot& snapshot) {
     ImGui::BeginChild("Simulation toolbar", ImVec2{0.0F, toolbar_height}, ImGuiChildFlags_Borders,
                       ImGuiWindowFlags_HorizontalScrollbar);
     draw_toolbar(session, progress_, workspace_state_);
+    const auto toolbar_min = ImGui::GetWindowPos();
+    const auto toolbar_max = ImVec2{toolbar_min.x + ImGui::GetWindowWidth(),
+                                    toolbar_min.y + ImGui::GetWindowHeight()};
+    pointer_regions_.add({ImGui::GetID("Simulation toolbar region"),
+                          {toolbar_min.x, toolbar_min.y, toolbar_max.x, toolbar_max.y},
+                          GuiPointerRegionBehavior::BoundarySensitive});
     ImGui::EndChild();
 
     if (!application_status_.empty()) {
@@ -1563,6 +1607,7 @@ void GuiApplication::draw_home_screen() {
 
 /*** Fills the native window with Home or a detached-snapshot workbench. ***/
 void GuiApplication::draw_frame() {
+    pointer_regions_.begin_frame();
     apply_pending_imgui_layout();
     ImGui::GetStyle().FontScaleMain = text_scale_;
 
@@ -1597,7 +1642,7 @@ void GuiApplication::draw_frame() {
     draw_bosch_wizard();
     draw_export_dialog();
     draw_plot_visualizer(open_plot_visualizer_, completed_results_.get(), workspace_state_,
-                         runtime_selection_, plot_visualizer_view_state_);
+                         runtime_selection_, plot_visualizer_view_state_, &pointer_regions_);
     if (validate_system_draft_requested_) {
         validate_system_draft_requested_ = false;
         validate_system_draft();
@@ -1617,6 +1662,26 @@ void GuiApplication::draw_frame() {
         export_diagnostic_.clear();
         open_export_dialog_ = true;
     }
+#if !defined(NDEBUG)
+    if (open_profiler_) {
+        if (ImGui::Begin("GUI Profiler", &open_profiler_)) {
+            const auto values = profiler_.snapshot();
+            static constexpr const char* counter_names[]{
+                "Poll",          "Timed wait",       "Indefinite wait", "Rendered frames",
+                "Skipped frames", "Background wakes", "Snapshots",       "Results",
+                "Event rows",    "Event filters",    "Plot caches",     "Bosch analyses"};
+            for (std::size_t index = 0; index < values.counters.size(); ++index) {
+                ImGui::Text("%s: %llu", counter_names[index],
+                            static_cast<unsigned long long>(values.counters[index]));
+            }
+            if (ImGui::Button("Reset counters")) {
+                profiler_.reset();
+            }
+        }
+        ImGui::End();
+    }
+#endif
+    pointer_regions_.publish();
 }
 
 } // namespace cpssim::gui
