@@ -7,6 +7,7 @@
 #include "imgui.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cstdint>
 #include <string>
 #include <type_traits>
@@ -100,19 +101,24 @@ void draw_filters(GuiEventFilters& filters, GuiEventColumnVisibility& columns,
 } // namespace
 
 void draw_event_view(const SimulationSnapshot& snapshot, std::uint64_t presentation_generation,
-                     GuiSelection& selection,
-                     GuiEventFilters& filters, GuiEventColumnVisibility& columns,
-                     EventViewState& state, GuiProfiler* profiler) {
+                     GuiSelection& selection, GuiEventFilters& filters,
+                     GuiEventColumnVisibility& columns, EventViewState& state,
+                     GuiProfiler* profiler) {
     draw_filters(filters, columns, state);
     const auto row_builds = state.cache.row_build_count();
     const auto filter_builds = state.cache.filter_build_count();
+    const auto cache_started = std::chrono::steady_clock::now();
     state.cache.update_rows(presentation_generation, snapshot);
     state.cache.update_filter(filters, std::chrono::steady_clock::now());
     if (profiler != nullptr) {
-        profiler->increment(GuiProfileCounter::EventCacheBuild,
-                            state.cache.row_build_count() - row_builds);
+        const auto new_row_builds = state.cache.row_build_count() - row_builds;
+        profiler->increment(GuiProfileCounter::EventCacheBuild, new_row_builds);
         profiler->increment(GuiProfileCounter::EventFilterBuild,
                             state.cache.filter_build_count() - filter_builds);
+        if (new_row_builds != 0) {
+            profiler->record(GuiProfileTimer::EventCacheBuild,
+                             std::chrono::steady_clock::now() - cache_started);
+        }
     }
     const auto& rows = state.cache.rows();
     const auto& projected = state.cache.filtered_indices();

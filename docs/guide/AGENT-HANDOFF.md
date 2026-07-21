@@ -141,8 +141,12 @@ these rules.
 | `ProjectContext` | project root/metadata, loaded specifications/workspace, runtime factory inputs, and sole GUI session |
 | `RecentProjects` | normalized bounded GUI user-preference history |
 | `system_builder_workflow` | canonical config/plan validation and atomic project/session reconstruction |
-| `RunResult` | detached immutable run input, typed signal series, and deterministic generic metrics |
+| `CompletedRunData` | one shared immutable complete snapshot per finished runtime generation |
+| `RunResult` | shared completed-run input, typed signal series, and deterministic generic metrics |
 | `CompletedRunResultCache` | one finish-only immutable result and performance summary per run generation |
+| `CompletedRunFinalizer` | managed immutable-input worker; GUI-boundary Ready publication and cancellation/join |
+| `GuiPresentationPublisher` | runtime/data/presentation generation policy and coherent publication rate |
+| `GuiPointerRegionMap` / `GuiRedrawTracker` | last-frame high-value pointer geometry and redraw generations |
 | `SimulationProgress` | cheap run state/tick/event count used while Fast views remain frozen |
 | `result_export` | atomic run-directory publication and raw result schemas |
 | `results_workbook` | XLSX convenience rendering and deterministic row splitting |
@@ -189,17 +193,18 @@ the C++ behavior silently.
 - multiple servers/scheduling domains, resource capacity sharing, migration,
   richer networks, and richer GUI analysis need explicit designs;
 - the current fixed GUI workbench has no docking,
-  unit-grouped/multiple signal axes, or background thread; timeline and
+  unit-grouped/multiple signal axes, or simulation worker thread; timeline and
   signal viewports and text scale are not persisted; run-plan fields may be
   edited or loaded only while no run exists or the active run is
   Paused/Finished;
-- architecture layout is deliberately simple and workspace pan/zoom is not
-  persisted; graph task drops edit the pending plan and never migrate active
-  jobs;
+- architecture task/resource layout, pan/zoom, and Select/Arrange/Assign mode
+  are workspace-only; Assign changes the pending plan and never migrates active
+  jobs or applies automatically;
 - current-monitor display scale updates automatically; theme changes rebuild
   an unscaled base style before that scale is applied once; workspace schemas
   1 and 2 migrate to schema 3, which also persists Results visibility and the
-  active Results tab;
+  active Results tab; schemas through 4 migrate to schema 5, which adds
+  Architecture geometry/mode and Results section ratios;
 - Dear ImGui disk persistence is manual: `apps/gui/imgui.ini` is the fixed
   default, optional project-root `imgui.ini` files are written only by Save or
   Save As, and unsaved staging is deleted on replacement or shutdown;
@@ -224,8 +229,52 @@ per run generation. Reset and semantic/project replacement invalidate them.
 
 ImPlot is GUI-only at commit `524f9fcd48d76c13fdf94c5ffbba8787a1ff7e39`
 (MIT); demo sources are not built and the OpenGL vertex-offset flag is checked.
-Matplot++, plot-image export, background execution, comparison, sweeps, and
+Matplot++, plot-image export, background simulation, comparison, sweeps, and
 multi-vehicle research remain outside this boundary.
+
+## Latest Goal 6 stabilization boundary
+
+Goal 6 makes Dear ImGui frame production event-driven. A pure activity policy
+selects Poll, timed background wait, or indefinite idle wait before any ImGui
+frame begins. Redraw generations and last-frame high-value pointer regions
+avoid passive-motion frames while retaining boundary hover and coordinate
+feedback. Debug builds expose wait/frame/cache counters and last/maximum
+timings.
+
+Runtime, simulation-data, and presentation generations centralize coherent
+snapshots. Live publication is capped at 15 Hz and semantic boundaries publish
+immediately. Finish detaches one shared immutable `CompletedRunData`; a managed
+`std::jthread` derives signals, metrics, Bosch analysis, and indexes without
+accessing mutable simulation/FMU or graphics state. Ready is published only at
+a GUI frame boundary, with `glfwPostEmptyEvent()` waking the native loop.
+
+Canonical Events caches source-order rows/search text by presentation
+generation, debounces text filtering, clips filtered indices, and lazily emits
+raw JSON. Completed plots cache width/range/axis/signal projections, retain
+full-resolution tooltip/export data, preserve digital transitions, and reuse
+the finalizer-owned Bosch analysis. Architecture now has explicit Logical and
+Communication presentation connections, persistent structural selection,
+compact ported boxes, orthogonal routes, and persisted Select/Arrange/Assign
+layout. Workspace schema 5 also owns Results section splitters and migration.
+Simulation stepping, event phases, FMI calls, and Bosch triggers remain
+unchanged. The architecture decision is
+[ADR-0025](../adr/0025-use-event-driven-frames-and-immutable-result-finalization.md).
+
+Goal 6 validation completed on 2026-07-21:
+
+- `cmake --build --preset gui -j2` passed;
+- `ctest --test-dir build/gui --output-on-failure` passed 282/282 tests,
+  including 104 GUI tests and both Bosch conformance executables;
+- `./scripts/verify.sh full` passed formatting plus Debug, ASan/UBSan,
+  Release, Clang, and clang-tidy, with 282/282 tests in every profile; and
+- `cpssim_gui --help` and `git diff --check` passed.
+
+The automated environment has neither an X11 display nor Xvfb, so the pinned
+desktop Live/Fast timing table, five-second native-loop idle counters, cursor
+redraw observation, plot interaction feel, and mixed-DPI monitor check remain
+manual. The procedure and unfilled measurements are recorded in
+[GUI performance verification](../gui/GUI_PERFORMANCE.md); no values were
+inferred from headless tests.
 
 End every handoff with exact commands/results, changed documents, limitations,
 and the next permitted task. Update this page whenever the implemented project

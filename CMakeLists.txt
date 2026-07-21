@@ -538,6 +538,7 @@ if(BUILD_TESTING)
             tests/gui/editable_system_draft_test.cpp
             tests/gui/event_table_model_test.cpp
             tests/gui/frame_scheduler_test.cpp
+            tests/gui/gui_profiler_test.cpp
             tests/gui/presentation_model_test.cpp
             tests/gui/presentation_publication_test.cpp
             tests/gui/resource_presentation_test.cpp

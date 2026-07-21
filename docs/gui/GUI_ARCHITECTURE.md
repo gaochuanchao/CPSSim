@@ -71,6 +71,8 @@ The view files are deliberately small boundaries:
 | File | Responsibility | Closest test |
 |---|---|---|
 | [`display_scale.*`](../../src/cpssim/gui/display_scale.hpp) | safe display/framebuffer scale fallback, layout bounds, font-bake floor, and change detection | [`display_scale_test.cpp`](../../tests/gui/display_scale_test.cpp) |
+| [`frame_scheduler.*`](../../src/cpssim/gui/frame_scheduler.hpp) | pure frame-activity, native wait, redraw-generation, and high-value pointer-region policy | [`frame_scheduler_test.cpp`](../../tests/gui/frame_scheduler_test.cpp) |
+| [`gui_profiler.*`](../../src/cpssim/gui/gui_profiler.hpp) | development counters and last/maximum phase timings | [`gui_profiler_test.cpp`](../../tests/gui/gui_profiler_test.cpp) |
 | [`simulation_controller.*`](../../src/cpssim/gui/simulation_controller.hpp) | FIFO commands, current engine/policy/model ownership, detached snapshots | [`simulation_controller_test.cpp`](../../tests/gui/simulation_controller_test.cpp) |
 | [`simulation_session.*`](../../src/cpssim/gui/simulation_session.hpp) | loaded experiment, draft/active plan boundary, atomic controller replacement | [`draft_run_plan_test.cpp`](../../tests/gui/draft_run_plan_test.cpp) |
 | [`draft_run_plan.*`](../../src/cpssim/gui/draft_run_plan.hpp) | incomplete editable run-plan values and validation input | [`draft_run_plan_test.cpp`](../../tests/gui/draft_run_plan_test.cpp) |
@@ -84,6 +86,8 @@ The view files are deliberately small boundaries:
 | [`workspace_state.*`](../../src/cpssim/gui/workspace_state.hpp) | versioned presentation preferences and normalized splitter geometry | [`workspace_state_test.cpp`](../../tests/gui/workspace_state_test.cpp) |
 | [`resource_presentation.*`](../../src/cpssim/gui/resource_presentation.hpp) | utilization derived from detached resource counters | [`resource_presentation_test.cpp`](../../tests/gui/resource_presentation_test.cpp) |
 | [`event_table_model.*`](../../src/cpssim/gui/event_table_model.hpp) | canonical event-row projection, filtering, and cause lookup | [`event_table_model_test.cpp`](../../tests/gui/event_table_model_test.cpp) |
+| [`presentation_publication.*`](../../src/cpssim/gui/presentation_publication.hpp) | runtime/data/presentation generation policy and 15 Hz Live publication gate | [`presentation_publication_test.cpp`](../../tests/gui/presentation_publication_test.cpp) |
+| [`completed_run_finalizer.*`](../../src/cpssim/analysis/completed_run_finalizer.hpp) | managed immutable-input result finalization and GUI-boundary publication | [`completed_run_finalizer_test.cpp`](../../tests/analysis/completed_run_finalizer_test.cpp) |
 | [`analysis/run_result.*`](../../src/cpssim/analysis/run_result.hpp) | immutable detached run result and deterministic generic metrics | [`run_result_test.cpp`](../../tests/analysis/run_result_test.cpp) |
 | [`application/result_export.*`](../../src/cpssim/application/result_export.hpp) | versioned manifest plus atomic authoritative JSON/CSV publication | [`result_export_test.cpp`](../../tests/application/result_export_test.cpp) |
 | [`application/results_workbook.*`](../../src/cpssim/application/results_workbook.hpp) | pinned-library XLSX convenience output and row-limit splitting | [`result_export_test.cpp`](../../tests/application/result_export_test.cpp) |
@@ -98,21 +102,39 @@ area, and Resources/Canonical Events stack use font-scaled minimum heights and
 normalized horizontal-split ratios. The ratios are project workspace state;
 no docking geometry is involved.
 
-## 3. One frame and one command
+## 3. Event-driven frames and commands
 
-The frame loop in `main.cpp` performs these steps:
+The native loop classifies activity before beginning a Dear ImGui frame:
 
 ```text
-poll native events
-    -> session.update()
+Running / Interactive  -> glfwPollEvents
+BackgroundPending      -> glfwWaitEventsTimeout(0.05)
+FullyIdle               -> glfwWaitEvents
+```
+
+After the wait it performs only required work:
+
+```text
+publish pending worker output at the GUI boundary
+    -> update the session only when running or commands are queued
     -> detect current-monitor scale and rebuild style if needed
     -> skip drawing while the framebuffer is unavailable
-    -> copy session.snapshot()
+    -> skip the entire Dear ImGui/OpenGL frame when fully idle and clean
     -> start Dear ImGui frame
     -> sanitize framebuffer density
-    -> GuiApplication::draw_frame(snapshot)
-    -> submit drawing
+    -> draw from current cached presentation models
+    -> render and swap
 ```
+
+Dear ImGui remains immediate-mode; CPSSim does not attempt dirty rectangles or
+partial framebuffer refresh. A redraw generation is invalidated by input,
+project/session/presentation changes, and stale pointer geometry. Pointer
+regions come from the last completed frame. Passive canvas/background motion
+is ignored; boundary-sensitive task/resource/connection regions redraw only on
+enter/leave; Timeline and Plot coordinates are position-sensitive; and
+splitter/scrollbar/resize handles redraw while dragged. A stale map permits one
+conservative recovery frame. An active-frame cap near 60 Hz is a fallback when
+swap blocking is ineffective.
 
 `session.update()` consumes queued commands before presentation publication.
 Live mode processes one complete logical event tick. Fast mode cooperatively
@@ -121,10 +143,21 @@ returning to the GUI. Both use the same engine step, so VSync and wall-clock
 batch guards cannot change the sequence of simulated ticks.
 
 Fast Running publishes lightweight progress while heavy views retain the last
-complete detached snapshot. Pause, Finish, Reset, and switching to Live publish
-a coherent snapshot. A generation-aware cache builds `RunResult` exactly once
-after Finish and never while Running or Paused; see
-[ADR-0024](../adr/0024-use-cooperative-fast-batches-and-completed-run-implot.md).
+complete detached snapshot. `runtime_generation`, `simulation_data_generation`,
+and `presentation_generation` make publication explicit. Live publication is
+capped at 15 Hz; Pause, Finish, Reset, completed Step, Fast-to-Live, and runtime
+replacement publish immediately. Finished state never republishes an unchanged
+snapshot.
+
+On Finish, one immutable shared `CompletedRunData` owns the complete snapshot.
+A managed `std::jthread` receives only that data and builds generic metrics,
+the signal model, Bosch analysis, and indexes. It cannot access the mutable
+session/FMU/controller, GLFW/ImGui, selection, or workspace. The GUI first
+shows `Finalizing completed run...`; the worker posts `glfwPostEmptyEvent()`
+and the GUI publishes Ready only at its next frame boundary. Reset, Apply,
+project replacement/close, and shutdown cancel and join the worker. `RunResult`
+references the shared data rather than copying the full trace again. See
+[ADR-0025](../adr/0025-use-event-driven-frames-and-immutable-result-finalization.md).
 
 GLFW can temporarily report a zero-sized framebuffer while a window is
 minimized or crosses monitors. The frame loop does not begin an ImGui frame in
@@ -172,7 +205,9 @@ Use this table before adding a field:
 | Explorer/System Builder structural identity | `StructuralSelection` |
 | Runtime entity and inclusive tick range | `GuiSelection` |
 | Derived graph/timeline/signal data | corresponding GUI-support builder/cache |
-| Immutable run result and generic metrics | finish-only `CompletedRunResultCache`, derived once from a complete `SimulationSnapshot` |
+| Immutable completed snapshot | shared `CompletedRunData`, detached once per runtime generation |
+| Immutable run result and generic/Bosch metrics | `CompletedRunFinalizer` then finish-only `CompletedRunResultCache` |
+| Frame invalidation, pointer geometry, waits, profiling | native loop plus graphics-independent frame/profiler support |
 | Atomic result-directory publication | `result_export` application service |
 | Default, staged, and project-specific Dear ImGui layout text | `GuiLayoutStore` |
 | Home/Workbench and optional active project/session | `GuiApplicationState` |
@@ -293,7 +328,7 @@ Builder. `GuiSelection` contains runtime highlighting/inspection identity and
 an independent optional inclusive tick range:
 
 ```text
-structural = system | section | resource | task | profile key | route key
+structural = system | section | resource | task | profile key | route key | connection key
 runtime    = none | experiment | task | resource | route | job | event
 time       = no range | [begin_tick, end_tick]
 ```
@@ -304,7 +339,7 @@ The values have separate owners:
 flowchart LR
     Explorer --> Structural[StructuralSelection]
     Structural --> Builder[System Builder]
-    Architecture --> Runtime[GuiSelection]
+    Architecture --> Structural[StructuralSelection]
     Timeline --> Runtime
     Signals --> Runtime
     Events --> Runtime
@@ -328,10 +363,20 @@ resource nodes plus message-route and assignment edges. Resources and tasks
 are sorted by strong ID. Acyclic message routes influence task layers; cycles
 fall back to stable TaskId order. Logical coordinates are graphics-independent.
 
-The draw view owns only canvas pan, zoom, fit, drag feedback, and selection.
-A task drop calls the session's draft API. It cannot migrate an active job.
-Zoom-scaled architecture labels pass through `sanitize_gui_font_size`, which
-keeps ImGui's integer font-bake request above zero even at minimum zoom.
+The GUI-only graph has explicit Logical and Communication connections. Bosch
+logical dependencies display latency zero and create no messages;
+communication connections display 80 ticks. The adapter-owned one-tick send
+handoff is never exposed. Solid lines represent logical dependencies and
+dashed lines represent communication. Assignment lines are intentionally
+absent.
+
+Select mode updates persistent structural selection for tasks, resources, and
+connections. Arrange mode persists task positions and independent resource
+position/size overrides. Assign mode changes only draft task/resource
+assignments and never applies them automatically. Compact one-line task boxes
+use deterministic input/output ports and orthogonal routes. Auto Layout,
+per-entity reset/auto-size, pan, zoom, and mode are workspace presentation
+state. Selection remains available while Running, while controls stay read-only.
 
 ### Scheduling timeline
 
@@ -383,6 +428,21 @@ visible endpoints and extrema without modifying the stored series.
 Functional-model recreation and snapshot ownership are specified by
 [ADR-0021](../adr/0021-recreate-functional-models-and-copy-observations-for-gui-runs.md).
 
+### Canonical Events and completed plots
+
+`GuiEventTableCache` projects rows once per `presentation_generation`, preserves
+source canonical order, and precomputes compact lowercase search text. Filtered
+indices are cached and text filtering is debounced by 150 ms. The view clips
+the filtered index list; raw JSON is generated only for a selected/copy/export
+row. Selection remains an `EventSequence`, never a row index.
+
+Bosch result analysis is built once in finalization. `GuiPlotDataCache` keys
+completed plot models by run generation, signals, axis unit, range, and width.
+Its point budget is `clamp(2 * width, 512, 8192)`; min/max buckets preserve
+first, last, and extrema while digital transitions remain exact. Tooltip and
+export queries use full-resolution data. Cursor movement does not invalidate
+X/Y data; only visible lanes and merged visible critical intervals are drawn.
+
 ## 10. Immediate-mode rendering
 
 Dear ImGui redraws widgets every frame. Persistent values therefore live in an
@@ -423,10 +483,9 @@ beside the Dear ImGui context, and its demo sources are not built. A new graph
 or plotting dependency needs separate evidence, a reviewed version/hash, a
 GUI-only CMake boundary, and an ADR when it materially changes architecture.
 
-The application and controller are currently single-threaded. A background
-simulation would add synchronization, cancellation, shutdown, FMU ownership,
-and snapshot-publication decisions. Measure a real responsiveness problem and
-write an ADR before introducing it.
+Simulation, the controller, and all FMI calls remain on the GUI thread. Only
+post-Finish derivation uses a worker, across the immutable boundary described
+above. The worker never runs simulation and never calls graphics APIs.
 
 Four persistence domains remain separate:
 
@@ -436,9 +495,10 @@ Four persistence domains remain separate:
 4. GUI workspace and user preferences.
 
 Only experiment configuration and run plan affect simulation input. Workspace
-schema 4 persists theme, panel visibility, ordered upper/lower tabs, splitters,
-Fast pacing, visualizer preferences, event filters/columns, and selected
-signals. Schemas 1-3 migrate safely. Unknown
+schema 5 persists theme, panel visibility, ordered upper/lower tabs, splitters,
+Fast pacing, visualizer preferences, event filters/columns, selected signals,
+Architecture mode/pan/zoom/entity geometry, and Results section ratios.
+Schemas 1-4 migrate safely. Unknown
 fields and unsupported versions reject the optional workspace and report a
 fallback diagnostic; invalid known enum/ratio values use safe defaults. The
 separate recent-project preference file is also presentation-only.

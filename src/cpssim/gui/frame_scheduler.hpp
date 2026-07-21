@@ -63,10 +63,14 @@ class GuiPointerRedrawPolicy {
   public:
     bool cursor_moved(GuiPointerPoint point, const GuiPointerRegionMap& regions);
     void button_changed(bool pressed) noexcept { button_pressed_ = pressed; }
-    void clear_hover() noexcept { hovered_identity_.reset(); }
+    void clear_hover() noexcept {
+        hovered_identity_.reset();
+        hovered_behavior_.reset();
+    }
 
   private:
     std::optional<std::uint64_t> hovered_identity_;
+    std::optional<GuiPointerRegionBehavior> hovered_behavior_;
     std::optional<GuiPointerPoint> last_position_;
     bool button_pressed_{false};
 };

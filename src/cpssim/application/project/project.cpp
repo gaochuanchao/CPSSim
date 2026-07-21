@@ -369,9 +369,8 @@ std::string serialize_project_workspace_json(const ProjectWorkspace& workspace) 
     }
     Json task_layouts = Json::array();
     for (const auto& row : workspace.architecture.tasks) {
-        task_layouts.push_back({{"task_id", row.task_id.value()},
-                                {"x", row.position.x},
-                                {"y", row.position.y}});
+        task_layouts.push_back(
+            {{"task_id", row.task_id.value()}, {"x", row.position.x}, {"y", row.position.y}});
     }
     Json resource_layouts = Json::array();
     for (const auto& row : workspace.architecture.resources) {
@@ -393,10 +392,9 @@ std::string serialize_project_workspace_json(const ProjectWorkspace& workspace) 
          {{"upper", tab_name(workspace.active_upper_tab)},
           {"lower", tab_name(workspace.active_lower_tab)}}},
         {"architecture",
-         {{"mode", workspace.architecture.mode == GuiArchitectureMode::Arrange
-                       ? "arrange"
-                       : workspace.architecture.mode == GuiArchitectureMode::Assign ? "assign"
-                                                                                     : "select"},
+         {{"mode", workspace.architecture.mode == GuiArchitectureMode::Arrange  ? "arrange"
+                   : workspace.architecture.mode == GuiArchitectureMode::Assign ? "assign"
+                                                                                : "select"},
           {"pan_x", workspace.architecture.pan_x},
           {"pan_y", workspace.architecture.pan_y},
           {"zoom", workspace.architecture.zoom},
@@ -526,11 +524,10 @@ ProjectWorkspace parse_project_workspace_json(std::string_view json_text) {
     }
     if (const auto found = document.find("splitters");
         found != document.end() && found->is_object()) {
-        require_only_fields(
-            *found,
-            {"left_sidebar", "right_sidebar", "analysis_lower", "resources_events", "center",
-             "results_summary", "results_timing"},
-            "workspace $.splitters");
+        require_only_fields(*found,
+                            {"left_sidebar", "right_sidebar", "analysis_lower", "resources_events",
+                             "center", "results_summary", "results_timing"},
+                            "workspace $.splitters");
         workspace.left_sidebar_ratio =
             read_optional_float(*found, "left_sidebar", workspace.left_sidebar_ratio);
         workspace.right_sidebar_ratio =
@@ -550,9 +547,9 @@ ProjectWorkspace parse_project_workspace_json(std::string_view json_text) {
         if (const auto mode = architecture->find("mode");
             mode != architecture->end() && mode->is_string()) {
             const auto value = mode->get<std::string>();
-            workspace.architecture.mode = value == "arrange" ? GuiArchitectureMode::Arrange
+            workspace.architecture.mode = value == "arrange"  ? GuiArchitectureMode::Arrange
                                           : value == "assign" ? GuiArchitectureMode::Assign
-                                                                : GuiArchitectureMode::Select;
+                                                              : GuiArchitectureMode::Select;
         }
         workspace.architecture.pan_x =
             read_optional_float(*architecture, "pan_x", workspace.architecture.pan_x);
@@ -563,7 +560,8 @@ ProjectWorkspace parse_project_workspace_json(std::string_view json_text) {
         if (const auto tasks = architecture->find("tasks");
             tasks != architecture->end() && tasks->is_array()) {
             for (const auto& row : *tasks) {
-                if (!row.is_object()) continue;
+                if (!row.is_object())
+                    continue;
                 require_only_fields(row, {"task_id", "x", "y"}, "workspace $.architecture.tasks[]");
                 if (row.contains("task_id") && row["task_id"].is_number_unsigned() &&
                     row.contains("x") && row["x"].is_number() && row.contains("y") &&
@@ -577,21 +575,22 @@ ProjectWorkspace parse_project_workspace_json(std::string_view json_text) {
         if (const auto resources = architecture->find("resources");
             resources != architecture->end() && resources->is_array()) {
             for (const auto& row : *resources) {
-                if (!row.is_object()) continue;
+                if (!row.is_object())
+                    continue;
                 require_only_fields(row, {"resource_id", "x", "y", "width", "height"},
                                     "workspace $.architecture.resources[]");
                 if (!row.contains("resource_id") || !row["resource_id"].is_number_unsigned())
                     continue;
-                GuiResourceLayoutOverride value{
-                    ResourceId{row["resource_id"].get<std::uint64_t>()}, std::nullopt,
-                    std::nullopt};
+                GuiResourceLayoutOverride value{ResourceId{row["resource_id"].get<std::uint64_t>()},
+                                                std::nullopt, std::nullopt};
                 if (row.contains("x") && row["x"].is_number() && row.contains("y") &&
                     row["y"].is_number())
                     value.position = GuiLayoutPoint{row["x"].get<float>(), row["y"].get<float>()};
                 if (row.contains("width") && row["width"].is_number() && row.contains("height") &&
                     row["height"].is_number())
-                    value.size = GuiLayoutSize{row["width"].get<float>(), row["height"].get<float>()};
-                workspace.architecture.resources.push_back(std::move(value));
+                    value.size =
+                        GuiLayoutSize{row["width"].get<float>(), row["height"].get<float>()};
+                workspace.architecture.resources.push_back(value);
             }
         }
     }

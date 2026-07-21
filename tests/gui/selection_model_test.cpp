@@ -89,8 +89,7 @@ TEST_CASE("structural and runtime selections retain independent strong identitie
     synchronize_structural_selection(structural, draft);
     REQUIRE((structural.kind() == StructuralSelectionKind::ExecutionProfile));
 
-    structural.select_connection(
-        {GuiConnectionKind::Logical, TaskId{1}, TaskId{2}});
+    structural.select_connection({GuiConnectionKind::Logical, TaskId{1}, TaskId{2}});
     REQUIRE(structural.kind() == StructuralSelectionKind::Connection);
     REQUIRE(runtime.resource_id() == ResourceId{4});
 

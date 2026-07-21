@@ -32,33 +32,34 @@ bool CompletedRunFinalizer::request(CompletedRunFinalizationRequest request) {
         pending_error_.reset();
         state_ = CompletedResultFinalizationState::Finalizing;
     }
-    worker_ = std::jthread([this, request = std::move(request)](std::stop_token stop) mutable {
-        try {
-            auto result = builder_(request, stop);
-            if (stop.stop_requested()) {
-                return;
+    worker_ =
+        std::jthread([this, request = std::move(request)](const std::stop_token& stop) mutable {
+            try {
+                auto result = builder_(request, stop);
+                if (stop.stop_requested()) {
+                    return;
+                }
+                std::function<void()> wakeup;
+                {
+                    std::lock_guard lock{mutex_};
+                    pending_result_ = std::move(result);
+                    wakeup = wakeup_;
+                }
+                if (wakeup) {
+                    wakeup();
+                }
+            } catch (const std::exception& error) {
+                std::function<void()> wakeup;
+                {
+                    std::lock_guard lock{mutex_};
+                    pending_error_ = error.what();
+                    wakeup = wakeup_;
+                }
+                if (wakeup) {
+                    wakeup();
+                }
             }
-            std::function<void()> wakeup;
-            {
-                std::lock_guard lock{mutex_};
-                pending_result_ = std::move(result);
-                wakeup = wakeup_;
-            }
-            if (wakeup) {
-                wakeup();
-            }
-        } catch (const std::exception& error) {
-            std::function<void()> wakeup;
-            {
-                std::lock_guard lock{mutex_};
-                pending_error_ = error.what();
-                wakeup = wakeup_;
-            }
-            if (wakeup) {
-                wakeup();
-            }
-        }
-    });
+        });
     return true;
 }
 
@@ -95,8 +96,7 @@ CompletedResultFinalizationState CompletedRunFinalizer::state() const {
 bool CompletedRunFinalizer::publication_pending() const {
     std::lock_guard lock{mutex_};
     return pending_result_.has_value() ||
-           (pending_error_.has_value() &&
-            state_ == CompletedResultFinalizationState::Finalizing);
+           (pending_error_.has_value() && state_ == CompletedResultFinalizationState::Finalizing);
 }
 
 std::optional<CompletedRunResult> CompletedRunFinalizer::take_publication() {

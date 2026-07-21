@@ -9,6 +9,7 @@
 #include "implot.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <string>
 #include <vector>
@@ -29,7 +30,8 @@ void signal_browser(std::uint64_t run_generation, const GuiSignalModel& model,
         workspace.selected_signals.clear();
     ImGui::BeginChild("Signal browser", ImVec2{15.0F * ImGui::GetFontSize(), 150.0F},
                       ImGuiChildFlags_Borders);
-    for (const auto* series : state.search_cache.update(run_generation, model, state.search.data())) {
+    for (const auto* series :
+         state.search_cache.update(run_generation, model, state.search.data())) {
         auto enabled = selected(workspace.selected_signals, series->descriptor.id);
         if (ImGui::Checkbox(series->descriptor.path.c_str(), &enabled)) {
             if (enabled)
@@ -123,8 +125,8 @@ const GuiScalarSample* nearest_sample(const GuiSignalSeries& series, Tick tick) 
 }
 
 void draw_lane(const RunResult& result, const GuiPlotLane& lane, GuiPlotRange range,
-               const GuiPlotDataCache& cache, GuiWorkspaceState& workspace,
-               GuiSelection& selection, const BoschResultAnalysis* bosch, bool fit_requested) {
+               const GuiPlotDataCache& cache, GuiWorkspaceState& workspace, GuiSelection& selection,
+               const BoschResultAnalysis* bosch, bool fit_requested) {
     const auto x_min =
         plot_tick_coordinate(range.begin, workspace.plot_x_axis_unit, result.metrics.tick_period);
     const auto x_max = plot_tick_coordinate(std::max(range.end, range.begin + 1),
@@ -253,11 +255,10 @@ void draw_plot_visualizer(bool& open, const CompletedRunResult* completed,
     }
     if (pointer_regions != nullptr) {
         const auto position = ImGui::GetWindowPos();
-        pointer_regions->add(
-            {ImGui::GetID("Plot visualizer canvas"),
-             {position.x, position.y, position.x + ImGui::GetWindowWidth(),
-              position.y + ImGui::GetWindowHeight()},
-             GuiPointerRegionBehavior::PositionSensitive});
+        pointer_regions->add({ImGui::GetID("Plot visualizer canvas"),
+                              {position.x, position.y, position.x + ImGui::GetWindowWidth(),
+                               position.y + ImGui::GetWindowHeight()},
+                              GuiPointerRegionBehavior::PositionSensitive});
     }
     if (completed == nullptr || !completed->result->signals.model.has_value()) {
         ImGui::TextDisabled("No completed run is available.");
@@ -277,15 +278,19 @@ void draw_plot_visualizer(bool& open, const CompletedRunResult* completed,
     controls(workspace, state, is_bosch);
     const auto lanes = build_plot_lanes(*result.signals.model, workspace.selected_signals);
     const auto range = resolve_plot_range(result, workspace.plot_range_mode, selection.tick_range(),
-                                          workspace.plot_custom_begin,
-                                          workspace.plot_custom_end);
+                                          workspace.plot_custom_begin, workspace.plot_custom_end);
     const auto previous_builds = state.plot_cache.build_count();
+    const auto cache_started = std::chrono::steady_clock::now();
     state.plot_cache.update(completed->run_generation, *result.signals.model,
                             workspace.selected_signals, workspace.plot_x_axis_unit, range,
                             ImGui::GetContentRegionAvail().x);
     if (profiler != nullptr) {
-        profiler->increment(GuiProfileCounter::PlotCacheBuild,
-                            state.plot_cache.build_count() - previous_builds);
+        const auto new_builds = state.plot_cache.build_count() - previous_builds;
+        profiler->increment(GuiProfileCounter::PlotCacheBuild, new_builds);
+        if (new_builds != 0) {
+            profiler->record(GuiProfileTimer::PlotCacheBuild,
+                             std::chrono::steady_clock::now() - cache_started);
+        }
     }
     ImGuiListClipper clipper;
     clipper.Begin(static_cast<int>(lanes.size()), 224.0F);

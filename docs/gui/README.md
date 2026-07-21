@@ -73,7 +73,7 @@ The toolbar distinguishes four states:
 |---|---|
 | Not configured | The experiment is loaded, but no draft has been applied |
 | Paused | An active run exists and may be stepped or edited around |
-| Running | Each rendered frame requests one complete event-tick step |
+| Running | Live/Fast execution advances cooperatively, independent of repaint frequency |
 | Finished | The inclusive stop tick has been completed |
 
 Changing the rendering rate, panel size, or text size cannot change logical
@@ -128,7 +128,7 @@ file. A project without `imgui.ini` always uses the fixed default.
 +------------------------------------------------------------------+
 ```
 
-The left and right sidebars and upper/lower center groups have draggable
+The left and right sidebars, upper/lower center groups, and Results sections have draggable
 horizontal splitters with minimum heights. Right-click a center tab to move it
 between groups; **View → Reset Panel Arrangement** restores the defaults. Their
 normalized ratios and panel visibility persist in the project workspace. Use
@@ -176,17 +176,22 @@ for the ownership and file-format decisions.
 
 ### Architecture view
 
-The graph displays tasks, resources, message routes, and applied assignments.
+The graph displays compact tasks and independently sized resources. Solid
+connections are logical, presentation-only dependencies with latency zero;
+dashed connections are communication. Bosch communication displays 80 ticks,
+while its adapter-owned one-tick handoff is intentionally hidden.
 It supports:
 
 - wheel zoom and middle-button pan;
-- fit-to-view;
-- shared task, resource, and route selection; and
-- dragging a task to an accessible resource to edit the pending draft.
+- Select mode for persistent task, resource, and connection selection;
+- Arrange mode for task/resource movement and resource resizing;
+- Assign mode for dragging a task to an accessible draft resource;
+- fit, auto layout, auto-size, and per-entity layout reset; and
+- workspace persistence of mode, pan, zoom, positions, and resource sizes.
 
 A drag changes only the draft. The applied assignment remains visible until
-**Apply and restart** succeeds. Dashed message routes describe configured causal
-communication; they do not imply typed Simulink-style signal ports.
+**Apply and restart** succeeds. Selection remains available while Running, but
+editing is disabled with a prompt to pause.
 At extreme fit/zoom levels, canvas labels retain a safe minimum font-bake size;
 zoom in to make their content readable.
 
@@ -223,15 +228,19 @@ used only for drawing. Visual downsampling preserves visible endpoints and
 bucket extrema; it never changes full-resolution observations.
 
 The current plot uses one shared value axis. Unit-grouped axes remain future
-work. Selected signal identities persist in workspace schema 4.
+work. Selected signal identities persist in workspace schema 5.
 
 ### Results and export
 
 The **Results** tab is final-run analysis. Running and Paused states show only
-lightweight progress. The first Finished transition builds one cached immutable
-result with compact run, timing, task-response, and Bosch summaries. **Open
+lightweight progress. On the first Finished transition, one immutable snapshot
+is detached and a managed background finalizer builds one cached result without
+touching the controller, FMU, or GUI state. The tab immediately reports
+`Finalizing completed run...`, then presents compact run, timing, task-response,
+and Bosch summaries at a GUI frame boundary. **Open
 Plot Visualizer** opens a non-modal ImPlot window with signal search, unit-aware
 lanes, zoom/pan, tick/second ranges, shared cursor selection, and Bosch overlays.
+The Results summary, timing, and task sections have persistent splitters.
 
 Use **File → Export Run Results** to export the complete run or the inclusive
 time range currently selected in the workbench. Raw JSON/CSV is always written;
@@ -248,6 +257,17 @@ and inline labeled utilization with an exact observed-tick tooltip. Canonical Ev
 column table in sequence order with type/task/resource/vehicle/text filters and
 optional columns. Selecting a row opens raw JSON and typed details in Runtime
 Inspector; selecting Cause navigates to its canonical predecessor.
+
+### Idle rendering and profiler
+
+CPSSim polls while Running or interacting, waits with a short timeout only
+while completed-result work is pending, and otherwise waits indefinitely for a
+native event. Fully idle state does not begin a Dear ImGui frame. Ordinary
+pointer motion over static backgrounds is passive; graph entity boundaries
+redraw on enter/leave, while Timeline and Plot canvases redraw for cursor
+coordinates. Debug builds expose **View → GUI Profiler** with native wait,
+frame, publication/cache counters, and last/maximum phase timings. See the
+[performance verification record](GUI_PERFORMANCE.md).
 
 ## 4. Learn the code from one frame
 

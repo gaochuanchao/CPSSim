@@ -68,9 +68,8 @@ std::size_t plot_point_budget(float logical_width) noexcept {
 }
 
 bool GuiPlotDataCache::update(std::uint64_t run_generation, const GuiSignalModel& model,
-                              const std::vector<GuiSignalId>& selected,
-                              GuiPlotXAxisUnit axis_unit, GuiPlotRange range,
-                              float logical_width) {
+                              const std::vector<GuiSignalId>& selected, GuiPlotXAxisUnit axis_unit,
+                              GuiPlotRange range, float logical_width) {
     const auto budget = plot_point_budget(logical_width);
     if (initialized_ && run_generation_ == run_generation && selected_ == selected &&
         axis_unit_ == axis_unit && range_ == range && point_budget_ == budget) {
@@ -80,8 +79,7 @@ bool GuiPlotDataCache::update(std::uint64_t run_generation, const GuiSignalModel
     series_.reserve(selected.size());
     for (const auto& id : selected) {
         if (const auto* source = find_signal_series(model, id); source != nullptr) {
-            series_.push_back(
-                {id, downsample_signal(*source, {range.begin, range.end, budget})});
+            series_.push_back({id, downsample_signal(*source, {range.begin, range.end, budget})});
         }
     }
     run_generation_ = run_generation;
@@ -100,8 +98,9 @@ const GuiPlotSeriesProjection* GuiPlotDataCache::find(const GuiSignalId& id) con
     return found == series_.end() ? nullptr : &*found;
 }
 
-const std::vector<const GuiSignalSeries*>& GuiPlotSignalSearchCache::update(
-    std::uint64_t run_generation, const GuiSignalModel& model, std::string_view query) {
+const std::vector<const GuiSignalSeries*>&
+GuiPlotSignalSearchCache::update(std::uint64_t run_generation, const GuiSignalModel& model,
+                                 std::string_view query) {
     if (!initialized_ || run_generation_ != run_generation || query_ != query) {
         run_generation_ = run_generation;
         query_ = query;

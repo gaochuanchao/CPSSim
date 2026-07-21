@@ -72,10 +72,9 @@ void draw_horizontal_splitter(const char* identity, float available_height, floa
     if (pointer_regions != nullptr) {
         const auto item_minimum = ImGui::GetItemRectMin();
         const auto item_maximum = ImGui::GetItemRectMax();
-        pointer_regions->add(
-            {ImGui::GetID(identity),
-             {item_minimum.x, item_minimum.y, item_maximum.x, item_maximum.y},
-             GuiPointerRegionBehavior::DragHandle});
+        pointer_regions->add({ImGui::GetID(identity),
+                              {item_minimum.x, item_minimum.y, item_maximum.x, item_maximum.y},
+                              GuiPointerRegionBehavior::DragHandle});
     }
     if (ImGui::IsItemHovered() || ImGui::IsItemActive()) {
         ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
@@ -150,10 +149,9 @@ void GuiApplication::initialize_presentation_state() {
                     bosch_analysis = std::make_shared<const BoschResultAnalysis>(
                         derive_bosch_result_analysis(*result));
                 }
-                return CompletedRunResult{
-                    request.data->runtime_generation, std::move(result),
-                    std::move(bosch_analysis), request.performance,
-                    std::chrono::steady_clock::now() - started};
+                return CompletedRunResult{request.data->runtime_generation, std::move(result),
+                                          std::move(bosch_analysis), request.performance,
+                                          std::chrono::steady_clock::now() - started};
             });
     }
     structural_selection_.select_system();
@@ -190,8 +188,7 @@ bool GuiApplication::process_background_publications() {
         return false;
     }
     if (auto completed = completed_finalizer_->take_publication(); completed.has_value()) {
-        profiler_.record(GuiProfileTimer::ResultFinalization,
-                         completed->finalization_duration);
+        profiler_.record(GuiProfileTimer::ResultFinalization, completed->finalization_duration);
         profiler_.increment(GuiProfileCounter::ResultBuild);
         if (completed->bosch_analysis != nullptr) {
             profiler_.increment(GuiProfileCounter::BoschAnalysisBuild);
@@ -469,11 +466,10 @@ void GuiApplication::publish_complete_snapshot(bool publish_finished_result) {
     auto snapshot = session.snapshot();
     profiler_.increment(GuiProfileCounter::SnapshotBuild);
     if (publish_finished_result && snapshot.run_state == GuiRunState::Finished) {
-        auto data = std::make_shared<const CompletedRunData>(CompletedRunData{
-            session.runtime_generation(), session.simulation_data_generation(),
-            std::move(snapshot)});
-        presentation_snapshot_ =
-            std::shared_ptr<const SimulationSnapshot>{data, &data->snapshot};
+        auto data = std::make_shared<const CompletedRunData>(
+            CompletedRunData{session.runtime_generation(), session.simulation_data_generation(),
+                             std::move(snapshot)});
+        presentation_snapshot_ = std::shared_ptr<const SimulationSnapshot>{data, &data->snapshot};
         const auto scenario = application_state_.has_active_project()
                                   ? application_state_.active_project().metadata().scenario_kind
                                   : std::string{"generic"};
@@ -1293,28 +1289,25 @@ void GuiApplication::draw_center_panels(const SimulationSnapshot& snapshot) {
                         application_state_.active_project().metadata().scenario_kind == "bosch"
                     ? bosch_functional_dependencies()
                     : std::vector<GuiFunctionalDependency>{};
-            const auto is_bosch = application_state_.has_active_project() &&
-                                  application_state_.active_project().metadata().scenario_kind ==
-                                      "bosch";
-            const auto graph =
-                build_architecture_graph(*experiment, functional_dependencies, is_bosch,
-                                         &workspace_state_.architecture);
+            const auto is_bosch =
+                application_state_.has_active_project() &&
+                application_state_.active_project().metadata().scenario_kind == "bosch";
+            const auto graph = build_architecture_graph(*experiment, functional_dependencies,
+                                                        is_bosch, &workspace_state_.architecture);
             static_cast<void>(draw_architecture_view(
                 graph, *experiment, system_run_assignments_, structural_selection_,
                 workspace_state_.architecture, architecture_view_state_, session.draft_editable(),
                 previewing, &pointer_regions_));
             break;
         }
-        case GuiCenterTab::Timeline:
-            {
-                const auto region_min = ImGui::GetCursorScreenPos();
-                const auto region_size = ImGui::GetContentRegionAvail();
-                pointer_regions_.add(
-                    {ImGui::GetID("Timeline interaction region"),
-                     {region_min.x, region_min.y, region_min.x + region_size.x,
-                      region_min.y + region_size.y},
-                     GuiPointerRegionBehavior::PositionSensitive});
-            }
+        case GuiCenterTab::Timeline: {
+            const auto region_min = ImGui::GetCursorScreenPos();
+            const auto region_size = ImGui::GetContentRegionAvail();
+            pointer_regions_.add({ImGui::GetID("Timeline interaction region"),
+                                  {region_min.x, region_min.y, region_min.x + region_size.x,
+                                   region_min.y + region_size.y},
+                                  GuiPointerRegionBehavior::PositionSensitive});
+        }
             if (draw_timeline_view(snapshot, runtime_selection_, timeline_view_state_))
                 workspace_state_.panels.inspector = true;
             break;
@@ -1323,9 +1316,8 @@ void GuiApplication::draw_center_panels(const SimulationSnapshot& snapshot) {
             break;
         case GuiCenterTab::Results: {
             draw_results_view(progress_, completed_results_.get(), finalization_state(),
-                              open_plot_visualizer_,
-                              request_completed_export_, workspace_state_, results_view_state_,
-                              &pointer_regions_);
+                              open_plot_visualizer_, request_completed_export_, workspace_state_,
+                              results_view_state_, &pointer_regions_);
             break;
         }
         case GuiCenterTab::Resources:
@@ -1543,8 +1535,8 @@ void GuiApplication::draw_workbench(const SimulationSnapshot& snapshot) {
                       ImGuiWindowFlags_HorizontalScrollbar);
     draw_toolbar(session, progress_, workspace_state_);
     const auto toolbar_min = ImGui::GetWindowPos();
-    const auto toolbar_max = ImVec2{toolbar_min.x + ImGui::GetWindowWidth(),
-                                    toolbar_min.y + ImGui::GetWindowHeight()};
+    const auto toolbar_max =
+        ImVec2{toolbar_min.x + ImGui::GetWindowWidth(), toolbar_min.y + ImGui::GetWindowHeight()};
     pointer_regions_.add({ImGui::GetID("Simulation toolbar region"),
                           {toolbar_min.x, toolbar_min.y, toolbar_max.x, toolbar_max.y},
                           GuiPointerRegionBehavior::BoundarySensitive});
@@ -1757,12 +1749,21 @@ void GuiApplication::draw_frame() {
         if (ImGui::Begin("GUI Profiler", &open_profiler_)) {
             const auto values = profiler_.snapshot();
             static constexpr const char* counter_names[]{
-                "Poll",          "Timed wait",       "Indefinite wait", "Rendered frames",
+                "Poll",           "Timed wait",       "Indefinite wait", "Rendered frames",
                 "Skipped frames", "Background wakes", "Snapshots",       "Results",
-                "Event rows",    "Event filters",    "Plot caches",     "Bosch analyses"};
+                "Event rows",     "Event filters",    "Plot caches",     "Bosch analyses"};
             for (std::size_t index = 0; index < values.counters.size(); ++index) {
                 ImGui::Text("%s: %llu", counter_names[index],
                             static_cast<unsigned long long>(values.counters[index]));
+            }
+            ImGui::SeparatorText("Timings (last / maximum ms)");
+            static constexpr const char* timer_names[]{
+                "Controller update", "Snapshot build",   "Result finalization",
+                "Event cache build", "Plot cache build", "View-model build",
+                "Dear ImGui build",  "Render and swap",  "Complete frame"};
+            for (std::size_t index = 0; index < values.last_milliseconds.size(); ++index) {
+                ImGui::Text("%s: %.3f / %.3f", timer_names[index], values.last_milliseconds[index],
+                            values.maximum_milliseconds[index]);
             }
             if (ImGui::Button("Reset counters")) {
                 profiler_.reset();

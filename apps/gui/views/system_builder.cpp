@@ -43,11 +43,11 @@ void draw_profile_diagnostics(const SystemDraftBuildResult& validation,
 }
 
 bool begin_properties(const char* identity) {
-    const auto properties_wide = gui_property_layout_is_wide(ImGui::GetContentRegionAvail().x,
-                                                              ImGui::GetFontSize());
-    const auto opened = ImGui::BeginTable(
-        identity, properties_wide ? 2 : 1,
-        ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_SizingStretchProp);
+    const auto properties_wide =
+        gui_property_layout_is_wide(ImGui::GetContentRegionAvail().x, ImGui::GetFontSize());
+    const auto opened =
+        ImGui::BeginTable(identity, properties_wide ? 2 : 1,
+                          ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_SizingStretchProp);
     if (opened && properties_wide) {
         ImGui::TableSetupColumn("Labels", ImGuiTableColumnFlags_WidthFixed,
                                 9.0F * ImGui::GetFontSize());
@@ -56,9 +56,7 @@ bool begin_properties(const char* identity) {
     return opened;
 }
 
-bool current_properties_wide() {
-    return ImGui::TableGetColumnCount() == 2;
-}
+bool current_properties_wide() { return ImGui::TableGetColumnCount() == 2; }
 
 void property_label(const char* label) {
     const auto properties_wide = current_properties_wide();
@@ -72,8 +70,8 @@ void property_label(const char* label) {
         ImGui::TableNextRow();
         ImGui::TableSetColumnIndex(0);
     }
-    ImGui::SetNextItemWidth(std::min(ImGui::GetContentRegionAvail().x,
-                                     16.0F * ImGui::GetFontSize()));
+    ImGui::SetNextItemWidth(
+        std::min(ImGui::GetContentRegionAvail().x, 16.0F * ImGui::GetFontSize()));
 }
 
 void property_help(const char* text) {
@@ -540,8 +538,8 @@ void draw_connection(const EditableSystemDraft& draft, const StructuralSelection
     property_label("Displayed latency");
     Tick latency = 0;
     if (connection->kind == GuiConnectionKind::Communication) {
-        const auto index = route_index(
-            draft, {connection->source_task_id, connection->destination_task_id});
+        const auto index =
+            route_index(draft, {connection->source_task_id, connection->destination_task_id});
         if (edit_policy == ProjectSystemEditPolicy::BoschCompatible) {
             latency = 80;
         } else if (index.has_value()) {
@@ -550,8 +548,10 @@ void draw_connection(const EditableSystemDraft& draft, const StructuralSelection
     }
     ImGui::Text("%lld ticks", static_cast<long long>(latency));
     property_help(connection->kind == GuiConnectionKind::Logical
-                           ? "Logical dependencies are presentation-only and create no messages, delays, or canonical network events."
-                           : "Communication latency describes the visible network delay. The Bosch adapter's internal one-tick send handoff is intentionally hidden.");
+                      ? "Logical dependencies are presentation-only and create no messages, "
+                        "delays, or canonical network events."
+                      : "Communication latency describes the visible network delay. The Bosch "
+                        "adapter's internal one-tick send handoff is intentionally hidden.");
     ImGui::EndTable();
 }
 
@@ -559,10 +559,9 @@ void draw_connection(const EditableSystemDraft& draft, const StructuralSelection
 
 void draw_system_builder(EditableSystemDraft& draft, const SystemDraftBuildResult& validation,
                          std::vector<DraftTaskAssignment>& assignments,
-                         StructuralSelection& selection,
-                         const ExperimentPresentationSnapshot&, bool editing_enabled,
-                         ProjectSystemEditPolicy edit_policy, std::string_view project_name,
-                         SystemBuilderViewState& state) {
+                         StructuralSelection& selection, const ExperimentPresentationSnapshot&,
+                         bool editing_enabled, ProjectSystemEditPolicy edit_policy,
+                         std::string_view project_name, SystemBuilderViewState& state) {
     ImGui::BeginDisabled(!editing_enabled);
     switch (selection.kind()) {
     case StructuralSelectionKind::System:

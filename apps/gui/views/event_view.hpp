@@ -7,9 +7,9 @@
 
 #pragma once
 
-#include "cpssim/gui/selection_model.hpp"
 #include "cpssim/gui/event_table_model.hpp"
 #include "cpssim/gui/gui_profiler.hpp"
+#include "cpssim/gui/selection_model.hpp"
 #include "cpssim/gui/workspace_state.hpp"
 
 #include <array>
@@ -24,8 +24,8 @@ struct EventViewState {
 };
 
 void draw_event_view(const SimulationSnapshot& snapshot, std::uint64_t presentation_generation,
-                     GuiSelection& selection,
-                     GuiEventFilters& filters, GuiEventColumnVisibility& columns,
-                     EventViewState& state, GuiProfiler* profiler = nullptr);
+                     GuiSelection& selection, GuiEventFilters& filters,
+                     GuiEventColumnVisibility& columns, EventViewState& state,
+                     GuiProfiler* profiler = nullptr);
 
 } // namespace cpssim::gui

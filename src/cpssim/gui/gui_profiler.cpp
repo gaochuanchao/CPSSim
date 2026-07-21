@@ -18,8 +18,7 @@ void GuiProfiler::record(GuiProfileTimer timer, std::chrono::nanoseconds duratio
         std::max(values_.maximum_milliseconds[index], milliseconds);
 }
 
-GuiScopedProfileTimer::GuiScopedProfileTimer(GuiProfiler& profiler,
-                                             GuiProfileTimer timer) noexcept
+GuiScopedProfileTimer::GuiScopedProfileTimer(GuiProfiler& profiler, GuiProfileTimer timer) noexcept
     : profiler_{profiler}, timer_{timer}, started_{std::chrono::steady_clock::now()} {}
 
 GuiScopedProfileTimer::~GuiScopedProfileTimer() {

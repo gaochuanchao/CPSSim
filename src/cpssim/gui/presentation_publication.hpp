@@ -26,6 +26,7 @@ class GuiPresentationPublicationPolicy {
     bool should_publish(const GuiPresentationPublicationInput& input) const noexcept;
     void published(const GuiPresentationPublicationInput& input) noexcept;
     const GuiPresentationGenerations& generations() const noexcept { return generations_; }
+
   private:
     GuiPresentationGenerations generations_;
     std::chrono::steady_clock::time_point last_publication_{};

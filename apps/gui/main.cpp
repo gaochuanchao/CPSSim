@@ -324,14 +324,18 @@ int run_gui(std::unique_ptr<cpssim::GuiSimulationSession> session,
             application.draw_frame();
         }
 
-        ImGui::Render();
-        application.update_imgui_layout_persistence();
-        glViewport(0, 0, display_width, display_height);
-        const auto clear_color = cpssim::gui_theme_clear_color(application.theme());
-        glClearColor(clear_color.red, clear_color.green, clear_color.blue, clear_color.alpha);
-        glClear(GL_COLOR_BUFFER_BIT);
-        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-        glfwSwapBuffers(window);
+        {
+            cpssim::GuiScopedProfileTimer timer{application.profiler(),
+                                                cpssim::GuiProfileTimer::RenderSwap};
+            ImGui::Render();
+            application.update_imgui_layout_persistence();
+            glViewport(0, 0, display_width, display_height);
+            const auto clear_color = cpssim::gui_theme_clear_color(application.theme());
+            glClearColor(clear_color.red, clear_color.green, clear_color.blue, clear_color.alpha);
+            glClear(GL_COLOR_BUFFER_BIT);
+            ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+            glfwSwapBuffers(window);
+        }
         last_present = std::chrono::steady_clock::now();
         loop.redraw.acknowledge();
         application.profiler().increment(cpssim::GuiProfileCounter::RenderedFrame);

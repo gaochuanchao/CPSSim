@@ -109,20 +109,17 @@ std::vector<std::size_t> filter_event_table_rows(const std::vector<GuiEventTable
 
 std::optional<std::size_t> find_event_row_by_sequence(const std::vector<GuiEventTableRow>& rows,
                                                       EventSequence sequence) noexcept {
-    const auto found = std::find_if(rows.begin(), rows.end(),
-                                    [sequence](const auto& row) {
-                                        return row.sequence == sequence;
-                                    });
+    const auto found = std::find_if(
+        rows.begin(), rows.end(), [sequence](const auto& row) { return row.sequence == sequence; });
     return found != rows.end() && found->sequence == sequence
                ? std::optional<std::size_t>{static_cast<std::size_t>(found - rows.begin())}
                : std::nullopt;
 }
 
 std::string event_raw_json(const SimulationSnapshot& snapshot, EventSequence sequence) {
-    const auto found = std::find_if(snapshot.event_log.begin(), snapshot.event_log.end(),
-                                    [sequence](const auto& event) {
-                                        return event.sequence() == sequence;
-                                    });
+    const auto found =
+        std::find_if(snapshot.event_log.begin(), snapshot.event_log.end(),
+                     [sequence](const auto& event) { return event.sequence() == sequence; });
     if (found == snapshot.event_log.end()) {
         return {};
     }
@@ -168,8 +165,8 @@ bool GuiEventTableCache::update_filter(const GuiEventFilters& filters,
         pending_text_since_ = now;
     }
     constexpr auto debounce = std::chrono::milliseconds{150};
-    const auto text_ready = effective_filters_.text != pending_text_ &&
-                            now - pending_text_since_ >= debounce;
+    const auto text_ready =
+        effective_filters_.text != pending_text_ && now - pending_text_since_ >= debounce;
     if (text_ready) {
         effective_filters_.text = pending_text_;
     }

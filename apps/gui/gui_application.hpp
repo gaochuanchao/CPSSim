@@ -12,8 +12,8 @@
 #include "views/system_builder.hpp"
 #include "views/timeline_view.hpp"
 
-#include "cpssim/analysis/completed_run_result.hpp"
 #include "cpssim/analysis/completed_run_finalizer.hpp"
+#include "cpssim/analysis/completed_run_result.hpp"
 #include "cpssim/application/file_dialog.hpp"
 #include "cpssim/application/gui_layout_store.hpp"
 #include "cpssim/application/recent_projects.hpp"

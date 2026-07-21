@@ -264,12 +264,13 @@ TEST_CASE("functional dependencies are distinct presentation-only graph edges",
 
 TEST_CASE("Bosch connection presentation hides adapter handoff and reports latency 80",
           "[gui][architecture][connection]") {
-    const auto graph = build_architecture_graph(
-        make_graph_presentation(), {{TaskId{2}, TaskId{3}, "logical"}}, true);
-    const auto communication = std::find_if(graph.edges.begin(), graph.edges.end(), [](const auto& edge) {
-        return edge.connection.has_value() &&
-               edge.connection->id.kind == GuiConnectionKind::Communication;
-    });
+    const auto graph = build_architecture_graph(make_graph_presentation(),
+                                                {{TaskId{2}, TaskId{3}, "logical"}}, true);
+    const auto communication =
+        std::find_if(graph.edges.begin(), graph.edges.end(), [](const auto& edge) {
+            return edge.connection.has_value() &&
+                   edge.connection->id.kind == GuiConnectionKind::Communication;
+        });
     REQUIRE(communication != graph.edges.end());
     REQUIRE(communication->connection->displayed_latency == 80);
     REQUIRE(communication->connection->creates_network_events);

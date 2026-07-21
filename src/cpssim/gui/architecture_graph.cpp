@@ -149,8 +149,7 @@ GuiGraphNodeId resource_graph_node_id(ResourceId resource_id) {
 GuiArchitectureGraph
 build_architecture_graph(const ExperimentPresentationSnapshot& experiment,
                          const std::vector<GuiFunctionalDependency>& functional_dependencies,
-                         bool bosch_latency_presentation,
-                         const GuiArchitectureWorkspace* layout) {
+                         bool bosch_latency_presentation, const GuiArchitectureWorkspace* layout) {
     auto resources = experiment.resources;
     auto tasks = experiment.tasks;
     auto routes = experiment.routes;
@@ -221,20 +220,23 @@ build_architecture_graph(const ExperimentPresentationSnapshot& experiment,
         });
     }
     for (auto& resource_node : result.nodes) {
-        if (resource_node.kind != GuiGraphNodeKind::Resource) continue;
+        if (resource_node.kind != GuiGraphNodeKind::Resource)
+            continue;
         const auto resource_id = std::get<ResourceId>(resource_node.entity);
         auto right = resource_node.position.x +
                      std::max(48.0F, 24.0F + static_cast<float>(resource_node.label.size()) * 8.0F);
         auto bottom = resource_node.position.y + 48.0F;
         for (const auto& task_node : result.nodes) {
-            if (task_node.kind != GuiGraphNodeKind::Task) continue;
-            const auto assigned = assigned_resource(assignments, std::get<TaskId>(task_node.entity));
-            if (assigned != resource_id) continue;
+            if (task_node.kind != GuiGraphNodeKind::Task)
+                continue;
+            const auto assigned =
+                assigned_resource(assignments, std::get<TaskId>(task_node.entity));
+            if (assigned != resource_id)
+                continue;
             right = std::max(right, task_node.position.x + task_node.size.width + 12.0F);
             bottom = std::max(bottom, task_node.position.y + task_node.size.height + 12.0F);
         }
-        resource_node.size = {right - resource_node.position.x,
-                              bottom - resource_node.position.y};
+        resource_node.size = {right - resource_node.position.x, bottom - resource_node.position.y};
     }
 
     if (group_slots.back() != std::vector<std::size_t>(layer_count, 0)) {
@@ -246,8 +248,7 @@ build_architecture_graph(const ExperimentPresentationSnapshot& experiment,
     if (layout != nullptr) {
         for (auto& node : result.nodes) {
             if (node.kind == GuiGraphNodeKind::Task) {
-                if (const auto* override =
-                        find_task_layout(*layout, std::get<TaskId>(node.entity));
+                if (const auto* override = find_task_layout(*layout, std::get<TaskId>(node.entity));
                     override != nullptr) {
                     node.position = {override->position.x, override->position.y};
                 }
@@ -261,10 +262,10 @@ build_architecture_graph(const ExperimentPresentationSnapshot& experiment,
                     node.size = {override->size->width, override->size->height};
                 }
             }
-            result.logical_size.width =
-                std::max(result.logical_size.width, node.position.x + node.size.width + graph_margin);
-            result.logical_size.height = std::max(result.logical_size.height,
-                                                  node.position.y + node.size.height + graph_margin);
+            result.logical_size.width = std::max(result.logical_size.width,
+                                                 node.position.x + node.size.width + graph_margin);
+            result.logical_size.height = std::max(
+                result.logical_size.height, node.position.y + node.size.height + graph_margin);
         }
     }
 
@@ -285,8 +286,7 @@ build_architecture_graph(const ExperimentPresentationSnapshot& experiment,
                                 .functional_reference = dependency,
                                 .assignment_reference = std::nullopt,
                                 .connection = GuiConnectionPresentation{
-                                    .id = {GuiConnectionKind::Logical,
-                                           dependency.source_task_id,
+                                    .id = {GuiConnectionKind::Logical, dependency.source_task_id,
                                            dependency.destination_task_id},
                                     .label = dependency.label,
                                     .displayed_latency = 0,
@@ -311,24 +311,23 @@ build_architecture_graph(const ExperimentPresentationSnapshot& experiment,
                 ": destination task T" +
                 std::to_string(route.identity.destination_task_id.value()) + " is unavailable"};
         }
-        result.edges.push_back({.id = {.kind = GuiGraphEdgeKind::MessageRoute,
-                                       .source = source,
-                                       .destination = destination},
-                                .kind = GuiGraphEdgeKind::MessageRoute,
-                                .source = source,
-                                .destination = destination,
-                                .route_reference = route.identity,
-                                .functional_reference = std::nullopt,
-                                .assignment_reference = std::nullopt,
-                                .connection = GuiConnectionPresentation{
-                                    .id = {GuiConnectionKind::Communication,
-                                           route.identity.source_task_id,
-                                           route.identity.destination_task_id},
-                                    .label = "Communication",
-                                    .displayed_latency =
-                                        bosch_latency_presentation ? Tick{80} : route.delay,
-                                    .creates_network_events = true,
-                                    .protected_semantics = bosch_latency_presentation}});
+        result.edges.push_back(
+            {.id = {.kind = GuiGraphEdgeKind::MessageRoute,
+                    .source = source,
+                    .destination = destination},
+             .kind = GuiGraphEdgeKind::MessageRoute,
+             .source = source,
+             .destination = destination,
+             .route_reference = route.identity,
+             .functional_reference = std::nullopt,
+             .assignment_reference = std::nullopt,
+             .connection = GuiConnectionPresentation{
+                 .id = {GuiConnectionKind::Communication, route.identity.source_task_id,
+                        route.identity.destination_task_id},
+                 .label = "Communication",
+                 .displayed_latency = bosch_latency_presentation ? Tick{80} : route.delay,
+                 .creates_network_events = true,
+                 .protected_semantics = bosch_latency_presentation}});
     }
     for (const auto& assignment : assignments) {
         const auto source = task_graph_node_id(assignment.task_id);

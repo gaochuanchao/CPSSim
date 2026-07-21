@@ -36,7 +36,8 @@ bool CompletedRunResultCache::publish_finished(
 }
 
 bool CompletedRunResultCache::publish_ready(CompletedRunResult completed) {
-    if (completed.result == nullptr || completed.result->snapshot().run_state != GuiRunState::Finished ||
+    if (completed.result == nullptr ||
+        completed.result->snapshot().run_state != GuiRunState::Finished ||
         (completed_.has_value() && completed_->run_generation == completed.run_generation)) {
         return false;
     }

@@ -10,8 +10,8 @@
 
 #pragma once
 
-#include "cpssim/gui/editable_system_draft.hpp"
 #include "cpssim/gui/connection_model.hpp"
+#include "cpssim/gui/editable_system_draft.hpp"
 #include "cpssim/gui/simulation_controller.hpp"
 
 #include <optional>

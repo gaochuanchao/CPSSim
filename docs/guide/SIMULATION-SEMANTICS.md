@@ -126,6 +126,17 @@ Because completion precedes deadline checking at the same tick, a job that
 finishes exactly at its absolute deadline is on time. A deadline event records
 a miss only if the job is still incomplete when that phase is processed.
 
+The complete boundary contract is:
+
+```text
+release at beginning of tick r
+execution interval [s, s + C)
+finish/output availability at beginning of s + C
+absolute deadline r + D
+finish at r + D is valid
+same-tick completion precedes downstream reads and deadline checking
+```
+
 ## Trace versus queue
 
 The event queue contains candidates. The append-only canonical trace contains
@@ -163,6 +174,12 @@ The causal sequence chain is `JobFinish -> MessageSend -> MessageDelivery`.
 The current network has no payload values, contention, loss, receiver release,
 or random delay. The planned future channel model is recorded in
 [ADR-0011](../adr/0011-plan-user-configured-task-channels.md).
+
+The Bosch adapter preserves a conformance-specific one-tick handoff between
+task completion and the internal send trigger. This is not user-visible
+communication latency. The GUI presents Bosch communication latency as exactly
+80 ticks and never as 81; presentation-only logical connections show latency
+zero and create no messages, delays, or canonical message events.
 
 ## Functional-model order
 

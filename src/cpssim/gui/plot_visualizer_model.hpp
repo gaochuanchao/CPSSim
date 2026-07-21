@@ -6,8 +6,8 @@
 #include "cpssim/gui/selection_model.hpp"
 #include "cpssim/gui/workspace_state.hpp"
 
-#include <string_view>
 #include <optional>
+#include <string_view>
 
 namespace cpssim {
 
@@ -47,6 +47,7 @@ class GuiPlotDataCache {
     const std::vector<GuiPlotSeriesProjection>& series() const noexcept { return series_; }
     const GuiPlotSeriesProjection* find(const GuiSignalId& id) const noexcept;
     std::uint64_t build_count() const noexcept { return build_count_; }
+
   private:
     std::uint64_t run_generation_{};
     std::vector<GuiSignalId> selected_;
@@ -60,10 +61,10 @@ class GuiPlotDataCache {
 
 class GuiPlotSignalSearchCache {
   public:
-    const std::vector<const GuiSignalSeries*>& update(std::uint64_t run_generation,
-                                                       const GuiSignalModel& model,
-                                                       std::string_view query);
+    const std::vector<const GuiSignalSeries*>&
+    update(std::uint64_t run_generation, const GuiSignalModel& model, std::string_view query);
     std::uint64_t build_count() const noexcept { return build_count_; }
+
   private:
     std::uint64_t run_generation_{};
     std::string query_;

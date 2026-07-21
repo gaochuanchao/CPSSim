@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "cpssim/gui/connection_model.hpp"
 #include "cpssim/gui/architecture_layout.hpp"
+#include "cpssim/gui/connection_model.hpp"
 #include "cpssim/gui/selection_model.hpp"
 
 #include <compare>

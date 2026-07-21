@@ -162,8 +162,8 @@ void bosch_summary(const CompletedRunResult& completed) {
     const auto* analysis = completed.bosch_analysis.get();
     if (analysis == nullptr || analysis->lateral_error == nullptr) {
         ImGui::TextDisabled("%s", analysis != nullptr
-                                     ? analysis->diagnostic.value_or("Unavailable").c_str()
-                                     : "Unavailable");
+                                      ? analysis->diagnostic.value_or("Unavailable").c_str()
+                                      : "Unavailable");
         return;
     }
     double maximum = 0.0;
@@ -171,16 +171,15 @@ void bosch_summary(const CompletedRunResult& completed) {
         maximum = std::max(maximum, std::abs(gui_scalar_as_double(sample.value)));
     ImGui::Text("Threshold crossings: %zu | Maximum absolute lateral error: %.6g m | Critical "
                 "sections: %zu",
-                analysis->threshold_crossings.size(), maximum,
-                analysis->critical_intervals.size());
+                analysis->threshold_crossings.size(), maximum, analysis->critical_intervals.size());
 }
 
 } // namespace
 
 void draw_results_view(const SimulationProgress& progress, const CompletedRunResult* completed,
-                       CompletedResultFinalizationState finalization_state,
-                       bool& open_visualizer, bool& open_export, GuiWorkspaceState& workspace,
-                       ResultsViewState&, GuiPointerRegionMap* pointer_regions) {
+                       CompletedResultFinalizationState finalization_state, bool& open_visualizer,
+                       bool& open_export, GuiWorkspaceState& workspace, ResultsViewState&,
+                       GuiPointerRegionMap* pointer_regions) {
     ImGui::BeginDisabled(completed == nullptr);
     if (ImGui::Button("Open Plot Visualizer..."))
         open_visualizer = true;
@@ -219,17 +218,17 @@ void draw_results_view(const SimulationProgress& progress, const CompletedRunRes
         result_splitter("Results summary splitter", available_height,
                         workspace.results_summary_ratio, pointer_regions);
         const auto lower_height = ImGui::GetContentRegionAvail().y;
-        const auto timing_split = calculate_vertical_split(
-            lower_height, splitter_height, workspace.results_timing_ratio,
-            5.0F * ImGui::GetTextLineHeightWithSpacing(),
-            5.0F * ImGui::GetTextLineHeightWithSpacing());
+        const auto timing_split =
+            calculate_vertical_split(lower_height, splitter_height, workspace.results_timing_ratio,
+                                     5.0F * ImGui::GetTextLineHeightWithSpacing(),
+                                     5.0F * ImGui::GetTextLineHeightWithSpacing());
         workspace.results_timing_ratio = timing_split.normalized_ratio;
         ImGui::BeginChild("Results timing region", ImVec2{0.0F, timing_split.first_height},
                           ImGuiChildFlags_Borders);
         timing(completed->result->metrics, completed->performance);
         ImGui::EndChild();
-        result_splitter("Results timing splitter", lower_height,
-                        workspace.results_timing_ratio, pointer_regions);
+        result_splitter("Results timing splitter", lower_height, workspace.results_timing_ratio,
+                        pointer_regions);
         ImGui::BeginChild("Results task region", ImVec2{0.0F, 0.0F}, ImGuiChildFlags_Borders);
         responses(completed->result->metrics);
         ImGui::EndChild();

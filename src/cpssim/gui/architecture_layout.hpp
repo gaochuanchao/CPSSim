@@ -58,8 +58,8 @@ void reset_task_layout_position(GuiArchitectureWorkspace& state, TaskId task_id)
 void reset_resource_layout_position(GuiArchitectureWorkspace& state, ResourceId resource_id);
 void reset_resource_layout_size(GuiArchitectureWorkspace& state, ResourceId resource_id);
 const GuiTaskLayoutOverride* find_task_layout(const GuiArchitectureWorkspace& state,
-                                               TaskId task_id) noexcept;
+                                              TaskId task_id) noexcept;
 const GuiResourceLayoutOverride* find_resource_layout(const GuiArchitectureWorkspace& state,
-                                                       ResourceId resource_id) noexcept;
+                                                      ResourceId resource_id) noexcept;
 
 } // namespace cpssim

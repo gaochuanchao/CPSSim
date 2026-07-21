@@ -31,8 +31,8 @@ TEST_CASE("completed finalizer publishes exactly at consumer boundary", "[analys
     CompletedRunFinalizer finalizer{[](const auto& request, std::stop_token) {
         auto result = std::make_shared<const RunResult>(
             build_run_result(request.data, request.scenario_kind));
-        return CompletedRunResult{request.data->runtime_generation, std::move(result), nullptr,
-                                  request.performance, {}};
+        return CompletedRunResult{
+            request.data->runtime_generation, std::move(result), nullptr, request.performance, {}};
     }};
     finalizer.set_wakeup([&] {
         std::lock_guard lock{mutex};
@@ -56,8 +56,8 @@ TEST_CASE("completed finalizer rejects non-finished data and cancels safely",
     CompletedRunFinalizer finalizer{[](const auto& request, std::stop_token) {
         auto result = std::make_shared<const RunResult>(
             build_run_result(request.data, request.scenario_kind));
-        return CompletedRunResult{request.data->runtime_generation, std::move(result), nullptr,
-                                  request.performance, {}};
+        return CompletedRunResult{
+            request.data->runtime_generation, std::move(result), nullptr, request.performance, {}};
     }};
     auto data = finished_data(1);
     auto unfinished = std::make_shared<CompletedRunData>(*data);

@@ -2,8 +2,8 @@
 
 #pragma once
 
-#include "cpssim/gui/signal_series.hpp"
 #include "cpssim/gui/architecture_layout.hpp"
+#include "cpssim/gui/signal_series.hpp"
 #include "cpssim/gui/simulation_controller.hpp"
 #include "cpssim/model/categories.hpp"
 

@@ -5,8 +5,8 @@
 #include "cpssim/gui/simulation_controller.hpp"
 #include "cpssim/gui/workspace_state.hpp"
 
-#include <optional>
 #include <chrono>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -36,10 +36,8 @@ std::string event_raw_json(const SimulationSnapshot& snapshot, EventSequence seq
 
 class GuiEventTableCache {
   public:
-    bool update_rows(std::uint64_t presentation_generation,
-                     const SimulationSnapshot& snapshot);
-    bool update_filter(const GuiEventFilters& filters,
-                       std::chrono::steady_clock::time_point now);
+    bool update_rows(std::uint64_t presentation_generation, const SimulationSnapshot& snapshot);
+    bool update_filter(const GuiEventFilters& filters, std::chrono::steady_clock::time_point now);
     const std::vector<GuiEventTableRow>& rows() const noexcept { return rows_; }
     const std::vector<std::size_t>& filtered_indices() const noexcept { return filtered_; }
     std::uint64_t row_build_count() const noexcept { return row_build_count_; }

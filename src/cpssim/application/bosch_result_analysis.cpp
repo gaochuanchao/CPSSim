@@ -88,8 +88,7 @@ visible_bosch_critical_intervals(const BoschResultAnalysis& analysis, Tick begin
         const auto adjacent = !visible.empty() &&
                               visible.back().end_tick != std::numeric_limits<Tick>::max() &&
                               clipped.begin_tick == visible.back().end_tick + 1;
-        if (!visible.empty() &&
-            (clipped.begin_tick <= visible.back().end_tick || adjacent)) {
+        if (!visible.empty() && (clipped.begin_tick <= visible.back().end_tick || adjacent)) {
             visible.back().end_tick = std::max(visible.back().end_tick, clipped.end_tick);
         } else {
             visible.push_back(clipped);

@@ -194,8 +194,8 @@ RunMetrics derive_run_metrics(const SimulationSnapshot& snapshot) {
 }
 
 RunResult build_run_result(SimulationSnapshot snapshot, std::string scenario_kind) {
-    auto completed = std::make_shared<const CompletedRunData>(
-        CompletedRunData{0, 0, std::move(snapshot)});
+    auto completed =
+        std::make_shared<const CompletedRunData>(CompletedRunData{0, 0, std::move(snapshot)});
     return build_run_result(std::move(completed), std::move(scenario_kind));
 }
 

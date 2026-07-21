@@ -56,10 +56,9 @@ GuiPointerRegionMap::hit_test(GuiPointerPoint point) const noexcept {
     if (!valid_) {
         return std::nullopt;
     }
-    const auto found = std::find_if(published_.rbegin(), published_.rend(),
-                                    [point](const auto& region) {
-                                        return region.bounds.contains(point);
-                                    });
+    const auto found =
+        std::find_if(published_.rbegin(), published_.rend(),
+                     [point](const auto& region) { return region.bounds.contains(point); });
     return found == published_.rend() ? std::nullopt : std::optional{*found};
 }
 
@@ -68,20 +67,25 @@ bool GuiPointerRedrawPolicy::cursor_moved(GuiPointerPoint point,
     if (!regions.valid()) {
         last_position_ = point;
         hovered_identity_.reset();
+        hovered_behavior_.reset();
         return true;
     }
     const auto hit = regions.hit_test(point);
     const auto previous = hovered_identity_;
+    const auto previous_behavior = hovered_behavior_;
     hovered_identity_ = hit ? std::optional{hit->identity} : std::nullopt;
-    const auto position_changed = !last_position_.has_value() || last_position_->x != point.x ||
-                                  last_position_->y != point.y;
+    hovered_behavior_ = hit ? std::optional{hit->behavior} : std::nullopt;
+    const auto position_changed =
+        !last_position_.has_value() || last_position_->x != point.x || last_position_->y != point.y;
     last_position_ = point;
     if (!hit.has_value()) {
-        return previous.has_value();
+        return previous_behavior == GuiPointerRegionBehavior::BoundarySensitive ||
+               previous_behavior == GuiPointerRegionBehavior::PositionSensitive;
     }
     switch (hit->behavior) {
     case GuiPointerRegionBehavior::Passive:
-        return previous.has_value() && previous != hovered_identity_;
+        return previous_behavior == GuiPointerRegionBehavior::BoundarySensitive &&
+               previous != hovered_identity_;
     case GuiPointerRegionBehavior::BoundarySensitive:
         return previous != hovered_identity_;
     case GuiPointerRegionBehavior::PositionSensitive:
