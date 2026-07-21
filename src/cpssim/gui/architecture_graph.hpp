@@ -9,6 +9,7 @@
 #pragma once
 
 #include "cpssim/gui/connection_model.hpp"
+#include "cpssim/gui/architecture_layout.hpp"
 #include "cpssim/gui/selection_model.hpp"
 
 #include <compare>
@@ -106,7 +107,8 @@ GuiGraphNodeId resource_graph_node_id(ResourceId resource_id);
 GuiArchitectureGraph
 build_architecture_graph(const ExperimentPresentationSnapshot& experiment,
                          const std::vector<GuiFunctionalDependency>& functional_dependencies = {},
-                         bool bosch_latency_presentation = false);
+                         bool bosch_latency_presentation = false,
+                         const GuiArchitectureWorkspace* layout = nullptr);
 
 const GuiGraphNode* find_graph_node(const GuiArchitectureGraph& graph, GuiGraphNodeId node_id);
 

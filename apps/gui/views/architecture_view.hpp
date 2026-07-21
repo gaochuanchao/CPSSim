@@ -18,11 +18,11 @@ namespace cpssim::gui {
 
 /*** Owns disposable workspace state; no value affects simulation behavior. ***/
 struct ArchitectureViewState {
-    float pan_x{0.0F};
-    float pan_y{0.0F};
-    float zoom{1.0F};
     bool fit_requested{true};
     std::optional<TaskId> pressed_task;
+    std::optional<ResourceId> pressed_resource;
+    bool resizing_resource_x{false};
+    bool resizing_resource_y{false};
     bool dragging_task{false};
     std::string status;
     bool status_error{false};
@@ -32,9 +32,11 @@ struct ArchitectureViewState {
  * Draws one graph canvas and returns true when a double-click requests the
  * Inspector panel.
  ***/
-bool draw_architecture_view(const GuiArchitectureGraph& graph, GuiSimulationSession& session,
+bool draw_architecture_view(const GuiArchitectureGraph& graph,
                             const ExperimentPresentationSnapshot& experiment,
-                            StructuralSelection& selection, ArchitectureViewState& state,
+                            std::vector<DraftTaskAssignment>& assignments,
+                            StructuralSelection& selection, GuiArchitectureWorkspace& layout,
+                            ArchitectureViewState& state, bool editing_enabled,
                             bool read_only_preview = false,
                             GuiPointerRegionMap* pointer_regions = nullptr);
 

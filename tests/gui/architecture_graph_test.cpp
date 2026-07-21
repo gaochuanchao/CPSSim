@@ -276,4 +276,21 @@ TEST_CASE("Bosch connection presentation hides adapter handoff and reports laten
     REQUIRE(communication->route_reference->source_task_id == TaskId{1});
 }
 
+TEST_CASE("compact architecture applies manual positions and independent resource sizes",
+          "[gui][architecture][layout]") {
+    GuiArchitectureWorkspace layout;
+    set_task_layout_position(layout, TaskId{1}, {500.0F, 300.0F});
+    set_resource_layout_position(layout, ResourceId{4}, {450.0F, 250.0F});
+    set_resource_layout_size(layout, ResourceId{4}, {280.0F, 190.0F});
+    const auto graph = build_architecture_graph(make_graph_presentation(), {}, false, &layout);
+    const auto* task = find_graph_node(graph, task_graph_node_id(TaskId{1}));
+    const auto* resource = find_graph_node(graph, resource_graph_node_id(ResourceId{4}));
+    REQUIRE(task->position == GuiLogicalPoint{500.0F, 300.0F});
+    REQUIRE(task->size.height == 26.0F);
+    REQUIRE(task->size.width >= 96.0F);
+    REQUIRE(task->size.width <= 220.0F);
+    REQUIRE(resource->position == GuiLogicalPoint{450.0F, 250.0F});
+    REQUIRE(resource->size == GuiLogicalSize{280.0F, 190.0F});
+}
+
 } // namespace

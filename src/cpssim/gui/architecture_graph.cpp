@@ -16,13 +16,13 @@ namespace cpssim {
 namespace {
 
 constexpr float graph_margin = 24.0F;
-constexpr float resource_header_height = 54.0F;
-constexpr float resource_bottom_padding = 24.0F;
+constexpr float resource_header_height = 30.0F;
+constexpr float resource_bottom_padding = 12.0F;
 constexpr float resource_gap = 30.0F;
 constexpr float task_width = 168.0F;
-constexpr float task_height = 62.0F;
+constexpr float task_height = 26.0F;
 constexpr float task_horizontal_gap = 92.0F;
-constexpr float task_vertical_gap = 22.0F;
+constexpr float task_vertical_gap = 12.0F;
 constexpr float task_left_padding = 42.0F;
 
 std::size_t task_index(const std::vector<GuiTaskPresentation>& tasks, TaskId task_id) {
@@ -128,6 +128,10 @@ std::string task_label(const GuiTaskPresentation& task) {
     return task.name + " (T" + std::to_string(task.id.value()) + ')';
 }
 
+float compact_task_width(const std::string& label) {
+    return std::clamp(16.0F + static_cast<float>(label.size()) * 8.0F, 96.0F, 220.0F);
+}
+
 std::string resource_label(const GuiResourcePresentation& resource) {
     return resource.name + " (R" + std::to_string(resource.id.value()) + ')';
 }
@@ -145,7 +149,8 @@ GuiGraphNodeId resource_graph_node_id(ResourceId resource_id) {
 GuiArchitectureGraph
 build_architecture_graph(const ExperimentPresentationSnapshot& experiment,
                          const std::vector<GuiFunctionalDependency>& functional_dependencies,
-                         bool bosch_latency_presentation) {
+                         bool bosch_latency_presentation,
+                         const GuiArchitectureWorkspace* layout) {
     auto resources = experiment.resources;
     auto tasks = experiment.tasks;
     auto routes = experiment.routes;
@@ -202,17 +207,34 @@ build_architecture_graph(const ExperimentPresentationSnapshot& experiment,
         }
         const auto layer = layers[index];
         const auto slot = group_slots[group][layer]++;
+        const auto label = task_label(tasks[index]);
         result.nodes.push_back({
             .id = task_graph_node_id(tasks[index].id),
             .kind = GuiGraphNodeKind::Task,
             .entity = tasks[index].id,
-            .label = task_label(tasks[index]),
+            .label = label,
             .position = {.x = graph_margin + task_left_padding +
                               static_cast<float>(layer) * (task_width + task_horizontal_gap),
                          .y = group_y + resource_header_height +
                               static_cast<float>(slot) * (task_height + task_vertical_gap)},
-            .size = {.width = task_width, .height = task_height},
+            .size = {.width = compact_task_width(label), .height = task_height},
         });
+    }
+    for (auto& resource_node : result.nodes) {
+        if (resource_node.kind != GuiGraphNodeKind::Resource) continue;
+        const auto resource_id = std::get<ResourceId>(resource_node.entity);
+        auto right = resource_node.position.x +
+                     std::max(48.0F, 24.0F + static_cast<float>(resource_node.label.size()) * 8.0F);
+        auto bottom = resource_node.position.y + 48.0F;
+        for (const auto& task_node : result.nodes) {
+            if (task_node.kind != GuiGraphNodeKind::Task) continue;
+            const auto assigned = assigned_resource(assignments, std::get<TaskId>(task_node.entity));
+            if (assigned != resource_id) continue;
+            right = std::max(right, task_node.position.x + task_node.size.width + 12.0F);
+            bottom = std::max(bottom, task_node.position.y + task_node.size.height + 12.0F);
+        }
+        resource_node.size = {right - resource_node.position.x,
+                              bottom - resource_node.position.y};
     }
 
     if (group_slots.back() != std::vector<std::size_t>(layer_count, 0)) {
@@ -220,6 +242,31 @@ build_architecture_graph(const ExperimentPresentationSnapshot& experiment,
     }
     result.logical_size = {.width = resource_width + 2.0F * graph_margin,
                            .height = std::max(next_y, graph_margin + task_height) + graph_margin};
+
+    if (layout != nullptr) {
+        for (auto& node : result.nodes) {
+            if (node.kind == GuiGraphNodeKind::Task) {
+                if (const auto* override =
+                        find_task_layout(*layout, std::get<TaskId>(node.entity));
+                    override != nullptr) {
+                    node.position = {override->position.x, override->position.y};
+                }
+            } else if (const auto* override =
+                           find_resource_layout(*layout, std::get<ResourceId>(node.entity));
+                       override != nullptr) {
+                if (override->position.has_value()) {
+                    node.position = {override->position->x, override->position->y};
+                }
+                if (override->size.has_value()) {
+                    node.size = {override->size->width, override->size->height};
+                }
+            }
+            result.logical_size.width =
+                std::max(result.logical_size.width, node.position.x + node.size.width + graph_margin);
+            result.logical_size.height = std::max(result.logical_size.height,
+                                                  node.position.y + node.size.height + graph_margin);
+        }
+    }
 
     result.edges.reserve(functional_dependencies.size() + routes.size() + assignments.size());
     for (const auto& dependency : functional_dependencies) {

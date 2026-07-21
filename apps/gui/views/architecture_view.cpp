@@ -12,6 +12,7 @@
 #include "imgui.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <optional>
 #include <string>
@@ -96,6 +97,16 @@ std::pair<ImVec2, ImVec2> edge_points(const GuiArchitectureGraph& graph, const G
             {destination_rect.maximum.x, destination_center.y}};
 }
 
+std::array<std::pair<ImVec2, ImVec2>, 3>
+edge_segments(const GuiArchitectureGraph& graph, const GuiGraphEdge& edge,
+              const ScreenTransform& transform) {
+    const auto [start, finish] = edge_points(graph, edge, transform);
+    const auto middle_x = (start.x + finish.x) * 0.5F;
+    const ImVec2 first_bend{middle_x, start.y};
+    const ImVec2 second_bend{middle_x, finish.y};
+    return {{{start, first_bend}, {first_bend, second_bend}, {second_bend, finish}}};
+}
+
 float distance_to_segment(ImVec2 point, ImVec2 start, ImVec2 finish) {
     const auto dx = finish.x - start.x;
     const auto dy = finish.y - start.y;
@@ -114,8 +125,11 @@ const GuiGraphEdge* hit_relation(const GuiArchitectureGraph& graph,
         if (edge.kind == GuiGraphEdgeKind::Assignment) {
             continue;
         }
-        const auto [start, finish] = edge_points(graph, edge, transform);
-        if (distance_to_segment(mouse, start, finish) <= route_hit_radius) {
+        const auto segments = edge_segments(graph, edge, transform);
+        if (std::any_of(segments.begin(), segments.end(), [mouse](const auto& segment) {
+                return distance_to_segment(mouse, segment.first, segment.second) <=
+                       route_hit_radius;
+            })) {
             return &edge;
         }
     }
@@ -157,12 +171,6 @@ bool route_related_to_selected_task(const GuiGraphEdge& edge,
             edge.route_reference->destination_task_id == *selection.task_id());
 }
 
-bool assignment_related_to_selected_task(const GuiGraphEdge& edge,
-                                         const StructuralSelection& selection) {
-    return edge.assignment_reference.has_value() && selection.task_id().has_value() &&
-           edge.assignment_reference->task_id == *selection.task_id();
-}
-
 bool resource_is_selected_assignment(const ExperimentPresentationSnapshot& experiment,
                                      const StructuralSelection& selection,
                                      ResourceId resource_id) {
@@ -180,10 +188,18 @@ std::optional<ResourceId> active_assignment(const ExperimentPresentationSnapshot
                                  : std::nullopt;
 }
 
+std::optional<ResourceId> draft_assignment(const std::vector<DraftTaskAssignment>& assignments,
+                                           TaskId task_id) {
+    const auto found = std::find_if(assignments.begin(), assignments.end(),
+                                    [task_id](const auto& row) { return row.task_id == task_id; });
+    return found == assignments.end() ? std::nullopt : found->resource_id;
+}
+
 void draw_edges(ImDrawList* draw_list, const GuiArchitectureGraph& graph,
                 const ScreenTransform& transform, const StructuralSelection& selection) {
     for (const auto& edge : graph.edges) {
-        const auto [start, finish] = edge_points(graph, edge, transform);
+        const auto segments = edge_segments(graph, edge, transform);
+        const auto finish = segments.back().second;
         if (edge.kind == GuiGraphEdgeKind::MessageRoute) {
             const auto selected = edge.connection.has_value() &&
                                   selection.connection() == edge.connection->id;
@@ -191,25 +207,25 @@ void draw_edges(ImDrawList* draw_list, const GuiArchitectureGraph& graph,
             const auto color = ImGui::GetColorU32(selected || related ? ImGuiCol_PlotLinesHovered
                                                                       : ImGuiCol_PlotLines);
             const auto thickness = selected ? 3.0F : (related ? 2.2F : 1.4F);
-            draw_dashed_line(draw_list, start, finish, color, thickness,
-                             std::max(10.0F * transform.zoom, 4.0F),
-                             std::max(6.0F * transform.zoom, 3.0F));
-            draw_arrow(draw_list, start, finish, color, std::max(transform.zoom, 0.65F));
+            for (const auto& segment : segments)
+                draw_dashed_line(draw_list, segment.first, segment.second, color, thickness,
+                                 std::max(10.0F * transform.zoom, 4.0F),
+                                 std::max(6.0F * transform.zoom, 3.0F));
+            draw_arrow(draw_list, segments.back().first, finish, color,
+                       std::max(transform.zoom, 0.65F));
         } else if (edge.kind == GuiGraphEdgeKind::FunctionalDependency) {
             const auto related = selection.task_id().has_value() &&
                                  (edge.source.entity_value == selection.task_id()->value() ||
                                   edge.destination.entity_value == selection.task_id()->value());
             const auto color =
                 ImGui::GetColorU32(related ? ImGuiCol_PlotLinesHovered : ImGuiCol_PlotLines);
-            draw_list->AddLine(start, finish, color, related ? 2.5F : 1.8F);
-            draw_arrow(draw_list, start, finish, color, std::max(transform.zoom, 0.65F));
+            for (const auto& segment : segments)
+                draw_list->AddLine(segment.first, segment.second, color,
+                                   related ? 2.5F : 1.8F);
+            draw_arrow(draw_list, segments.back().first, finish, color,
+                       std::max(transform.zoom, 0.65F));
         } else {
-            const auto related = assignment_related_to_selected_task(edge, selection);
-            const auto color =
-                ImGui::GetColorU32(related ? ImGuiCol_HeaderHovered : ImGuiCol_TextDisabled);
-            draw_dashed_line(draw_list, start, finish, color, related ? 2.2F : 1.3F,
-                             std::max(2.0F * transform.zoom, 2.0F),
-                             std::max(6.0F * transform.zoom, 4.0F));
+            continue;
         }
     }
 }
@@ -233,24 +249,25 @@ void draw_resource_node(ImDrawList* draw_list, const GuiGraphNode& node,
                              10.0F * transform.zoom);
     draw_list->AddRect(rect.minimum, rect.maximum, border, 10.0F * transform.zoom, 0,
                        selected || drag_target == resource_id ? 3.0F : 1.4F);
-    draw_list->AddLine({rect.minimum.x, rect.minimum.y + 42.0F * transform.zoom},
-                       {rect.maximum.x, rect.minimum.y + 42.0F * transform.zoom}, border, 1.2F);
+    draw_list->AddLine({rect.minimum.x, rect.minimum.y + 28.0F * transform.zoom},
+                       {rect.maximum.x, rect.minimum.y + 28.0F * transform.zoom}, border, 1.2F);
     draw_list->AddText(
         nullptr, sanitize_gui_font_size(ImGui::GetFontSize() * transform.zoom),
-        {rect.minimum.x + 12.0F * transform.zoom, rect.minimum.y + 11.0F * transform.zoom},
+        {rect.minimum.x + 8.0F * transform.zoom, rect.minimum.y + 5.0F * transform.zoom},
         ImGui::GetColorU32(ImGuiCol_Text), node.label.c_str());
 }
 
 void draw_task_node(ImDrawList* draw_list, const GuiGraphNode& node,
                     const ScreenTransform& transform,
                     const ExperimentPresentationSnapshot& experiment,
-                    const GuiSimulationSession& session, const StructuralSelection& selection,
+                    const std::vector<DraftTaskAssignment>& assignments,
+                    const StructuralSelection& selection,
                     bool dragging, bool read_only_preview) {
     const auto rect = node_rect(node, transform);
     const auto task_id = std::get<TaskId>(node.entity);
     const auto selected = selection.task_id() == task_id;
     const auto draft_resource =
-        read_only_preview ? std::optional<ResourceId>{} : session.draft().assignment(task_id);
+        read_only_preview ? std::optional<ResourceId>{} : draft_assignment(assignments, task_id);
     const auto draft_valid =
         read_only_preview || (draft_resource.has_value() &&
                               graph_assignment_accessible(experiment, task_id, *draft_resource));
@@ -265,10 +282,19 @@ void draw_task_node(ImDrawList* draw_list, const GuiGraphNode& node,
     draw_list->AddRect(rect.minimum, rect.maximum,
                        ImGui::GetColorU32(selected ? ImGuiCol_HeaderHovered : ImGuiCol_Border),
                        3.0F * transform.zoom, 0, selected ? 3.0F : 1.5F);
-    draw_list->AddText(
-        nullptr, sanitize_gui_font_size(ImGui::GetFontSize() * transform.zoom),
-        {rect.minimum.x + 10.0F * transform.zoom, rect.minimum.y + 8.0F * transform.zoom},
-        ImGui::GetColorU32(ImGuiCol_Text), node.label.c_str());
+    const auto text_position =
+        ImVec2{rect.minimum.x + 8.0F * transform.zoom, rect.minimum.y + 5.0F * transform.zoom};
+    const auto clip = ImVec4{rect.minimum.x + 6.0F * transform.zoom, rect.minimum.y,
+                             rect.maximum.x - 6.0F * transform.zoom, rect.maximum.y};
+    draw_list->AddText(nullptr, sanitize_gui_font_size(ImGui::GetFontSize() * transform.zoom),
+                       text_position, ImGui::GetColorU32(ImGuiCol_Text), node.label.c_str(),
+                       nullptr, 0.0F, &clip);
+    const auto port_radius = std::max(3.0F * transform.zoom, 2.0F);
+    const ImVec2 input{rect.minimum.x, (rect.minimum.y + rect.maximum.y) * 0.5F};
+    const ImVec2 output{rect.maximum.x, (rect.minimum.y + rect.maximum.y) * 0.5F};
+    draw_list->AddCircle(input, port_radius, ImGui::GetColorU32(ImGuiCol_PlotLines), 12,
+                         std::max(1.0F, transform.zoom));
+    draw_list->AddCircleFilled(output, port_radius, ImGui::GetColorU32(ImGuiCol_PlotLines), 12);
     if (draft_changed && draft_resource.has_value()) {
         const auto draft_label = "Resource R" + std::to_string(draft_resource->value());
         draw_list->AddText(
@@ -287,26 +313,26 @@ void draw_task_node(ImDrawList* draw_list, const GuiGraphNode& node,
 }
 
 void fit_graph(ArchitectureViewState& state, const GuiArchitectureGraph& graph,
-               ImVec2 canvas_size) {
+               GuiArchitectureWorkspace& layout, ImVec2 canvas_size) {
     constexpr float padding = 32.0F;
     const auto available_width = std::max(canvas_size.x - 2.0F * padding, 1.0F);
     const auto available_height = std::max(canvas_size.y - 2.0F * padding, 1.0F);
-    state.zoom = std::clamp(std::min(available_width / graph.logical_size.width,
+    layout.zoom = std::clamp(std::min(available_width / graph.logical_size.width,
                                      available_height / graph.logical_size.height),
                             minimum_zoom, maximum_zoom);
-    state.pan_x = (canvas_size.x - graph.logical_size.width * state.zoom) * 0.5F;
-    state.pan_y = (canvas_size.y - graph.logical_size.height * state.zoom) * 0.5F;
+    layout.pan_x = (canvas_size.x - graph.logical_size.width * layout.zoom) * 0.5F;
+    layout.pan_y = (canvas_size.y - graph.logical_size.height * layout.zoom) * 0.5F;
     state.fit_requested = false;
 }
 
-void update_zoom(ArchitectureViewState& state, ImVec2 canvas_origin, ImVec2 mouse, float wheel) {
-    const auto old_zoom = state.zoom;
+void update_zoom(GuiArchitectureWorkspace& layout, ImVec2 canvas_origin, ImVec2 mouse, float wheel) {
+    const auto old_zoom = layout.zoom;
     const auto factor = wheel > 0.0F ? 1.12F : (1.0F / 1.12F);
-    state.zoom = std::clamp(old_zoom * factor, minimum_zoom, maximum_zoom);
-    const auto logical_x = (mouse.x - canvas_origin.x - state.pan_x) / old_zoom;
-    const auto logical_y = (mouse.y - canvas_origin.y - state.pan_y) / old_zoom;
-    state.pan_x = mouse.x - canvas_origin.x - logical_x * state.zoom;
-    state.pan_y = mouse.y - canvas_origin.y - logical_y * state.zoom;
+    layout.zoom = std::clamp(old_zoom * factor, minimum_zoom, maximum_zoom);
+    const auto logical_x = (mouse.x - canvas_origin.x - layout.pan_x) / old_zoom;
+    const auto logical_y = (mouse.y - canvas_origin.y - layout.pan_y) / old_zoom;
+    layout.pan_x = mouse.x - canvas_origin.x - logical_x * layout.zoom;
+    layout.pan_y = mouse.y - canvas_origin.y - logical_y * layout.zoom;
 }
 
 void reject_drop(ArchitectureViewState& state, TaskId task_id, std::string reason) {
@@ -316,9 +342,11 @@ void reject_drop(ArchitectureViewState& state, TaskId task_id, std::string reaso
 
 } // namespace
 
-bool draw_architecture_view(const GuiArchitectureGraph& graph, GuiSimulationSession& session,
+bool draw_architecture_view(const GuiArchitectureGraph& graph,
                             const ExperimentPresentationSnapshot& experiment,
-                            StructuralSelection& selection, ArchitectureViewState& state,
+                            std::vector<DraftTaskAssignment>& assignments,
+                            StructuralSelection& selection, GuiArchitectureWorkspace& layout,
+                            ArchitectureViewState& state, bool editing_enabled,
                             bool read_only_preview, GuiPointerRegionMap* pointer_regions) {
     if (read_only_preview) {
         state.pressed_task.reset();
@@ -328,10 +356,46 @@ bool draw_architecture_view(const GuiArchitectureGraph& graph, GuiSimulationSess
         state.fit_requested = true;
     }
     ImGui::SameLine();
+    if (ImGui::Button("Auto Layout")) {
+        auto_layout_architecture(layout);
+        state.fit_requested = true;
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Reset Layout")) {
+        reset_architecture_layout(layout);
+        state.fit_requested = true;
+    }
+    ImGui::SameLine();
+    int mode = static_cast<int>(layout.mode);
+    ImGui::SetNextItemWidth(7.0F * ImGui::GetFontSize());
+    if (ImGui::Combo("Mode", &mode, "Select\0Arrange\0Assign\0")) {
+        layout.mode = static_cast<GuiArchitectureMode>(mode);
+    }
+    if (layout.mode == GuiArchitectureMode::Arrange && selection.task_id().has_value()) {
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Reset Position")) {
+            reset_task_layout_position(layout, *selection.task_id());
+        }
+    } else if (layout.mode == GuiArchitectureMode::Arrange &&
+               selection.resource_id().has_value()) {
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Auto Size Resource")) {
+            reset_resource_layout_size(layout, *selection.resource_id());
+        }
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Reset Position")) {
+            reset_resource_layout_position(layout, *selection.resource_id());
+        }
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Reset Size")) {
+            reset_resource_layout_size(layout, *selection.resource_id());
+        }
+    }
+    ImGui::SameLine();
     ImGui::TextDisabled(read_only_preview
                             ? "Zoom %.0f%% | wheel: zoom | middle-drag: pan | read-only preview"
-                            : "Zoom %.0f%% | wheel: zoom | middle-drag: pan | drag task: draft",
-                        state.zoom * 100.0F);
+                            : "Zoom %.0f%% | wheel: zoom | middle-drag: pan",
+                        layout.zoom * 100.0F);
     ImGui::SameLine();
     ImGui::TextDisabled("| solid: functional | dashed: network | dim: assignment");
     if (!state.status.empty()) {
@@ -350,18 +414,18 @@ bool draw_architecture_view(const GuiArchitectureGraph& graph, GuiSimulationSess
     const auto mouse = ImGui::GetIO().MousePos;
 
     if (state.fit_requested) {
-        fit_graph(state, graph, canvas_size);
+        fit_graph(state, graph, layout, canvas_size);
     }
     if (canvas_hovered && ImGui::GetIO().MouseWheel != 0.0F) {
-        update_zoom(state, canvas_origin, mouse, ImGui::GetIO().MouseWheel);
+        update_zoom(layout, canvas_origin, mouse, ImGui::GetIO().MouseWheel);
     }
     if (canvas_hovered && ImGui::IsMouseDragging(ImGuiMouseButton_Middle, 0.0F)) {
-        state.pan_x += ImGui::GetIO().MouseDelta.x;
-        state.pan_y += ImGui::GetIO().MouseDelta.y;
+        layout.pan_x += ImGui::GetIO().MouseDelta.x;
+        layout.pan_y += ImGui::GetIO().MouseDelta.y;
     }
 
     const ScreenTransform transform{
-        .origin = canvas_origin, .pan_x = state.pan_x, .pan_y = state.pan_y, .zoom = state.zoom};
+        .origin = canvas_origin, .pan_x = layout.pan_x, .pan_y = layout.pan_y, .zoom = layout.zoom};
     if (pointer_regions != nullptr) {
         pointer_regions->add(
             {ImGui::GetID("Architecture passive canvas"),
@@ -372,7 +436,6 @@ bool draw_architecture_view(const GuiArchitectureGraph& graph, GuiSimulationSess
             if (!edge.connection.has_value()) {
                 continue;
             }
-            const auto [start, finish] = edge_points(graph, edge, transform);
             constexpr float tolerance = 8.0F;
             const auto identity = "Architecture connection " +
                                   std::to_string(static_cast<int>(edge.connection->id.kind)) + " " +
@@ -380,20 +443,28 @@ bool draw_architecture_view(const GuiArchitectureGraph& graph, GuiSimulationSess
                                   std::to_string(edge.destination.entity_value);
             constexpr int segments = 12;
             const auto region_identity = ImGui::GetID(identity.c_str());
-            for (int segment = 0; segment < segments; ++segment) {
-                const auto first = static_cast<float>(segment) / segments;
-                const auto second = static_cast<float>(segment + 1) / segments;
-                const ImVec2 segment_start{start.x + (finish.x - start.x) * first,
-                                           start.y + (finish.y - start.y) * first};
-                const ImVec2 segment_end{start.x + (finish.x - start.x) * second,
-                                         start.y + (finish.y - start.y) * second};
-                pointer_regions->add(
-                    {region_identity,
-                     {std::min(segment_start.x, segment_end.x) - tolerance,
-                      std::min(segment_start.y, segment_end.y) - tolerance,
-                      std::max(segment_start.x, segment_end.x) + tolerance,
-                      std::max(segment_start.y, segment_end.y) + tolerance},
-                     GuiPointerRegionBehavior::BoundarySensitive});
+            for (const auto& route_segment : edge_segments(graph, edge, transform)) {
+                for (int segment = 0; segment < segments; ++segment) {
+                    const auto first = static_cast<float>(segment) / segments;
+                    const auto second = static_cast<float>(segment + 1) / segments;
+                    const ImVec2 segment_start{
+                        route_segment.first.x +
+                            (route_segment.second.x - route_segment.first.x) * first,
+                        route_segment.first.y +
+                            (route_segment.second.y - route_segment.first.y) * first};
+                    const ImVec2 segment_end{
+                        route_segment.first.x +
+                            (route_segment.second.x - route_segment.first.x) * second,
+                        route_segment.first.y +
+                            (route_segment.second.y - route_segment.first.y) * second};
+                    pointer_regions->add(
+                        {region_identity,
+                         {std::min(segment_start.x, segment_end.x) - tolerance,
+                          std::min(segment_start.y, segment_end.y) - tolerance,
+                          std::max(segment_start.x, segment_end.x) + tolerance,
+                          std::max(segment_start.y, segment_end.y) + tolerance},
+                         GuiPointerRegionBehavior::BoundarySensitive});
+                }
             }
         }
         for (const auto& node : graph.nodes) {
@@ -405,6 +476,20 @@ bool draw_architecture_view(const GuiArchitectureGraph& graph, GuiSimulationSess
                 {ImGui::GetID(identity.c_str()),
                  {rect.minimum.x, rect.minimum.y, rect.maximum.x, rect.maximum.y},
                  GuiPointerRegionBehavior::BoundarySensitive});
+            if (node.kind == GuiGraphNodeKind::Resource) {
+                constexpr float handle = 8.0F;
+                const auto handle_identity = ImGui::GetID((identity + " resize").c_str());
+                pointer_regions->add(
+                    {handle_identity,
+                     {rect.maximum.x - handle, rect.minimum.y, rect.maximum.x + handle,
+                      rect.maximum.y + handle},
+                     GuiPointerRegionBehavior::DragHandle});
+                pointer_regions->add(
+                    {handle_identity,
+                     {rect.minimum.x, rect.maximum.y - handle, rect.maximum.x + handle,
+                      rect.maximum.y + handle},
+                     GuiPointerRegionBehavior::DragHandle});
+            }
         }
     }
     bool structural_selection_changed = false;
@@ -415,7 +500,8 @@ bool draw_architecture_view(const GuiArchitectureGraph& graph, GuiSimulationSess
         if (task != nullptr) {
             select_graph_node(selection, *task);
             structural_selection_changed = true;
-            if (!read_only_preview) {
+            if (!read_only_preview && editing_enabled &&
+                layout.mode != GuiArchitectureMode::Select) {
                 state.pressed_task = std::get<TaskId>(task->entity);
             }
         } else if (route != nullptr) {
@@ -428,11 +514,25 @@ bool draw_architecture_view(const GuiArchitectureGraph& graph, GuiSimulationSess
         } else if (resource != nullptr) {
             select_graph_node(selection, *resource);
             structural_selection_changed = true;
+            if (!read_only_preview && editing_enabled &&
+                layout.mode == GuiArchitectureMode::Arrange) {
+                state.pressed_resource = std::get<ResourceId>(resource->entity);
+                const auto rect = node_rect(*resource, transform);
+                constexpr float handle = 9.0F;
+                state.resizing_resource_x = std::abs(mouse.x - rect.maximum.x) <= handle;
+                state.resizing_resource_y = std::abs(mouse.y - rect.maximum.y) <= handle;
+            }
         }
     }
 
     if (canvas_hovered) {
-        if (const auto* hovered = hit_relation(graph, transform, mouse);
+        if (const auto* hovered_task =
+                hit_node(graph, transform, mouse, GuiGraphNodeKind::Task);
+            hovered_task != nullptr &&
+            ImGui::CalcTextSize(hovered_task->label.c_str()).x + 16.0F >
+                hovered_task->size.width * transform.zoom) {
+            ImGui::SetTooltip("%s", hovered_task->label.c_str());
+        } else if (const auto* hovered = hit_relation(graph, transform, mouse);
             hovered != nullptr && hovered->connection.has_value()) {
             const auto& connection = *hovered->connection;
             ImGui::BeginTooltip();
@@ -454,27 +554,65 @@ bool draw_architecture_view(const GuiArchitectureGraph& graph, GuiSimulationSess
     if (!read_only_preview && state.pressed_task.has_value() &&
         ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
         state.dragging_task = true;
+        if (layout.mode == GuiArchitectureMode::Arrange && editing_enabled) {
+            if (const auto* node =
+                    find_graph_node(graph, task_graph_node_id(*state.pressed_task));
+                node != nullptr) {
+                set_task_layout_position(
+                    layout, *state.pressed_task,
+                    {node->position.x + ImGui::GetIO().MouseDelta.x / layout.zoom,
+                     node->position.y + ImGui::GetIO().MouseDelta.y / layout.zoom});
+            }
+        }
+    }
+    if (state.pressed_resource.has_value() && ImGui::IsMouseDragging(ImGuiMouseButton_Left) &&
+        editing_enabled && layout.mode == GuiArchitectureMode::Arrange) {
+        const auto* node =
+            find_graph_node(graph, resource_graph_node_id(*state.pressed_resource));
+        if (node != nullptr) {
+            const auto dx = ImGui::GetIO().MouseDelta.x / layout.zoom;
+            const auto dy = ImGui::GetIO().MouseDelta.y / layout.zoom;
+            if (state.resizing_resource_x || state.resizing_resource_y) {
+                set_resource_layout_size(
+                    layout, *state.pressed_resource,
+                    {std::max(48.0F, node->size.width + (state.resizing_resource_x ? dx : 0.0F)),
+                     std::max(36.0F,
+                              node->size.height + (state.resizing_resource_y ? dy : 0.0F))});
+            } else {
+                set_resource_layout_position(layout, *state.pressed_resource,
+                                             {node->position.x + dx, node->position.y + dy});
+                for (const auto& assignment : experiment.assignments) {
+                    if (assignment.resource_id != *state.pressed_resource) continue;
+                    if (const auto* task =
+                            find_graph_node(graph, task_graph_node_id(assignment.task_id));
+                        task != nullptr)
+                        set_task_layout_position(layout, assignment.task_id,
+                                                 {task->position.x + dx, task->position.y + dy});
+                }
+            }
+        }
     }
     if (state.pressed_task.has_value() && ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
         const auto task_id = *state.pressed_task;
-        if (state.dragging_task) {
+        if (state.dragging_task && layout.mode == GuiArchitectureMode::Assign) {
             const auto* resource = hit_node(graph, transform, mouse, GuiGraphNodeKind::Resource);
             if (resource == nullptr) {
                 reject_drop(state, task_id, "drop onto a resource container");
             } else {
                 const auto resource_id = std::get<ResourceId>(resource->entity);
-                if (!session.draft_editable()) {
+                if (!editing_enabled) {
                     reject_drop(state, task_id,
                                 "the run is Running; pause it before editing the draft");
                 } else if (!graph_assignment_accessible(experiment, task_id, resource_id)) {
                     reject_drop(state, task_id,
                                 "resource R" + std::to_string(resource_id.value()) +
                                     " has no configured execution profile for this task");
-                } else if (!session.set_draft_assignment(task_id, resource_id)) {
-                    reject_drop(state, task_id,
-                                "resource R" + std::to_string(resource_id.value()) +
-                                    " could not be written to the pending draft");
                 } else {
+                    const auto assignment =
+                        std::find_if(assignments.begin(), assignments.end(),
+                                     [task_id](const auto& row) { return row.task_id == task_id; });
+                    if (assignment != assignments.end()) assignment->resource_id = resource_id;
+                    else assignments.push_back({task_id, resource_id});
                     state.status = "Pending assignment updated: T" +
                                    std::to_string(task_id.value()) + " -> R" +
                                    std::to_string(resource_id.value()) +
@@ -486,15 +624,19 @@ bool draw_architecture_view(const GuiArchitectureGraph& graph, GuiSimulationSess
         state.pressed_task.reset();
         state.dragging_task = false;
     }
+    if (state.pressed_resource.has_value() && ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+        state.pressed_resource.reset();
+        state.resizing_resource_x = false;
+        state.resizing_resource_y = false;
+    }
 
     std::optional<ResourceId> drag_target;
     bool valid_drag_target = false;
-    if (state.dragging_task) {
+    if (state.dragging_task && layout.mode == GuiArchitectureMode::Assign) {
         const auto* resource = hit_node(graph, transform, mouse, GuiGraphNodeKind::Resource);
         if (resource != nullptr) {
             drag_target = std::get<ResourceId>(resource->entity);
-            valid_drag_target =
-                session.draft_editable() &&
+            valid_drag_target = editing_enabled && layout.mode == GuiArchitectureMode::Assign &&
                 graph_assignment_accessible(experiment, *state.pressed_task, *drag_target);
         }
     }
@@ -522,10 +664,10 @@ bool draw_architecture_view(const GuiArchitectureGraph& graph, GuiSimulationSess
         }
         const auto dragging =
             state.dragging_task && state.pressed_task == std::get<TaskId>(node.entity);
-        draw_task_node(draw_list, node, transform, experiment, session, selection, dragging,
+        draw_task_node(draw_list, node, transform, experiment, assignments, selection, dragging,
                        read_only_preview);
     }
-    if (state.dragging_task) {
+    if (state.dragging_task && layout.mode == GuiArchitectureMode::Assign) {
         draw_list->AddLine(
             mouse, {mouse.x + 20.0F, mouse.y + 20.0F},
             ImGui::GetColorU32(valid_drag_target ? ImGuiCol_CheckMark : ImGuiCol_PlotHistogram),

@@ -255,6 +255,7 @@ add_library(
     src/cpssim/application/project/system_edit_policy.cpp
     src/cpssim/application/recent_projects.cpp
     src/cpssim/gui/architecture_graph.cpp
+    src/cpssim/gui/architecture_layout.cpp
     src/cpssim/gui/display_scale.cpp
     src/cpssim/gui/event_table_model.cpp
     src/cpssim/gui/frame_scheduler.cpp

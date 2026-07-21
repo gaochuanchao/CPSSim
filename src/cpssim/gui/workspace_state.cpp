@@ -42,6 +42,11 @@ void normalize_workspace_state(GuiWorkspaceState& workspace) noexcept {
     workspace.left_sidebar_ratio = normalize_splitter_ratio(workspace.left_sidebar_ratio, 0.52F);
     workspace.right_sidebar_ratio = normalize_splitter_ratio(workspace.right_sidebar_ratio, 0.48F);
     workspace.center_split_ratio = normalize_splitter_ratio(workspace.center_split_ratio, 0.62F);
+    workspace.results_summary_ratio =
+        normalize_splitter_ratio(workspace.results_summary_ratio, 0.30F);
+    workspace.results_timing_ratio =
+        normalize_splitter_ratio(workspace.results_timing_ratio, 0.42F);
+    normalize_architecture_workspace(workspace.architecture);
     if (workspace.fast_event_batch_size == 0) {
         workspace.fast_event_batch_size = 1000;
     }

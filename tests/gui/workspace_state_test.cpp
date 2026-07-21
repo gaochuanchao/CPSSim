@@ -81,3 +81,20 @@ TEST_CASE("vertical split preserves both panels in narrow layouts", "[gui][works
     REQUIRE(narrow.second_height > 0.0F);
     REQUIRE(narrow.first_height + narrow.second_height == 94.0F);
 }
+
+TEST_CASE("architecture layout overrides reset independently and normalize safely",
+          "[gui][workspace][architecture]") {
+    GuiWorkspaceState workspace;
+    workspace.architecture.mode = GuiArchitectureMode::Arrange;
+    set_task_layout_position(workspace.architecture, TaskId{4}, {12.0F, 18.0F});
+    set_resource_layout_position(workspace.architecture, ResourceId{2}, {3.0F, 7.0F});
+    set_resource_layout_size(workspace.architecture, ResourceId{2}, {240.0F, 160.0F});
+    REQUIRE(find_task_layout(workspace.architecture, TaskId{4}) != nullptr);
+    REQUIRE(find_resource_layout(workspace.architecture, ResourceId{2})->size.has_value());
+    auto_layout_architecture(workspace.architecture);
+    REQUIRE(workspace.architecture.tasks.empty());
+    REQUIRE(workspace.architecture.resources.empty());
+    REQUIRE(workspace.architecture.mode == GuiArchitectureMode::Arrange);
+    reset_architecture_layout(workspace.architecture);
+    REQUIRE(workspace.architecture == GuiArchitectureWorkspace{});
+}

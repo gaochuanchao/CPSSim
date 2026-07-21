@@ -1297,11 +1297,12 @@ void GuiApplication::draw_center_panels(const SimulationSnapshot& snapshot) {
                                   application_state_.active_project().metadata().scenario_kind ==
                                       "bosch";
             const auto graph =
-                build_architecture_graph(*experiment, functional_dependencies, is_bosch);
-            static_cast<void>(draw_architecture_view(graph, session, *experiment,
-                                                     structural_selection_,
-                                                     architecture_view_state_, previewing,
-                                                     &pointer_regions_));
+                build_architecture_graph(*experiment, functional_dependencies, is_bosch,
+                                         &workspace_state_.architecture);
+            static_cast<void>(draw_architecture_view(
+                graph, *experiment, system_run_assignments_, structural_selection_,
+                workspace_state_.architecture, architecture_view_state_, session.draft_editable(),
+                previewing, &pointer_regions_));
             break;
         }
         case GuiCenterTab::Timeline:

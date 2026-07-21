@@ -3,6 +3,7 @@
 #pragma once
 
 #include "cpssim/gui/signal_series.hpp"
+#include "cpssim/gui/architecture_layout.hpp"
 #include "cpssim/gui/simulation_controller.hpp"
 #include "cpssim/model/categories.hpp"
 
@@ -13,7 +14,7 @@
 
 namespace cpssim {
 
-inline constexpr std::uint32_t current_gui_workspace_schema_version = 4;
+inline constexpr std::uint32_t current_gui_workspace_schema_version = 5;
 
 enum class GuiTheme { Dark, Light };
 enum class GuiCenterTab { Architecture, Timeline, Signals, Results, Resources, Events };
@@ -95,6 +96,9 @@ struct GuiWorkspaceState {
     GuiEventFilters event_filters;
     GuiEventColumnVisibility event_columns;
     std::vector<GuiSignalId> selected_signals;
+    GuiArchitectureWorkspace architecture;
+    float results_summary_ratio{0.30F};
+    float results_timing_ratio{0.42F};
 
     bool operator==(const GuiWorkspaceState&) const = default;
 };

@@ -367,12 +367,41 @@ std::string serialize_project_workspace_json(const ProjectWorkspace& workspace) 
                                                                                       : "boolean";
         signals.push_back({{"source_name", signal.source_name}, {"type", scalar_type}});
     }
+    Json task_layouts = Json::array();
+    for (const auto& row : workspace.architecture.tasks) {
+        task_layouts.push_back({{"task_id", row.task_id.value()},
+                                {"x", row.position.x},
+                                {"y", row.position.y}});
+    }
+    Json resource_layouts = Json::array();
+    for (const auto& row : workspace.architecture.resources) {
+        Json value{{"resource_id", row.resource_id.value()}};
+        if (row.position.has_value()) {
+            value["x"] = row.position->x;
+            value["y"] = row.position->y;
+        }
+        if (row.size.has_value()) {
+            value["width"] = row.size->width;
+            value["height"] = row.size->height;
+        }
+        resource_layouts.push_back(std::move(value));
+    }
     const auto& panels = workspace.panels;
     const auto& columns = workspace.event_columns;
     const Json document{
         {"active_tabs",
          {{"upper", tab_name(workspace.active_upper_tab)},
           {"lower", tab_name(workspace.active_lower_tab)}}},
+        {"architecture",
+         {{"mode", workspace.architecture.mode == GuiArchitectureMode::Arrange
+                       ? "arrange"
+                       : workspace.architecture.mode == GuiArchitectureMode::Assign ? "assign"
+                                                                                     : "select"},
+          {"pan_x", workspace.architecture.pan_x},
+          {"pan_y", workspace.architecture.pan_y},
+          {"zoom", workspace.architecture.zoom},
+          {"tasks", std::move(task_layouts)},
+          {"resources", std::move(resource_layouts)}}},
         {"center_tabs",
          {{"upper", tab_array(workspace.upper_tabs)}, {"lower", tab_array(workspace.lower_tabs)}}},
         {"execution",
@@ -408,7 +437,9 @@ std::string serialize_project_workspace_json(const ProjectWorkspace& workspace) 
         {"splitters",
          {{"center", workspace.center_split_ratio},
           {"left_sidebar", workspace.left_sidebar_ratio},
-          {"right_sidebar", workspace.right_sidebar_ratio}}},
+          {"right_sidebar", workspace.right_sidebar_ratio},
+          {"results_summary", workspace.results_summary_ratio},
+          {"results_timing", workspace.results_timing_ratio}}},
         {"visualizer",
          {{"x_axis", workspace.plot_x_axis_unit == GuiPlotXAxisUnit::Seconds ? "seconds" : "ticks"},
           {"range", workspace.plot_range_mode == GuiPlotRangeMode::Selected ? "selected"
@@ -453,7 +484,8 @@ ProjectWorkspace parse_project_workspace_json(std::string_view json_text) {
         require_only_fields(document, {"schema_version"}, "workspace $");
         return ProjectWorkspace{};
     }
-    if (version != 2 && version != 3 && version != current_project_workspace_schema_version) {
+    if (version != 2 && version != 3 && version != 4 &&
+        version != current_project_workspace_schema_version) {
         fail_project("workspace $.schema_version",
                      "unsupported version " + std::to_string(version) + "; expected 1, 2, or " +
                          std::to_string(current_project_workspace_schema_version));
@@ -461,7 +493,7 @@ ProjectWorkspace parse_project_workspace_json(std::string_view json_text) {
     require_only_fields(document,
                         {"schema_version", "theme", "panels", "splitters", "active_tabs",
                          "center_tabs", "execution", "visualizer", "event_filters", "event_columns",
-                         "selected_signals"},
+                         "selected_signals", "architecture"},
                         "workspace $");
 
     ProjectWorkspace workspace;
@@ -496,7 +528,8 @@ ProjectWorkspace parse_project_workspace_json(std::string_view json_text) {
         found != document.end() && found->is_object()) {
         require_only_fields(
             *found,
-            {"left_sidebar", "right_sidebar", "analysis_lower", "resources_events", "center"},
+            {"left_sidebar", "right_sidebar", "analysis_lower", "resources_events", "center",
+             "results_summary", "results_timing"},
             "workspace $.splitters");
         workspace.left_sidebar_ratio =
             read_optional_float(*found, "left_sidebar", workspace.left_sidebar_ratio);
@@ -505,6 +538,62 @@ ProjectWorkspace parse_project_workspace_json(std::string_view json_text) {
         workspace.center_split_ratio = read_optional_float(
             *found, "center",
             read_optional_float(*found, "analysis_lower", workspace.center_split_ratio));
+        workspace.results_summary_ratio =
+            read_optional_float(*found, "results_summary", workspace.results_summary_ratio);
+        workspace.results_timing_ratio =
+            read_optional_float(*found, "results_timing", workspace.results_timing_ratio);
+    }
+    if (const auto architecture = document.find("architecture");
+        architecture != document.end() && architecture->is_object()) {
+        require_only_fields(*architecture, {"mode", "pan_x", "pan_y", "zoom", "tasks", "resources"},
+                            "workspace $.architecture");
+        if (const auto mode = architecture->find("mode");
+            mode != architecture->end() && mode->is_string()) {
+            const auto value = mode->get<std::string>();
+            workspace.architecture.mode = value == "arrange" ? GuiArchitectureMode::Arrange
+                                          : value == "assign" ? GuiArchitectureMode::Assign
+                                                                : GuiArchitectureMode::Select;
+        }
+        workspace.architecture.pan_x =
+            read_optional_float(*architecture, "pan_x", workspace.architecture.pan_x);
+        workspace.architecture.pan_y =
+            read_optional_float(*architecture, "pan_y", workspace.architecture.pan_y);
+        workspace.architecture.zoom =
+            read_optional_float(*architecture, "zoom", workspace.architecture.zoom);
+        if (const auto tasks = architecture->find("tasks");
+            tasks != architecture->end() && tasks->is_array()) {
+            for (const auto& row : *tasks) {
+                if (!row.is_object()) continue;
+                require_only_fields(row, {"task_id", "x", "y"}, "workspace $.architecture.tasks[]");
+                if (row.contains("task_id") && row["task_id"].is_number_unsigned() &&
+                    row.contains("x") && row["x"].is_number() && row.contains("y") &&
+                    row["y"].is_number()) {
+                    workspace.architecture.tasks.push_back(
+                        {TaskId{row["task_id"].get<std::uint64_t>()},
+                         {row["x"].get<float>(), row["y"].get<float>()}});
+                }
+            }
+        }
+        if (const auto resources = architecture->find("resources");
+            resources != architecture->end() && resources->is_array()) {
+            for (const auto& row : *resources) {
+                if (!row.is_object()) continue;
+                require_only_fields(row, {"resource_id", "x", "y", "width", "height"},
+                                    "workspace $.architecture.resources[]");
+                if (!row.contains("resource_id") || !row["resource_id"].is_number_unsigned())
+                    continue;
+                GuiResourceLayoutOverride value{
+                    ResourceId{row["resource_id"].get<std::uint64_t>()}, std::nullopt,
+                    std::nullopt};
+                if (row.contains("x") && row["x"].is_number() && row.contains("y") &&
+                    row["y"].is_number())
+                    value.position = GuiLayoutPoint{row["x"].get<float>(), row["y"].get<float>()};
+                if (row.contains("width") && row["width"].is_number() && row.contains("height") &&
+                    row["height"].is_number())
+                    value.size = GuiLayoutSize{row["width"].get<float>(), row["height"].get<float>()};
+                workspace.architecture.resources.push_back(std::move(value));
+            }
+        }
     }
     if (const auto found = document.find("active_tabs");
         found != document.end() && found->is_object()) {

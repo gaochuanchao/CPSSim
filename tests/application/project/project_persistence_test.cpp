@@ -227,9 +227,19 @@ TEST_CASE("project metadata and presentation workspace JSON round trip strictly"
     workspace.event_filters.text = "finished";
     workspace.event_columns.phase = false;
     workspace.selected_signals = {{GuiSignalScalarType::Real, "vehicle.x"}};
+    workspace.architecture.mode = GuiArchitectureMode::Arrange;
+    workspace.architecture.pan_x = 17.0F;
+    workspace.architecture.pan_y = -9.0F;
+    workspace.architecture.zoom = 1.4F;
+    set_task_layout_position(workspace.architecture, TaskId{1}, {25.0F, 30.0F});
+    set_resource_layout_position(workspace.architecture, ResourceId{1}, {10.0F, 15.0F});
+    set_resource_layout_size(workspace.architecture, ResourceId{1}, {260.0F, 180.0F});
+    workspace.results_summary_ratio = 0.34F;
+    workspace.results_timing_ratio = 0.47F;
     REQUIRE(
         (parse_project_workspace_json(serialize_project_workspace_json(workspace)) == workspace));
     REQUIRE((parse_project_workspace_json(R"({"schema_version":1})") == ProjectWorkspace{}));
+    REQUIRE((parse_project_workspace_json(R"({"schema_version":4})") == ProjectWorkspace{}));
     REQUIRE_THROWS_AS(parse_project_workspace_json(R"({"schema_version":99})"),
                       std::invalid_argument);
     REQUIRE_THROWS_AS(parse_project_workspace_json(R"({"schema_version":2,"unknown":true})"),
