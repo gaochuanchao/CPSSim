@@ -62,4 +62,54 @@ double plot_tick_coordinate(Tick tick, GuiPlotXAxisUnit unit, PhysicalDuration t
                : static_cast<double>(tick) * static_cast<double>(tick_period.count()) / 1.0e9;
 }
 
+std::size_t plot_point_budget(float logical_width) noexcept {
+    const auto width = std::max(0.0F, logical_width);
+    return std::clamp<std::size_t>(static_cast<std::size_t>(width * 2.0F), 512, 8192);
+}
+
+bool GuiPlotDataCache::update(std::uint64_t run_generation, const GuiSignalModel& model,
+                              const std::vector<GuiSignalId>& selected,
+                              GuiPlotXAxisUnit axis_unit, GuiPlotRange range,
+                              float logical_width) {
+    const auto budget = plot_point_budget(logical_width);
+    if (initialized_ && run_generation_ == run_generation && selected_ == selected &&
+        axis_unit_ == axis_unit && range_ == range && point_budget_ == budget) {
+        return false;
+    }
+    series_.clear();
+    series_.reserve(selected.size());
+    for (const auto& id : selected) {
+        if (const auto* source = find_signal_series(model, id); source != nullptr) {
+            series_.push_back(
+                {id, downsample_signal(*source, {range.begin, range.end, budget})});
+        }
+    }
+    run_generation_ = run_generation;
+    selected_ = selected;
+    axis_unit_ = axis_unit;
+    range_ = range;
+    point_budget_ = budget;
+    initialized_ = true;
+    ++build_count_;
+    return true;
+}
+
+const GuiPlotSeriesProjection* GuiPlotDataCache::find(const GuiSignalId& id) const noexcept {
+    const auto found = std::find_if(series_.begin(), series_.end(),
+                                    [&id](const auto& row) { return row.id == id; });
+    return found == series_.end() ? nullptr : &*found;
+}
+
+const std::vector<const GuiSignalSeries*>& GuiPlotSignalSearchCache::update(
+    std::uint64_t run_generation, const GuiSignalModel& model, std::string_view query) {
+    if (!initialized_ || run_generation_ != run_generation || query_ != query) {
+        run_generation_ = run_generation;
+        query_ = query;
+        matches_ = search_plot_signals(model, query);
+        initialized_ = true;
+        ++build_count_;
+    }
+    return matches_;
+}
+
 } // namespace cpssim

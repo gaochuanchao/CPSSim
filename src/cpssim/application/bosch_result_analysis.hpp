@@ -37,6 +37,9 @@ struct BoschResultAnalysis {
 GuiSignalId bosch_lateral_error_signal_id();
 GuiSignalId bosch_critical_section_signal_id();
 BoschResultAnalysis derive_bosch_result_analysis(const RunResult& result);
+std::vector<BoschCriticalInterval>
+visible_bosch_critical_intervals(const BoschResultAnalysis& analysis, Tick begin_tick,
+                                 Tick end_tick);
 std::vector<WorkbookControlMetric> bosch_workbook_control_metrics(const RunResult& result);
 
 } // namespace cpssim

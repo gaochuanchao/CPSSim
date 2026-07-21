@@ -8,6 +8,8 @@
 #pragma once
 
 #include "cpssim/gui/selection_model.hpp"
+#include "cpssim/gui/event_table_model.hpp"
+#include "cpssim/gui/gui_profiler.hpp"
 #include "cpssim/gui/workspace_state.hpp"
 
 #include <array>
@@ -18,10 +20,12 @@ namespace cpssim::gui {
 struct EventViewState {
     std::array<char, 256> text_filter{};
     bool filter_initialized{false};
+    GuiEventTableCache cache;
 };
 
-void draw_event_view(const SimulationSnapshot& snapshot, GuiSelection& selection,
+void draw_event_view(const SimulationSnapshot& snapshot, std::uint64_t presentation_generation,
+                     GuiSelection& selection,
                      GuiEventFilters& filters, GuiEventColumnVisibility& columns,
-                     EventViewState& state);
+                     EventViewState& state, GuiProfiler* profiler = nullptr);
 
 } // namespace cpssim::gui

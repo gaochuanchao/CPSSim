@@ -243,4 +243,41 @@ TEST_CASE("plot ranges and tick units retain exact source ticks",
     REQUIRE(plot_tick_coordinate(5, GuiPlotXAxisUnit::Seconds, result.metrics.tick_period) == 0.01);
 }
 
+TEST_CASE("plot cache keys drawing data and clamps its pixel budget",
+          "[gui][signal][visualizer][cache]") {
+    std::vector<FunctionalObservation> rows;
+    for (Tick tick = 0; tick < 20; ++tick) {
+        rows.push_back(observation(tick, static_cast<double>(tick), tick, false));
+    }
+    const auto built = build_signal_model(rows);
+    GuiPlotDataCache cache;
+    const std::vector<GuiSignalId> selected{{GuiSignalScalarType::Real, "state"}};
+    REQUIRE(cache.update(5, *built.model, selected, GuiPlotXAxisUnit::Ticks, {0, 19}, 100.0F));
+    REQUIRE_FALSE(
+        cache.update(5, *built.model, selected, GuiPlotXAxisUnit::Ticks, {0, 19}, 100.0F));
+    REQUIRE(cache.build_count() == 1);
+    REQUIRE(cache.find(selected.front()) != nullptr);
+    REQUIRE(plot_point_budget(10.0F) == 512);
+    REQUIRE(plot_point_budget(10'000.0F) == 8192);
+}
+
+TEST_CASE("digital downsampling preserves exact transitions", "[gui][signal][downsample]") {
+    GuiSignalSeries series{.descriptor = {.id = {GuiSignalScalarType::Boolean, "active"},
+                                          .path = "Plant/Active",
+                                          .display_name = "Active",
+                                          .unit = "",
+                                          .source = "test"},
+                           .samples = {}};
+    for (Tick tick = 0; tick < 100; ++tick) {
+        series.samples.push_back({tick, tick >= 40 && tick < 70});
+    }
+    const auto projected =
+        downsample_signal(series, {.begin_tick = 0, .end_tick = 99, .maximum_points = 4});
+    REQUIRE(std::find(projected.begin(), projected.end(), series.samples[39]) != projected.end());
+    REQUIRE(std::find(projected.begin(), projected.end(), series.samples[40]) != projected.end());
+    REQUIRE(std::find(projected.begin(), projected.end(), series.samples[69]) != projected.end());
+    REQUIRE(std::find(projected.begin(), projected.end(), series.samples[70]) != projected.end());
+    REQUIRE(series.samples.size() == 100);
+}
+
 } // namespace

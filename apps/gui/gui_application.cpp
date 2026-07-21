@@ -1332,8 +1332,9 @@ void GuiApplication::draw_center_panels(const SimulationSnapshot& snapshot) {
             draw_resource_view(snapshot, runtime_selection_);
             break;
         case GuiCenterTab::Events:
-            draw_event_view(snapshot, runtime_selection_, workspace_state_.event_filters,
-                            workspace_state_.event_columns, event_view_state_);
+            draw_event_view(snapshot, publication_policy_.generations().presentation,
+                            runtime_selection_, workspace_state_.event_filters,
+                            workspace_state_.event_columns, event_view_state_, &profiler_);
             break;
         }
     };
@@ -1730,7 +1731,8 @@ void GuiApplication::draw_frame() {
     draw_bosch_wizard();
     draw_export_dialog();
     draw_plot_visualizer(open_plot_visualizer_, completed_results_.get(), workspace_state_,
-                         runtime_selection_, plot_visualizer_view_state_, &pointer_regions_);
+                         runtime_selection_, plot_visualizer_view_state_, &pointer_regions_,
+                         &profiler_);
     if (validate_system_draft_requested_) {
         validate_system_draft_requested_ = false;
         validate_system_draft();

@@ -46,14 +46,14 @@ SimulationSnapshot event_snapshot() {
 }
 } // namespace
 
-TEST_CASE("event rows remain in canonical sequence order with missing IDs", "[gui][events]") {
+TEST_CASE("event rows preserve canonical source order with missing IDs", "[gui][events]") {
     const auto rows = build_event_table_rows(event_snapshot());
     REQUIRE(rows.size() == 2);
-    REQUIRE(rows[0].sequence == EventSequence{1});
-    REQUIRE(rows[1].sequence == EventSequence{2});
-    REQUIRE_FALSE(rows[0].entities.resource_id.has_value());
-    REQUIRE(rows[1].time_milliseconds == 0.2);
-    REQUIRE(find_event_row_by_sequence(rows, *rows[1].cause) == 0);
+    REQUIRE(rows[0].sequence == EventSequence{2});
+    REQUIRE(rows[1].sequence == EventSequence{1});
+    REQUIRE_FALSE(rows[1].entities.resource_id.has_value());
+    REQUIRE(rows[0].time_milliseconds == 0.2);
+    REQUIRE(find_event_row_by_sequence(rows, *rows[0].cause) == 1);
 }
 
 TEST_CASE("event filters project indices without mutating canonical rows", "[gui][events]") {
@@ -64,8 +64,26 @@ TEST_CASE("event filters project indices without mutating canonical rows", "[gui
     filters.vehicle = VehicleId{5};
     filters.text = "execution completion";
     const auto projected = filter_event_table_rows(rows, filters);
-    REQUIRE(projected == std::vector<std::size_t>{1});
-    REQUIRE(rows[0].sequence == EventSequence{1});
+    REQUIRE(projected == std::vector<std::size_t>{0});
+    REQUIRE(rows[0].sequence == EventSequence{2});
+}
+
+TEST_CASE("event cache keys rows by presentation generation and debounces text",
+          "[gui][events][cache]") {
+    GuiEventTableCache cache;
+    auto source = event_snapshot();
+    const auto start = std::chrono::steady_clock::now();
+    REQUIRE(cache.update_rows(1, source));
+    REQUIRE_FALSE(cache.update_rows(1, source));
+    REQUIRE(cache.row_build_count() == 1);
+    GuiEventFilters filters;
+    REQUIRE(cache.update_filter(filters, start));
+    filters.text = "deadline";
+    REQUIRE_FALSE(cache.update_filter(filters, start + std::chrono::milliseconds{100}));
+    REQUIRE(cache.update_filter(filters, start + std::chrono::milliseconds{251}));
+    REQUIRE(cache.filtered_indices().empty());
+    REQUIRE_FALSE(event_raw_json(source, EventSequence{999}).size() > 0);
+    REQUIRE(event_raw_json(source, EventSequence{2}).find("job_finish") != std::string::npos);
 }
 
 TEST_CASE("large event projection retains canonical order", "[gui][events][large]") {

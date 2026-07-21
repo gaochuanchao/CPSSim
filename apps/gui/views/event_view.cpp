@@ -99,12 +99,23 @@ void draw_filters(GuiEventFilters& filters, GuiEventColumnVisibility& columns,
 
 } // namespace
 
-void draw_event_view(const SimulationSnapshot& snapshot, GuiSelection& selection,
+void draw_event_view(const SimulationSnapshot& snapshot, std::uint64_t presentation_generation,
+                     GuiSelection& selection,
                      GuiEventFilters& filters, GuiEventColumnVisibility& columns,
-                     EventViewState& state) {
+                     EventViewState& state, GuiProfiler* profiler) {
     draw_filters(filters, columns, state);
-    const auto rows = build_event_table_rows(snapshot);
-    const auto projected = filter_event_table_rows(rows, filters);
+    const auto row_builds = state.cache.row_build_count();
+    const auto filter_builds = state.cache.filter_build_count();
+    state.cache.update_rows(presentation_generation, snapshot);
+    state.cache.update_filter(filters, std::chrono::steady_clock::now());
+    if (profiler != nullptr) {
+        profiler->increment(GuiProfileCounter::EventCacheBuild,
+                            state.cache.row_build_count() - row_builds);
+        profiler->increment(GuiProfileCounter::EventFilterBuild,
+                            state.cache.filter_build_count() - filter_builds);
+    }
+    const auto& rows = state.cache.rows();
+    const auto& projected = state.cache.filtered_indices();
     const auto flags = ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable |
                        ImGuiTableFlags_Hideable | ImGuiTableFlags_ScrollX |
                        ImGuiTableFlags_ScrollY | ImGuiTableFlags_SizingFixedFit;
@@ -177,7 +188,8 @@ void draw_event_view(const SimulationSnapshot& snapshot, GuiSelection& selection
                 ImGui::TextDisabled("—");
             }
             if (ImGui::BeginPopupContextItem("Raw event JSON")) {
-                ImGui::TextWrapped("%s", row.raw_json.c_str());
+                const auto raw_json = event_raw_json(snapshot, row.sequence);
+                ImGui::TextWrapped("%s", raw_json.c_str());
                 ImGui::EndPopup();
             }
             ImGui::PopID();

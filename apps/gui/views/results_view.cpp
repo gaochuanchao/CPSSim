@@ -121,21 +121,25 @@ void responses(const RunMetrics& metrics) {
     ImGui::EndTable();
 }
 
-void bosch_summary(const RunResult& result) {
+void bosch_summary(const CompletedRunResult& completed) {
+    const auto& result = *completed.result;
     if (result.scenario_kind != "bosch")
         return;
     ImGui::SeparatorText("Bosch Summary");
-    const auto analysis = derive_bosch_result_analysis(result);
-    if (analysis.lateral_error == nullptr) {
-        ImGui::TextDisabled("%s", analysis.diagnostic.value_or("Unavailable").c_str());
+    const auto* analysis = completed.bosch_analysis.get();
+    if (analysis == nullptr || analysis->lateral_error == nullptr) {
+        ImGui::TextDisabled("%s", analysis != nullptr
+                                     ? analysis->diagnostic.value_or("Unavailable").c_str()
+                                     : "Unavailable");
         return;
     }
     double maximum = 0.0;
-    for (const auto& sample : analysis.lateral_error->samples)
+    for (const auto& sample : analysis->lateral_error->samples)
         maximum = std::max(maximum, std::abs(gui_scalar_as_double(sample.value)));
     ImGui::Text("Threshold crossings: %zu | Maximum absolute lateral error: %.6g m | Critical "
                 "sections: %zu",
-                analysis.threshold_crossings.size(), maximum, analysis.critical_intervals.size());
+                analysis->threshold_crossings.size(), maximum,
+                analysis->critical_intervals.size());
 }
 
 } // namespace
@@ -160,7 +164,7 @@ void draw_results_view(const SimulationProgress& progress, const CompletedRunRes
         summary(completed->result->metrics);
         timing(completed->result->metrics, completed->performance);
         responses(completed->result->metrics);
-        bosch_summary(*completed->result);
+        bosch_summary(*completed);
     }
     ImGui::Spacing();
     ImGui::BeginDisabled(completed == nullptr);

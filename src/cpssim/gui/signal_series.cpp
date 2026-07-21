@@ -321,6 +321,25 @@ std::vector<GuiScalarSample> downsample_signal(const GuiSignalSeries& series,
     if (count <= request.maximum_points) {
         return {begin, end};
     }
+    if (series.descriptor.id.scalar_type == GuiSignalScalarType::Boolean) {
+        std::vector<GuiScalarSample> transitions;
+        transitions.reserve(std::min(count, request.maximum_points));
+        transitions.push_back(*begin);
+        auto previous = begin;
+        for (auto current = std::next(begin); current != end; ++current) {
+            if (current->value != previous->value) {
+                if (transitions.back() != *previous) {
+                    transitions.push_back(*previous);
+                }
+                transitions.push_back(*current);
+            }
+            previous = current;
+        }
+        if (transitions.back() != *std::prev(end)) {
+            transitions.push_back(*std::prev(end));
+        }
+        return transitions;
+    }
     if (request.maximum_points == 1) {
         return {*begin};
     }

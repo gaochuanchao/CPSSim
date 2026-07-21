@@ -2,6 +2,9 @@
 
 #include "cpssim/application/bosch_result_analysis.hpp"
 
+#include <algorithm>
+#include <limits>
+
 namespace cpssim {
 namespace {
 
@@ -70,6 +73,29 @@ BoschResultAnalysis derive_bosch_result_analysis(const RunResult& result) {
         }
     }
     return analysis;
+}
+
+std::vector<BoschCriticalInterval>
+visible_bosch_critical_intervals(const BoschResultAnalysis& analysis, Tick begin_tick,
+                                 Tick end_tick) {
+    std::vector<BoschCriticalInterval> visible;
+    for (const auto& interval : analysis.critical_intervals) {
+        if (interval.end_tick < begin_tick || interval.begin_tick > end_tick) {
+            continue;
+        }
+        BoschCriticalInterval clipped{std::max(interval.begin_tick, begin_tick),
+                                      std::min(interval.end_tick, end_tick)};
+        const auto adjacent = !visible.empty() &&
+                              visible.back().end_tick != std::numeric_limits<Tick>::max() &&
+                              clipped.begin_tick == visible.back().end_tick + 1;
+        if (!visible.empty() &&
+            (clipped.begin_tick <= visible.back().end_tick || adjacent)) {
+            visible.back().end_tick = std::max(visible.back().end_tick, clipped.end_tick);
+        } else {
+            visible.push_back(clipped);
+        }
+    }
+    return visible;
 }
 
 std::vector<WorkbookControlMetric> bosch_workbook_control_metrics(const RunResult& result) {

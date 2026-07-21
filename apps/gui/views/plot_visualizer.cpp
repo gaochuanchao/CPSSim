@@ -20,8 +20,8 @@ bool selected(const std::vector<GuiSignalId>& values, const GuiSignalId& id) {
     return std::find(values.begin(), values.end(), id) != values.end();
 }
 
-void signal_browser(const GuiSignalModel& model, GuiWorkspaceState& workspace,
-                    PlotVisualizerViewState& state) {
+void signal_browser(std::uint64_t run_generation, const GuiSignalModel& model,
+                    GuiWorkspaceState& workspace, PlotVisualizerViewState& state) {
     ImGui::InputTextWithHint("##plot-search", "Search signals...", state.search.data(),
                              state.search.size());
     ImGui::SameLine();
@@ -29,7 +29,7 @@ void signal_browser(const GuiSignalModel& model, GuiWorkspaceState& workspace,
         workspace.selected_signals.clear();
     ImGui::BeginChild("Signal browser", ImVec2{15.0F * ImGui::GetFontSize(), 150.0F},
                       ImGuiChildFlags_Borders);
-    for (const auto* series : search_plot_signals(model, state.search.data())) {
+    for (const auto* series : state.search_cache.update(run_generation, model, state.search.data())) {
         auto enabled = selected(workspace.selected_signals, series->descriptor.id);
         if (ImGui::Checkbox(series->descriptor.path.c_str(), &enabled)) {
             if (enabled)
@@ -122,10 +122,9 @@ const GuiScalarSample* nearest_sample(const GuiSignalSeries& series, Tick tick) 
     return tick - previous->tick <= found->tick - tick ? &*previous : &*found;
 }
 
-void draw_lane(const RunResult& result, const GuiPlotLane& lane, GuiWorkspaceState& workspace,
+void draw_lane(const RunResult& result, const GuiPlotLane& lane, GuiPlotRange range,
+               const GuiPlotDataCache& cache, GuiWorkspaceState& workspace,
                GuiSelection& selection, const BoschResultAnalysis* bosch, bool fit_requested) {
-    const auto range = resolve_plot_range(result, workspace.plot_range_mode, selection.tick_range(),
-                                          workspace.plot_custom_begin, workspace.plot_custom_end);
     const auto x_min =
         plot_tick_coordinate(range.begin, workspace.plot_x_axis_unit, result.metrics.tick_period);
     const auto x_max = plot_tick_coordinate(std::max(range.end, range.begin + 1),
@@ -148,7 +147,11 @@ void draw_lane(const RunResult& result, const GuiPlotLane& lane, GuiWorkspaceSta
                                                                                   : "Ticks",
                           lane.unit.c_str(), axis_flags, axis_flags);
         for (const auto* series : lane.series) {
-            const auto samples = downsample_signal(*series, {range.begin, range.end, 4000});
+            const auto* projected = cache.find(series->descriptor.id);
+            if (projected == nullptr) {
+                continue;
+            }
+            const auto& samples = projected->samples;
             std::vector<double> x;
             std::vector<double> y;
             x.reserve(samples.size());
@@ -179,8 +182,10 @@ void draw_lane(const RunResult& result, const GuiPlotLane& lane, GuiWorkspaceSta
             ImPlot::PlotLine("-0.2 m", xs, lower, 2);
         }
         if (bosch != nullptr && workspace.plot_bosch_critical_sections) {
-            for (std::size_t index = 0; index < bosch->critical_intervals.size(); ++index) {
-                const auto& interval = bosch->critical_intervals[index];
+            const auto visible_intervals =
+                visible_bosch_critical_intervals(*bosch, range.begin, range.end);
+            for (std::size_t index = 0; index < visible_intervals.size(); ++index) {
+                const auto& interval = visible_intervals[index];
                 const double xs[]{
                     plot_tick_coordinate(interval.begin_tick, workspace.plot_x_axis_unit,
                                          result.metrics.tick_period),
@@ -238,7 +243,8 @@ void draw_lane(const RunResult& result, const GuiPlotLane& lane, GuiWorkspaceSta
 
 void draw_plot_visualizer(bool& open, const CompletedRunResult* completed,
                           GuiWorkspaceState& workspace, GuiSelection& selection,
-                          PlotVisualizerViewState& state, GuiPointerRegionMap* pointer_regions) {
+                          PlotVisualizerViewState& state, GuiPointerRegionMap* pointer_regions,
+                          GuiProfiler* profiler) {
     if (!open)
         return;
     if (!ImGui::Begin("Plot Visualizer", &open)) {
@@ -266,16 +272,29 @@ void draw_plot_visualizer(bool& open, const CompletedRunResult* completed,
         }
         state.initialized = true;
     }
-    signal_browser(*result.signals.model, workspace, state);
+    signal_browser(completed->run_generation, *result.signals.model, workspace, state);
     const auto is_bosch = result.scenario_kind == "bosch";
     controls(workspace, state, is_bosch);
     const auto lanes = build_plot_lanes(*result.signals.model, workspace.selected_signals);
-    const auto bosch = result.scenario_kind == "bosch"
-                           ? std::optional{derive_bosch_result_analysis(result)}
-                           : std::nullopt;
-    for (const auto& lane : lanes)
-        draw_lane(result, lane, workspace, selection, bosch ? &*bosch : nullptr,
-                  state.fit_requested);
+    const auto range = resolve_plot_range(result, workspace.plot_range_mode, selection.tick_range(),
+                                          workspace.plot_custom_begin,
+                                          workspace.plot_custom_end);
+    const auto previous_builds = state.plot_cache.build_count();
+    state.plot_cache.update(completed->run_generation, *result.signals.model,
+                            workspace.selected_signals, workspace.plot_x_axis_unit, range,
+                            ImGui::GetContentRegionAvail().x);
+    if (profiler != nullptr) {
+        profiler->increment(GuiProfileCounter::PlotCacheBuild,
+                            state.plot_cache.build_count() - previous_builds);
+    }
+    ImGuiListClipper clipper;
+    clipper.Begin(static_cast<int>(lanes.size()), 224.0F);
+    while (clipper.Step()) {
+        for (auto index = clipper.DisplayStart; index < clipper.DisplayEnd; ++index) {
+            draw_lane(result, lanes[static_cast<std::size_t>(index)], range, state.plot_cache,
+                      workspace, selection, completed->bosch_analysis.get(), state.fit_requested);
+        }
+    }
     state.fit_requested = false;
     if (lanes.empty())
         ImGui::TextDisabled("Select one or more signals to plot.");
