@@ -35,10 +35,9 @@ void row(const char* label, std::uint64_t value) {
     ImGui::Text("%llu", static_cast<unsigned long long>(value));
 }
 
+void bosch_summary(const CompletedRunResult& completed);
+
 void summary(const RunMetrics& metrics) {
-    ImGui::BeginChild("Compact run summary",
-                      ImVec2{std::min(320.0F, ImGui::GetContentRegionAvail().x), 0.0F},
-                      ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY);
     ImGui::SeparatorText("Run Summary");
     if (ImGui::BeginTable("Summary values", 2, ImGuiTableFlags_SizingFixedFit)) {
         row("Canonical events", metrics.event_count);
@@ -52,7 +51,41 @@ void summary(const RunMetrics& metrics) {
         ImGui::Text("%lld ticks", static_cast<long long>(metrics.horizon_tick));
         ImGui::EndTable();
     }
-    ImGui::EndChild();
+}
+
+void result_splitter(const char* identity, float total_height, float& ratio,
+                     GuiPointerRegionMap* pointer_regions) {
+    const auto height = std::max(2.0F, ImGui::GetFrameHeight() * 0.12F);
+    ImGui::InvisibleButton(identity, ImVec2{-1.0F, height});
+    if (pointer_regions != nullptr) {
+        const auto minimum = ImGui::GetItemRectMin();
+        const auto maximum = ImGui::GetItemRectMax();
+        pointer_regions->add({ImGui::GetID(identity),
+                              {minimum.x, minimum.y, maximum.x, maximum.y},
+                              GuiPointerRegionBehavior::DragHandle});
+    }
+    if (ImGui::IsItemHovered() || ImGui::IsItemActive()) {
+        ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
+    }
+    if (ImGui::IsItemActive() && total_height > height) {
+        ratio = normalize_splitter_ratio(
+            ratio + ImGui::GetIO().MouseDelta.y / (total_height - height), ratio);
+    }
+}
+
+void summary_region(const CompletedRunResult& completed) {
+    const auto wide = ImGui::GetContentRegionAvail().x >= 42.0F * ImGui::GetFontSize();
+    if (wide && completed.result->scenario_kind == "bosch" &&
+        ImGui::BeginTable("Result summaries", 2, ImGuiTableFlags_SizingStretchSame)) {
+        ImGui::TableNextColumn();
+        summary(completed.result->metrics);
+        ImGui::TableNextColumn();
+        bosch_summary(completed);
+        ImGui::EndTable();
+    } else {
+        summary(completed.result->metrics);
+        bosch_summary(completed);
+    }
 }
 
 void timing(const RunMetrics& metrics, const RunPerformanceSummary& performance) {
@@ -146,7 +179,18 @@ void bosch_summary(const CompletedRunResult& completed) {
 
 void draw_results_view(const SimulationProgress& progress, const CompletedRunResult* completed,
                        CompletedResultFinalizationState finalization_state,
-                       bool& open_visualizer, bool& open_export, ResultsViewState&) {
+                       bool& open_visualizer, bool& open_export, GuiWorkspaceState& workspace,
+                       ResultsViewState&, GuiPointerRegionMap* pointer_regions) {
+    ImGui::BeginDisabled(completed == nullptr);
+    if (ImGui::Button("Open Plot Visualizer..."))
+        open_visualizer = true;
+    ImGui::SameLine();
+    if (ImGui::Button("Export Completed Results..."))
+        open_export = true;
+    ImGui::EndDisabled();
+    if (completed == nullptr && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+        ImGui::SetTooltip("Available after the simulation finishes.");
+    ImGui::Separator();
     if (completed == nullptr) {
         if (finalization_state == CompletedResultFinalizationState::Finalizing) {
             ImGui::TextUnformatted("Finalizing completed run...");
@@ -161,21 +205,35 @@ void draw_results_view(const SimulationProgress& progress, const CompletedRunRes
         if (progress.run_state == GuiRunState::Paused)
             ImGui::TextDisabled("The simulation is paused; final analysis has not been built.");
     } else {
-        summary(completed->result->metrics);
+        const auto available_height = ImGui::GetContentRegionAvail().y;
+        const auto splitter_height = std::max(2.0F, ImGui::GetFrameHeight() * 0.12F);
+        const auto summary_split = calculate_vertical_split(
+            available_height, splitter_height, workspace.results_summary_ratio,
+            5.0F * ImGui::GetTextLineHeightWithSpacing(),
+            9.0F * ImGui::GetTextLineHeightWithSpacing());
+        workspace.results_summary_ratio = summary_split.normalized_ratio;
+        ImGui::BeginChild("Results summary region", ImVec2{0.0F, summary_split.first_height},
+                          ImGuiChildFlags_Borders);
+        summary_region(*completed);
+        ImGui::EndChild();
+        result_splitter("Results summary splitter", available_height,
+                        workspace.results_summary_ratio, pointer_regions);
+        const auto lower_height = ImGui::GetContentRegionAvail().y;
+        const auto timing_split = calculate_vertical_split(
+            lower_height, splitter_height, workspace.results_timing_ratio,
+            5.0F * ImGui::GetTextLineHeightWithSpacing(),
+            5.0F * ImGui::GetTextLineHeightWithSpacing());
+        workspace.results_timing_ratio = timing_split.normalized_ratio;
+        ImGui::BeginChild("Results timing region", ImVec2{0.0F, timing_split.first_height},
+                          ImGuiChildFlags_Borders);
         timing(completed->result->metrics, completed->performance);
+        ImGui::EndChild();
+        result_splitter("Results timing splitter", lower_height,
+                        workspace.results_timing_ratio, pointer_regions);
+        ImGui::BeginChild("Results task region", ImVec2{0.0F, 0.0F}, ImGuiChildFlags_Borders);
         responses(completed->result->metrics);
-        bosch_summary(*completed);
+        ImGui::EndChild();
     }
-    ImGui::Spacing();
-    ImGui::BeginDisabled(completed == nullptr);
-    if (ImGui::Button("Open Plot Visualizer..."))
-        open_visualizer = true;
-    ImGui::SameLine();
-    if (ImGui::Button("Export Completed Results..."))
-        open_export = true;
-    ImGui::EndDisabled();
-    if (completed == nullptr && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-        ImGui::SetTooltip("Available after the simulation finishes.");
 }
 
 } // namespace cpssim::gui

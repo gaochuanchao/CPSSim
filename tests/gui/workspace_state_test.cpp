@@ -98,3 +98,15 @@ TEST_CASE("architecture layout overrides reset independently and normalize safel
     reset_architecture_layout(workspace.architecture);
     REQUIRE(workspace.architecture == GuiArchitectureWorkspace{});
 }
+
+TEST_CASE("System Builder breakpoint and Results ratios are deterministic",
+          "[gui][workspace][responsive]") {
+    REQUIRE(gui_property_layout_is_wide(384.0F, 16.0F));
+    REQUIRE_FALSE(gui_property_layout_is_wide(383.0F, 16.0F));
+    GuiWorkspaceState workspace;
+    workspace.results_summary_ratio = -1.0F;
+    workspace.results_timing_ratio = 9.0F;
+    normalize_workspace_state(workspace);
+    REQUIRE(workspace.results_summary_ratio == 0.05F);
+    REQUIRE(workspace.results_timing_ratio == 0.95F);
+}

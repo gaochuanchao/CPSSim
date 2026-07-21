@@ -128,4 +128,9 @@ GuiClearColor gui_theme_clear_color(GuiTheme theme) noexcept {
                                     : GuiClearColor{0.08F, 0.09F, 0.11F, 1.0F};
 }
 
+bool gui_property_layout_is_wide(float available_width, float font_size) noexcept {
+    return std::isfinite(available_width) && std::isfinite(font_size) && font_size > 0.0F &&
+           available_width >= 24.0F * font_size;
+}
+
 } // namespace cpssim

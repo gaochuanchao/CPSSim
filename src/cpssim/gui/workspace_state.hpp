@@ -129,5 +129,6 @@ void reset_center_tab_arrangement(GuiWorkspaceState& workspace);
 bool move_center_tab(GuiWorkspaceState& workspace, GuiCenterTab tab, bool to_upper);
 bool center_tab_is_upper(const GuiWorkspaceState& workspace, GuiCenterTab tab) noexcept;
 GuiClearColor gui_theme_clear_color(GuiTheme theme) noexcept;
+bool gui_property_layout_is_wide(float available_width, float font_size) noexcept;
 
 } // namespace cpssim

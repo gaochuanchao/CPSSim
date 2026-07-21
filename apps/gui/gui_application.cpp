@@ -1324,7 +1324,8 @@ void GuiApplication::draw_center_panels(const SimulationSnapshot& snapshot) {
         case GuiCenterTab::Results: {
             draw_results_view(progress_, completed_results_.get(), finalization_state(),
                               open_plot_visualizer_,
-                              request_completed_export_, results_view_state_);
+                              request_completed_export_, workspace_state_, results_view_state_,
+                              &pointer_regions_);
             break;
         }
         case GuiCenterTab::Resources:

@@ -43,17 +43,44 @@ void draw_profile_diagnostics(const SystemDraftBuildResult& validation,
 }
 
 bool begin_properties(const char* identity) {
-    return ImGui::BeginTable(identity, 2,
-                             ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_SizingStretchProp);
+    const auto properties_wide = gui_property_layout_is_wide(ImGui::GetContentRegionAvail().x,
+                                                              ImGui::GetFontSize());
+    const auto opened = ImGui::BeginTable(
+        identity, properties_wide ? 2 : 1,
+        ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_SizingStretchProp);
+    if (opened && properties_wide) {
+        ImGui::TableSetupColumn("Labels", ImGuiTableColumnFlags_WidthFixed,
+                                9.0F * ImGui::GetFontSize());
+        ImGui::TableSetupColumn("Controls", ImGuiTableColumnFlags_WidthStretch);
+    }
+    return opened;
+}
+
+bool current_properties_wide() {
+    return ImGui::TableGetColumnCount() == 2;
 }
 
 void property_label(const char* label) {
+    const auto properties_wide = current_properties_wide();
     ImGui::TableNextRow();
     ImGui::TableSetColumnIndex(0);
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted(label);
-    ImGui::TableSetColumnIndex(1);
-    ImGui::SetNextItemWidth(-1.0F);
+    if (properties_wide) {
+        ImGui::TableSetColumnIndex(1);
+    } else {
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+    }
+    ImGui::SetNextItemWidth(std::min(ImGui::GetContentRegionAvail().x,
+                                     16.0F * ImGui::GetFontSize()));
+}
+
+void property_help(const char* text) {
+    const auto properties_wide = current_properties_wide();
+    ImGui::TableNextRow();
+    ImGui::TableSetColumnIndex(properties_wide ? 1 : 0);
+    ImGui::TextWrapped("%s", text);
 }
 
 void request_focus(SystemBuilderViewState& state, SystemBuilderFocusTarget target) {
@@ -270,10 +297,8 @@ void draw_task(EditableSystemDraft& draft, const SystemDraftBuildResult& validat
     draw_field_diagnostics(validation, SystemDraftEntityKind::Task, *index,
                            SystemDraftField::TaskPriority);
     if (protected_identity) {
-        ImGui::TableNextRow();
-        ImGui::TableSetColumnIndex(1);
-        ImGui::TextDisabled("This task identity is fixed by the Bosch FMU interface. Timing, "
-                            "execution profile, and allocation remain editable.");
+        property_help("This task identity is fixed by the Bosch FMU interface. Timing, "
+                      "execution profile, and allocation remain editable.");
     }
     ImGui::EndTable();
 }
@@ -482,9 +507,7 @@ void draw_route(EditableSystemDraft& draft, const SystemDraftBuildResult& valida
         selection.select_message_route(edited_key);
     }
     if (protected_endpoints) {
-        ImGui::TableNextRow();
-        ImGui::TableSetColumnIndex(1);
-        ImGui::TextDisabled(
+        property_help(
             "Bosch network route endpoints are fixed; send offset and delay remain editable.");
     }
     ImGui::EndTable();
@@ -526,10 +549,7 @@ void draw_connection(const EditableSystemDraft& draft, const StructuralSelection
         }
     }
     ImGui::Text("%lld ticks", static_cast<long long>(latency));
-    ImGui::TableNextRow();
-    ImGui::TableSetColumnIndex(0);
-    ImGui::TableSetColumnIndex(1);
-    ImGui::TextWrapped(connection->kind == GuiConnectionKind::Logical
+    property_help(connection->kind == GuiConnectionKind::Logical
                            ? "Logical dependencies are presentation-only and create no messages, delays, or canonical network events."
                            : "Communication latency describes the visible network delay. The Bosch adapter's internal one-tick send handoff is intentionally hidden.");
     ImGui::EndTable();
