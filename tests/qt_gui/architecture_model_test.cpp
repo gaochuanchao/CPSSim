@@ -14,6 +14,7 @@
 #include <QtNodes/BasicGraphicsScene>
 
 #include <QAction>
+#include <QUndoStack>
 #include <QtTest/QTest>
 
 #include <chrono>
@@ -131,6 +132,13 @@ class QtArchitectureModelTest final : public QObject {
     void draft_creation_selects_and_places_new_task();
     void explorer_creation_and_node_movement_use_shared_grid();
     void bosch_session_loads_paused_and_renders_six_flat_tasks();
+    void addTaskAction_exists_with_object_name();
+    void addTaskAction_creates_task_and_selects_with_position();
+    void addTaskAction_undo_removes_and_redo_restores_with_position();
+    void addTaskAction_disabled_without_editable_project();
+    void addTaskAction_disabled_while_running();
+    void addTaskAction_disabled_for_protected_project();
+    void addTaskAction_shares_undo_history_with_system_builder();
 };
 
 void QtArchitectureModelTest::strong_ids_are_mapped_without_truncation() {
@@ -184,7 +192,7 @@ void QtArchitectureModelTest::explorer_creation_and_node_movement_use_shared_gri
     QObject::connect(&builder, &QtSystemBuilderWidget::taskCreated, &view,
                      &QtArchitectureView::place_task_near_view_center);
 
-    QVERIFY(view.findChild<QAction*>("action.architecture.addTask") == nullptr);
+    QVERIFY(view.findChild<QAction*>("action.architecture.addTask") != nullptr);
     QVERIFY(builder.create_component(StructuralSection::Tasks));
     const auto task_id = bridge.application().structural_selection().task_id();
     QVERIFY(task_id.has_value());
@@ -260,6 +268,167 @@ void QtArchitectureModelTest::bosch_session_loads_paused_and_renders_six_flat_ta
     QCOMPARE(view.graph_model().connection_count(), std::size_t{5});
     QVERIFY(!view.add_task_at({500.0, 300.0}).has_value());
     QCOMPARE(view.graph_model().node_count(), std::size_t{6});
+}
+
+void QtArchitectureModelTest::addTaskAction_exists_with_object_name() {
+    TemporaryDirectory temporary;
+    auto application = std::make_unique<WorkbenchApplication>();
+    application->create_project(make_generic_project_template(temporary.path(), "project"));
+    QtWorkbenchBridge bridge{std::move(application)};
+    QtStructuralEditController edits{bridge};
+    QtArchitectureView view{bridge, edits};
+
+    auto* action = view.findChild<QAction*>("action.architecture.addTask");
+    QVERIFY(action != nullptr);
+    QVERIFY(action->isEnabled());
+}
+
+void QtArchitectureModelTest::addTaskAction_creates_task_and_selects_with_position() {
+    TemporaryDirectory temporary;
+    auto application = std::make_unique<WorkbenchApplication>();
+    application->create_project(make_generic_project_template(temporary.path(), "project"));
+    QtWorkbenchBridge bridge{std::move(application)};
+    QtStructuralEditController edits{bridge};
+    QtArchitectureView view{bridge, edits};
+
+    const auto before = view.graph_model().node_count();
+
+    auto* action = view.findChild<QAction*>("action.architecture.addTask");
+    QVERIFY(action != nullptr);
+    action->trigger();
+
+    QCOMPARE(view.graph_model().node_count(), before + 1);
+    const auto task_id = bridge.application().structural_selection().task_id();
+    QVERIFY(task_id.has_value());
+
+    const auto* layout =
+        find_task_layout(bridge.application().workspace().architecture, *task_id);
+    QVERIFY(layout != nullptr);
+    QVERIFY(layout->position.x > 0.0F);
+    QVERIFY(layout->position.y > 0.0F);
+}
+
+void QtArchitectureModelTest::addTaskAction_undo_removes_and_redo_restores_with_position() {
+    TemporaryDirectory temporary;
+    auto application = std::make_unique<WorkbenchApplication>();
+    application->create_project(make_generic_project_template(temporary.path(), "project"));
+    QtWorkbenchBridge bridge{std::move(application)};
+    QtStructuralEditController edits{bridge};
+    QtArchitectureView view{bridge, edits};
+
+    const auto before = view.graph_model().node_count();
+
+    auto* action = view.findChild<QAction*>("action.architecture.addTask");
+    action->trigger();
+    const auto task_id = bridge.application().structural_selection().task_id();
+    QVERIFY(task_id.has_value());
+    const auto* layout =
+        find_task_layout(bridge.application().workspace().architecture, *task_id);
+    QVERIFY(layout != nullptr);
+    const auto saved_position = layout->position;
+
+    QVERIFY(edits.undo_stack().canUndo());
+    edits.undo_stack().undo();
+    QCOMPARE(view.graph_model().node_count(), before);
+
+    edits.undo_stack().redo();
+    QCOMPARE(view.graph_model().node_count(), before + 1);
+    const auto* restored =
+        find_task_layout(bridge.application().workspace().architecture, *task_id);
+    QVERIFY(restored != nullptr);
+    QCOMPARE(restored->position, saved_position);
+}
+
+void QtArchitectureModelTest::addTaskAction_disabled_without_editable_project() {
+    auto application = std::make_unique<WorkbenchApplication>();
+    QtWorkbenchBridge bridge{std::move(application)};
+    QtStructuralEditController edits{bridge};
+    QtArchitectureView view{bridge, edits};
+
+    auto* action = view.findChild<QAction*>("action.architecture.addTask");
+    QVERIFY(action != nullptr);
+    QVERIFY(!action->isEnabled());
+}
+
+void QtArchitectureModelTest::addTaskAction_disabled_while_running() {
+    TemporaryDirectory temporary;
+    auto application = std::make_unique<WorkbenchApplication>();
+    application->create_project(make_generic_project_template(temporary.path(), "project"));
+    QtWorkbenchBridge bridge{std::move(application)};
+    QtStructuralEditController edits{bridge};
+    QtArchitectureView view{bridge, edits};
+
+    auto* action = view.findChild<QAction*>("action.architecture.addTask");
+    QVERIFY(action != nullptr);
+    QVERIFY(action->isEnabled());
+
+    bridge.application().enqueue(GuiCommand::Run);
+    bridge.application().update();
+    Q_EMIT bridge.applicationStateChanged();
+
+    QVERIFY(!action->isEnabled());
+}
+
+void QtArchitectureModelTest::addTaskAction_disabled_for_protected_project() {
+    TemporaryDirectory temporary;
+    const auto repository =
+        std::filesystem::path{__FILE__}.parent_path().parent_path().parent_path();
+    auto project =
+        create_bosch_project({.parent_directory = temporary.path(),
+                              .name = "bosch",
+                              .trajectory_directory = make_trajectory(temporary.path()),
+                              .scenario = BoschReferenceScenario::Dedicated,
+                              .stop_tick = 2,
+                              .reference_root = repository / "experiments/bosch_v10_reference",
+                              .shared_library = fmu_library()});
+    auto application = std::make_unique<WorkbenchApplication>(std::move(project));
+    QtWorkbenchBridge bridge{std::move(application)};
+    QtStructuralEditController edits{bridge};
+    QtArchitectureView view{bridge, edits};
+
+    auto* action = view.findChild<QAction*>("action.architecture.addTask");
+    QVERIFY(action != nullptr);
+    QVERIFY(!action->isEnabled());
+}
+
+void QtArchitectureModelTest::addTaskAction_shares_undo_history_with_system_builder() {
+    TemporaryDirectory temporary;
+    auto application = std::make_unique<WorkbenchApplication>();
+    application->create_project(make_generic_project_template(temporary.path(), "project"));
+    QtWorkbenchBridge bridge{std::move(application)};
+    QtStructuralEditController edits{bridge};
+    QtArchitectureView view{bridge, edits};
+    QtSystemBuilderWidget builder{bridge, edits};
+
+    const auto before = bridge.application().editable_system()->tasks().size();
+
+    // Create one task through System Builder
+    QVERIFY(builder.create_component(StructuralSection::Tasks));
+    QCOMPARE(bridge.application().editable_system()->tasks().size(), before + 1);
+
+    // Create one task through Architecture Add Task action
+    auto* arch_action = view.findChild<QAction*>("action.architecture.addTask");
+    QVERIFY(arch_action != nullptr);
+    arch_action->trigger();
+    QCOMPARE(bridge.application().editable_system()->tasks().size(), before + 2);
+
+    // Undo once removes the Architecture-created task
+    QVERIFY(edits.undo_stack().canUndo());
+    edits.undo_stack().undo();
+    QCOMPARE(bridge.application().editable_system()->tasks().size(), before + 1);
+
+    // Undo again removes the System-Builder-created task
+    QVERIFY(edits.undo_stack().canUndo());
+    edits.undo_stack().undo();
+    QCOMPARE(bridge.application().editable_system()->tasks().size(), before);
+
+    // Redo once restores the System-Builder-created task
+    edits.undo_stack().redo();
+    QCOMPARE(bridge.application().editable_system()->tasks().size(), before + 1);
+
+    // Redo again restores the Architecture-created task
+    edits.undo_stack().redo();
+    QCOMPARE(bridge.application().editable_system()->tasks().size(), before + 2);
 }
 
 } // namespace cpssim::qt

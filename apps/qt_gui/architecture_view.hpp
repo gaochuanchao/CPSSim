@@ -8,6 +8,8 @@
 
 #include <memory>
 
+class QAction;
+
 namespace QtNodes {
 class BasicGraphicsScene;
 class GraphicsView;
@@ -39,6 +41,8 @@ class QtArchitectureView final : public QWidget {
     void auto_layout();
     void snap_node_position(QtNodes::NodeId node_id, QPointF position);
     void synchronize_scene_selection();
+    void add_task_near_view_center();
+    void update_add_task_action_state();
 
     QtWorkbenchBridge& bridge_;
     QtStructuralEditController& edits_;
@@ -46,6 +50,7 @@ class QtArchitectureView final : public QWidget {
     std::unique_ptr<QtNodes::BasicGraphicsScene> scene_;
     std::unique_ptr<QtNodes::GraphicsView> view_;
     bool snap_to_grid_{true};
+    QAction* add_task_action_{nullptr};
 };
 
 } // namespace cpssim::qt

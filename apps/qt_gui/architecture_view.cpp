@@ -15,6 +15,7 @@
 #include <QtNodes/internal/ConnectionGraphicsObject.hpp>
 #include <QtNodes/internal/NodeGraphicsObject.hpp>
 
+#include <QAction>
 #include <QHBoxLayout>
 #include <QPainter>
 #include <QPushButton>
@@ -107,6 +108,8 @@ QtArchitectureView::QtArchitectureView(QtWorkbenchBridge& bridge,
     snap->setObjectName("action.architecture.snapToGrid");
     snap->setCheckable(true);
     snap->setChecked(true);
+    add_task_action_ = toolbar->addAction("Add Task");
+    add_task_action_->setObjectName("action.architecture.addTask");
     layout->addWidget(toolbar);
     layout->addWidget(view_.get());
 
@@ -114,6 +117,8 @@ QtArchitectureView::QtArchitectureView(QtWorkbenchBridge& bridge,
     connect(actual_size, &QAction::triggered, view_.get(), &QGraphicsView::resetTransform);
     connect(layout_action, &QAction::triggered, this, &QtArchitectureView::auto_layout);
     connect(snap, &QAction::toggled, this, [this](bool enabled) { snap_to_grid_ = enabled; });
+    connect(add_task_action_, &QAction::triggered, this,
+            &QtArchitectureView::add_task_near_view_center);
     connect(scene_.get(), &QtNodes::BasicGraphicsScene::nodeClicked, this,
             &QtArchitectureView::select_node);
     connect(scene_.get(), &QtNodes::BasicGraphicsScene::nodeSelected, this,
@@ -136,6 +141,7 @@ QtArchitectureView::QtArchitectureView(QtWorkbenchBridge& bridge,
     model_.set_position_changed([this](GuiGraphNodeId entity, QPointF position) {
         persist_node_position(entity, position);
     });
+    update_add_task_action_state();
     refresh();
 }
 
@@ -195,6 +201,7 @@ void QtArchitectureView::refresh() {
         }
     }
     synchronize_scene_selection();
+    update_add_task_action_state();
 }
 
 void QtArchitectureView::select_node(QtNodes::NodeId node_id) {
@@ -290,6 +297,17 @@ void QtArchitectureView::synchronize_scene_selection() {
             item->setSelected(true);
         }
     }
+}
+
+void QtArchitectureView::add_task_near_view_center() {
+    const QPoint viewport_center = view_->viewport()->rect().center();
+    const QPointF scene_center = view_->mapToScene(viewport_center);
+    add_task_at(scene_center);
+}
+
+void QtArchitectureView::update_add_task_action_state() {
+    add_task_action_->setEnabled(edits_.editing_enabled() &&
+                                 edits_.edit_policy() == ProjectSystemEditPolicy::Generic);
 }
 
 } // namespace cpssim::qt
