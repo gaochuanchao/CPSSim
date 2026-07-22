@@ -194,41 +194,49 @@ QtArchitectureView::~QtArchitectureView() = default;
 
 void QtArchitectureView::refresh() {
     auto& application = bridge_.application();
-    if (!application.has_active_session() || application.presentation_snapshot() == nullptr) {
+
+    // Prefer the editable draft; fall back to the runtime presentation
+    // snapshot only when no draft is open.
+    std::optional<ExperimentPresentationSnapshot> presentation;
+    if (application.editable_system().has_value()) {
+        presentation = build_draft_experiment_presentation(*application.editable_system(),
+                                                           application.run_assignments());
+    } else if (application.has_active_session() &&
+               application.presentation_snapshot() != nullptr) {
+        presentation = application.presentation_snapshot()->experiment;
+    }
+
+    if (!presentation.has_value()) {
         model_.rebuild({});
         update_action_state();
         return;
     }
+
     for (auto& task : application.workspace().architecture.tasks) {
         const auto snapped = snap_architecture_position({task.position.x, task.position.y});
         task.position = {static_cast<float>(snapped.x()), static_cast<float>(snapped.y())};
-    }
-    auto presentation = application.presentation_snapshot()->experiment;
-    if (application.editable_system().has_value()) {
-        presentation = build_draft_experiment_presentation(*application.editable_system(),
-                                                           application.run_assignments());
     }
     const auto bosch = application.has_active_project() &&
                        application.active_project().metadata().scenario_kind == "bosch";
     const auto dependencies =
         bosch ? bosch_functional_dependencies() : std::vector<GuiFunctionalDependency>{};
-    auto graph = build_architecture_graph(presentation, dependencies, bosch,
+    auto graph = build_architecture_graph(*presentation, dependencies, bosch,
                                           &application.workspace().architecture);
-    const auto tasks = build_task_node_presentations(presentation, current_workbench_theme(),
+    const auto tasks = build_task_node_presentations(*presentation, current_workbench_theme(),
                                                      bridge_.resource_highlight());
     model_.rebuild(flat_graph(std::move(graph), application.workspace().architecture), tasks);
     for (const auto node_id : model_.allNodeIds()) {
-        const auto* task = model_.task_presentation(node_id);
-        if (task == nullptr) {
+        const auto* node_task = model_.task_presentation(node_id);
+        if (node_task == nullptr) {
             continue;
         }
         if (auto* item = scene_->nodeGraphicsObject(node_id); item != nullptr) {
-            item->setToolTip(task->assignment_valid
+            item->setToolTip(node_task->assignment_valid
                                  ? QString{"Assigned to %1 with execution time %2 ticks"}
-                                       .arg(task->resource_name)
-                                       .arg(*task->execution_time)
+                                       .arg(node_task->resource_name)
+                                       .arg(*node_task->execution_time)
                                  : QString{"%1: assignment is incomplete or inaccessible"}.arg(
-                                       task->resource_name));
+                                       node_task->resource_name));
         }
     }
     synchronize_scene_selection();

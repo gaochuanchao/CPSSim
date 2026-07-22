@@ -14,6 +14,7 @@
 #include <QtNodes/BasicGraphicsScene>
 
 #include <QAction>
+#include <QApplication>
 #include <QUndoStack>
 #include <QtTest/QTest>
 
@@ -148,6 +149,15 @@ class QtArchitectureModelTest final : public QObject {
     void updateActionState_disabled_for_generic_running();
     void updateActionState_disabled_for_protected_adapter();
     void contextAddPosition_does_not_affect_toolbar_after_menu();
+
+    // Regression: editable draft rendering independent of session/snapshot.
+    void editableDraftPopulatesGraphWithoutSession();
+    void editableDraftNodeCountMatchesDraftTasks();
+    void everyModelNodeHasSceneGraphicsObject();
+    void addTaskCreatesVisibleSceneNode();
+    void undoRemovesVisibleSceneNode();
+    void redoRestoresVisibleSceneNode();
+    void boschProtectedStillRendersReadOnly();
 };
 
 void QtArchitectureModelTest::strong_ids_are_mapped_without_truncation() {
@@ -729,6 +739,201 @@ void QtArchitectureModelTest::contextAddPosition_does_not_affect_toolbar_after_m
         find_task_layout(bridge.application().workspace().architecture, *second_task);
     QVERIFY(first_layout != nullptr);
     QVERIFY(second_layout != nullptr);
+}
+
+void QtArchitectureModelTest::editableDraftPopulatesGraphWithoutSession() {
+    // Verify that an editable draft containing tasks populates the Architecture
+    // graph: after creating a generic project the draft contains tasks and the
+    // graph model must not be empty.
+    TemporaryDirectory temporary;
+    auto application = std::make_unique<WorkbenchApplication>();
+    application->create_project(make_generic_project_template(temporary.path(), "project"));
+    QtWorkbenchBridge bridge{std::move(application)};
+    QtStructuralEditController edits{bridge};
+    QtArchitectureView view{bridge, edits};
+
+    // The draft should contain tasks from the project template.
+    QVERIFY(bridge.application().editable_system().has_value());
+    const auto draft_task_count = bridge.application().editable_system()->tasks().size();
+    QVERIFY(draft_task_count > 0);
+
+    // The graph model must contain the same number of task nodes.
+    QCOMPARE(view.graph_model().node_count(), draft_task_count);
+}
+
+void QtArchitectureModelTest::editableDraftNodeCountMatchesDraftTasks() {
+    // After adding a task, the graph model node count must match the draft
+    // task count exactly (no stale or extra nodes).
+    TemporaryDirectory temporary;
+    auto application = std::make_unique<WorkbenchApplication>();
+    application->create_project(make_generic_project_template(temporary.path(), "project"));
+    QtWorkbenchBridge bridge{std::move(application)};
+    QtStructuralEditController edits{bridge};
+    QtArchitectureView view{bridge, edits};
+
+    const auto initial = bridge.application().editable_system()->tasks().size();
+    QCOMPARE(view.graph_model().node_count(), initial);
+
+    // Add one task through the controller.
+    QVERIFY(edits.create_task().has_value());
+    view.refresh();
+    QCOMPARE(view.graph_model().node_count(), initial + 1);
+
+    // Add a second task.
+    QVERIFY(edits.create_task().has_value());
+    view.refresh();
+    QCOMPARE(view.graph_model().node_count(), initial + 2);
+}
+
+void QtArchitectureModelTest::everyModelNodeHasSceneGraphicsObject() {
+    // After refresh and processing Qt events, every model node must have a
+    // corresponding BasicGraphicsScene nodeGraphicsObject.
+    TemporaryDirectory temporary;
+    auto application = std::make_unique<WorkbenchApplication>();
+    application->create_project(make_generic_project_template(temporary.path(), "project"));
+    QtWorkbenchBridge bridge{std::move(application)};
+    QtStructuralEditController edits{bridge};
+    QtArchitectureView view{bridge, edits};
+
+    // Add a task so we have more than just the template tasks.
+    QVERIFY(edits.create_task().has_value());
+    view.refresh();
+
+    // Process events so the QtNodes scene synchronises.
+    QApplication::processEvents();
+
+    const auto node_ids = view.graph_model().allNodeIds();
+    QVERIFY(!node_ids.empty());
+
+    for (const auto node_id : node_ids) {
+        auto* scene_node = view.graphics_scene().nodeGraphicsObject(node_id);
+        QVERIFY2(scene_node != nullptr,
+                 qPrintable(QString{"nodeGraphicsObject is null for nodeId %1"}.arg(
+                     static_cast<unsigned int>(node_id))));
+    }
+}
+
+void QtArchitectureModelTest::addTaskCreatesVisibleSceneNode() {
+    // Add Task through the toolbar action must create one visible scene node.
+    TemporaryDirectory temporary;
+    auto application = std::make_unique<WorkbenchApplication>();
+    application->create_project(make_generic_project_template(temporary.path(), "project"));
+    QtWorkbenchBridge bridge{std::move(application)};
+    QtStructuralEditController edits{bridge};
+    QtArchitectureView view{bridge, edits};
+
+    auto* action = view.findChild<QAction*>("action.architecture.addTask");
+    QVERIFY(action != nullptr);
+
+    const auto before = view.graph_model().node_count();
+    action->trigger();
+    QCOMPARE(view.graph_model().node_count(), before + 1);
+
+    QApplication::processEvents();
+
+    const auto new_task = bridge.application().structural_selection().task_id();
+    QVERIFY(new_task.has_value());
+    const auto new_node_id = view.graph_model().node_id_for(task_graph_node_id(*new_task));
+    QVERIFY(new_node_id.has_value());
+
+    auto* scene_node = view.graphics_scene().nodeGraphicsObject(*new_node_id);
+    QVERIFY(scene_node != nullptr);
+}
+
+void QtArchitectureModelTest::undoRemovesVisibleSceneNode() {
+    // Undo must remove the visible scene node created by Add Task.
+    TemporaryDirectory temporary;
+    auto application = std::make_unique<WorkbenchApplication>();
+    application->create_project(make_generic_project_template(temporary.path(), "project"));
+    QtWorkbenchBridge bridge{std::move(application)};
+    QtStructuralEditController edits{bridge};
+    QtArchitectureView view{bridge, edits};
+
+    auto* action = view.findChild<QAction*>("action.architecture.addTask");
+    QVERIFY(action != nullptr);
+
+    action->trigger();
+    const auto new_task = bridge.application().structural_selection().task_id();
+    QVERIFY(new_task.has_value());
+    const auto new_node_id = view.graph_model().node_id_for(task_graph_node_id(*new_task));
+    QVERIFY(new_node_id.has_value());
+
+    QApplication::processEvents();
+    QVERIFY(view.graphics_scene().nodeGraphicsObject(*new_node_id) != nullptr);
+
+    QVERIFY(edits.undo_stack().canUndo());
+    edits.undo_stack().undo();
+    view.refresh();
+    QApplication::processEvents();
+
+    // After undo + refresh, the scene node must be gone.
+    QVERIFY(view.graphics_scene().nodeGraphicsObject(*new_node_id) == nullptr);
+}
+
+void QtArchitectureModelTest::redoRestoresVisibleSceneNode() {
+    // Redo must restore the visible scene node that undo removed.
+    TemporaryDirectory temporary;
+    auto application = std::make_unique<WorkbenchApplication>();
+    application->create_project(make_generic_project_template(temporary.path(), "project"));
+    QtWorkbenchBridge bridge{std::move(application)};
+    QtStructuralEditController edits{bridge};
+    QtArchitectureView view{bridge, edits};
+
+    auto* action = view.findChild<QAction*>("action.architecture.addTask");
+    QVERIFY(action != nullptr);
+
+    action->trigger();
+    const auto new_task = bridge.application().structural_selection().task_id();
+    QVERIFY(new_task.has_value());
+
+    QVERIFY(edits.undo_stack().canUndo());
+    edits.undo_stack().undo();
+    view.refresh();
+
+    QVERIFY(edits.undo_stack().canRedo());
+    edits.undo_stack().redo();
+    view.refresh();
+
+    QApplication::processEvents();
+
+    const auto restored_node_id = view.graph_model().node_id_for(task_graph_node_id(*new_task));
+    QVERIFY(restored_node_id.has_value());
+    auto* scene_node = view.graphics_scene().nodeGraphicsObject(*restored_node_id);
+    QVERIFY(scene_node != nullptr);
+}
+
+void QtArchitectureModelTest::boschProtectedStillRendersReadOnly() {
+    // Bosch/protected projects must still render their six tasks but remain
+    // structurally read-only.
+    TemporaryDirectory temporary;
+    const auto repository =
+        std::filesystem::path{__FILE__}.parent_path().parent_path().parent_path();
+    auto project =
+        create_bosch_project({.parent_directory = temporary.path(),
+                              .name = "bosch",
+                              .trajectory_directory = make_trajectory(temporary.path()),
+                              .scenario = BoschReferenceScenario::Dedicated,
+                              .stop_tick = 2,
+                              .reference_root = repository / "experiments/bosch_v10_reference",
+                              .shared_library = fmu_library()});
+    auto application = std::make_unique<WorkbenchApplication>(std::move(project));
+    QtWorkbenchBridge bridge{std::move(application)};
+    QtStructuralEditController edits{bridge};
+    QtArchitectureView view{bridge, edits};
+
+    // Must render 6 task nodes and 5 connections.
+    QCOMPARE(view.graph_model().node_count(), std::size_t{6});
+    QCOMPARE(view.graph_model().connection_count(), std::size_t{5});
+
+    // add_task_at must return nullopt for protected projects.
+    QVERIFY(!view.add_task_at({500.0, 300.0}).has_value());
+    QCOMPARE(view.graph_model().node_count(), std::size_t{6});
+
+    // Verify scene objects exist.
+    QApplication::processEvents();
+    for (const auto node_id : view.graph_model().allNodeIds()) {
+        QVERIFY(view.graphics_scene().nodeGraphicsObject(node_id) != nullptr);
+    }
 }
 
 } // namespace cpssim::qt
