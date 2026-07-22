@@ -299,8 +299,19 @@ from `ResourceId`; task nodes also display the resource name or `Unassigned`;
 the `QAbstractTableModel` exposes mapping, WCET, priority, accessibility, and
 status; its combo delegate edits the draft; and table/canvas selection is
 bidirectional through `StructuralSelection`. No resource container or
-assignment edge is created. System Builder/component-library migration is the
-next phase.
+assignment edge is created.
+
+The Qt System Builder phase is complete. A persistent `QStackedWidget` provides
+system, task/profile, resource, connection, and empty pages above a resizable
+component library. Field edits and confirmed create/delete operations restore
+complete detached draft/assignment/selection snapshots through `QUndoStack`;
+Undo/Redo actions are shared by the Edit menu and shortcuts. Structured
+validation is shown on the selected page and in the section summary. The stack
+is cleared when project ownership changes, so an old command cannot mutate a
+replacement project. Bosch task identities and route structure remain
+protected, and the applied session remains unchanged until the existing atomic
+Apply and restart workflow succeeds. Runtime inspection migration is the next
+phase.
 
 Goal 6 validation completed on 2026-07-21:
 

@@ -105,6 +105,13 @@ and required route endpoints while allowing timing, resources, profiles,
 assignments, route timing, stop tick, and policy edits. Canonical fingerprints
 label the applied system as a reference baseline or modified Bosch experiment.
 
+The native Qt frontend presents the selected-item editor above its component
+library in a draggable vertical splitter. Resource, task, execution-profile,
+and message-route creation uses the same detached Explorer workflow as the
+legacy frontend. Form edits and confirmed deletion are undoable from the shared
+Edit → Undo/Redo actions; changing projects clears that history. Validation
+appears beside the selected editor and never changes the applied simulation.
+
 Window and table placement use a separate optional `imgui.ini` in the project
 root. The tracked [`apps/gui/imgui.ini`](imgui.ini) is the fixed default and is
 never a Dear ImGui output target. Layout changes are staged in a temporary file;

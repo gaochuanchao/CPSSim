@@ -5,6 +5,7 @@
 #include "apps/qt_gui/workbench_bridge.hpp"
 
 #include "cpssim/application/bosch_project_factory.hpp"
+#include "cpssim/application/project/system_edit_policy.hpp"
 #include "cpssim/gui/presentation_model.hpp"
 
 #include <QtNodes/BasicGraphicsScene>
@@ -143,6 +144,13 @@ std::optional<TaskId> QtArchitectureView::add_task_at(QPointF scene_position) {
     auto& application = bridge_.application();
     if (!application.editable_system().has_value() ||
         application.run_state() == GuiRunState::Running) {
+        return std::nullopt;
+    }
+    if (application.has_active_project() &&
+        project_system_edit_policy(application.active_project().metadata()) !=
+            ProjectSystemEditPolicy::Generic) {
+        application.set_status("Adapter-owned task identities are protected.", true);
+        Q_EMIT bridge_.statusChanged();
         return std::nullopt;
     }
     auto result = application.explorer_interaction().create(StructuralSection::Tasks,

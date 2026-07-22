@@ -44,6 +44,8 @@ class QtWorkbenchBridge final : public QObject {
     void shutdown();
     void notify_structural_selection_changed();
     bool assign_task(TaskId task_id, std::optional<ResourceId> resource_id);
+    void restore_draft(EditableSystemDraft draft, std::vector<DraftTaskAssignment> assignments,
+                       StructuralSelection selection);
     void set_resource_highlight(std::optional<ResourceId> resource_id);
     std::optional<ResourceId> resource_highlight() const noexcept { return resource_highlight_; }
 

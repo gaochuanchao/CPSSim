@@ -3,6 +3,7 @@
 
 #include "apps/qt_gui/architecture_view.hpp"
 #include "apps/qt_gui/resource_assignment_model.hpp"
+#include "apps/qt_gui/system_builder_widget.hpp"
 #include "apps/qt_gui/workbench_bridge.hpp"
 
 #include <QAction>
@@ -19,6 +20,7 @@
 #include <QStatusBar>
 #include <QTabWidget>
 #include <QToolBar>
+#include <QUndoStack>
 #include <QVBoxLayout>
 
 namespace cpssim::qt {
@@ -92,6 +94,12 @@ void QtMainWindow::build_actions() {
     step_action_->setObjectName("action.step");
     restore_layout_action_ = make_action("Reset Workbench Layout");
     restore_layout_action_->setObjectName("action.resetLayout");
+    undo_action_ = make_action("Undo", QKeySequence::Undo);
+    undo_action_->setObjectName("action.undo");
+    undo_action_->setEnabled(false);
+    redo_action_ = make_action("Redo", QKeySequence::Redo);
+    redo_action_->setObjectName("action.redo");
+    redo_action_->setEnabled(false);
 
     connect(restore_layout_action_, &QAction::triggered, this,
             &QtMainWindow::restore_default_layout);
@@ -189,6 +197,11 @@ void QtMainWindow::build_menus_and_toolbars() {
     file_menu->addAction(save_project_as_action_);
     file_menu->addAction(close_project_action_);
 
+    auto* edit_menu = menuBar()->addMenu("&Edit");
+    edit_menu->setObjectName("menu.edit");
+    edit_menu->addAction(undo_action_);
+    edit_menu->addAction(redo_action_);
+
     auto* simulation_menu = menuBar()->addMenu("&Simulation");
     simulation_menu->setObjectName("menu.simulation");
     for (auto* action : {run_action_, pause_action_, reset_action_, step_action_}) {
@@ -263,6 +276,17 @@ void QtMainWindow::bind_workbench(QtWorkbenchBridge* bridge) {
     auto* assignments_placeholder = assignments_dock->widget();
     assignments_dock->setWidget(new QtResourceAssignmentsWidget{*bridge_, assignments_dock});
     assignments_placeholder->deleteLater();
+    auto* builder_dock = findChild<QDockWidget*>("dock.systemBuilder");
+    auto* builder_placeholder = builder_dock->widget();
+    system_builder_ = new QtSystemBuilderWidget{*bridge_, builder_dock};
+    builder_dock->setWidget(system_builder_);
+    builder_placeholder->deleteLater();
+    connect(undo_action_, &QAction::triggered, &system_builder_->undo_stack(), &QUndoStack::undo);
+    connect(redo_action_, &QAction::triggered, &system_builder_->undo_stack(), &QUndoStack::redo);
+    connect(&system_builder_->undo_stack(), &QUndoStack::canUndoChanged, undo_action_,
+            &QAction::setEnabled);
+    connect(&system_builder_->undo_stack(), &QUndoStack::canRedoChanged, redo_action_,
+            &QAction::setEnabled);
     connect(run_action_, &QAction::triggered, bridge_, &QtWorkbenchBridge::run);
     connect(pause_action_, &QAction::triggered, bridge_, &QtWorkbenchBridge::pause);
     connect(reset_action_, &QAction::triggered, bridge_, &QtWorkbenchBridge::reset);
@@ -292,6 +316,7 @@ void QtMainWindow::synchronize_workbench_chrome() {
     pause_action_->setEnabled(state == GuiRunState::Running);
     reset_action_->setEnabled(state != GuiRunState::NotConfigured);
     step_action_->setEnabled(state == GuiRunState::Paused);
+    setWindowModified(application.system_changes_dirty());
     if (!application.status().empty()) {
         statusBar()->showMessage(QString::fromStdString(application.status()));
     } else if (application.has_active_session()) {

@@ -176,6 +176,16 @@ bool QtWorkbenchBridge::assign_task(TaskId task_id, std::optional<ResourceId> re
     return true;
 }
 
+void QtWorkbenchBridge::restore_draft(EditableSystemDraft draft,
+                                      std::vector<DraftTaskAssignment> assignments,
+                                      StructuralSelection selection) {
+    application_->restore_system_draft(std::move(draft), std::move(assignments),
+                                       std::move(selection));
+    Q_EMIT draftChanged();
+    Q_EMIT structuralSelectionChanged();
+    Q_EMIT statusChanged();
+}
+
 void QtWorkbenchBridge::set_resource_highlight(std::optional<ResourceId> resource_id) {
     if (resource_highlight_ == resource_id) {
         resource_highlight_.reset();

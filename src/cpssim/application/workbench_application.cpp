@@ -324,6 +324,19 @@ bool WorkbenchApplication::set_task_assignment(TaskId task_id,
     return true;
 }
 
+void WorkbenchApplication::restore_system_draft(EditableSystemDraft draft,
+                                                std::vector<DraftTaskAssignment> assignments,
+                                                StructuralSelection selection) {
+    if (!has_active_project() || run_state() == GuiRunState::Running) {
+        throw std::logic_error{"system draft restoration requires a paused editable project"};
+    }
+    system_draft_ = std::move(draft);
+    run_assignments_ = std::move(assignments);
+    structural_selection_ = std::move(selection);
+    synchronize_system_assignments();
+    validate_system_draft();
+}
+
 bool WorkbenchApplication::enqueue(GuiCommand command) {
     return has_active_session() && active_session().enqueue(command);
 }

@@ -320,6 +320,14 @@ Cancel is inert and all effects remain in drafts. A valid unapplied draft may re
 Architecture tab's detached presentation input and is labelled as a read-only
 preview. It never becomes engine input until Apply and restart succeeds.
 
+The Qt frontend adapts this same lifecycle with reusable system, resource,
+task/profile, connection, and empty editor pages. Its component library and
+field editors create `QUndoStack` commands containing detached draft,
+assignment, and structural-selection state; commands never mutate QtNodes as
+domain truth. Validation diagnostics stay graphics-independent and are
+projected into the selected form and its section summary. The undo history is
+discarded on project replacement.
+
 Save Project reads the applied session, not the draft. Open, close, Save As,
 generic-project creation, and Bosch-project replacement prompt when system
 changes are pending. The lifecycle is fixed by

@@ -13,12 +13,14 @@ class QDockWidget;
 class QStackedWidget;
 class QTabWidget;
 class QToolBar;
+class QUndoStack;
 
 namespace cpssim::qt {
 
 inline constexpr int qt_main_window_state_version = 1;
 
 class QtWorkbenchBridge;
+class QtSystemBuilderWidget;
 
 class QtMainWindow final : public QMainWindow {
     Q_OBJECT
@@ -78,6 +80,9 @@ class QtMainWindow final : public QMainWindow {
     QAction* reset_action_{nullptr};
     QAction* step_action_{nullptr};
     QAction* restore_layout_action_{nullptr};
+    QAction* undo_action_{nullptr};
+    QAction* redo_action_{nullptr};
+    QtSystemBuilderWidget* system_builder_{nullptr};
     QtWorkbenchBridge* bridge_{nullptr};
 };
 

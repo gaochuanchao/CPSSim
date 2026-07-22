@@ -195,6 +195,8 @@ void QtArchitectureModelTest::bosch_session_loads_paused_and_renders_six_flat_ta
     QCOMPARE(bridge.run_state(), GuiRunState::Paused);
     QCOMPARE(view.graph_model().node_count(), std::size_t{6});
     QCOMPARE(view.graph_model().connection_count(), std::size_t{5});
+    QVERIFY(!view.add_task_at({500.0, 300.0}).has_value());
+    QCOMPARE(view.graph_model().node_count(), std::size_t{6});
 }
 
 } // namespace cpssim::qt

@@ -112,6 +112,9 @@ class WorkbenchApplication {
     void validate_system_draft();
     bool apply_system_draft();
     bool set_task_assignment(TaskId task_id, std::optional<ResourceId> resource_id);
+    void restore_system_draft(EditableSystemDraft draft,
+                              std::vector<DraftTaskAssignment> assignments,
+                              StructuralSelection selection);
 
     bool enqueue(GuiCommand command);
     bool update();

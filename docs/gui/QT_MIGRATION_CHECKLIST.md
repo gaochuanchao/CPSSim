@@ -29,7 +29,7 @@ change simulation semantics or project formats.
 - [x] Assignment gate shows a stable accent and resource-name badge (including
       `Unassigned`), edits through a `QAbstractTableModel`, synchronizes table
       and canvas selection, and has no resource containers or assignment edges.
-- [ ] System Builder/component library mutate the CPSSim draft through commands
+- [x] System Builder/component library mutate the CPSSim draft through commands
       and `QUndoStack`, never through scene-only state.
 - [ ] Explorer, run configuration, runtime inspector, resources, events, and
       diagnostics retain their Goal 6 ownership and selection behavior.
