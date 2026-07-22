@@ -17,9 +17,9 @@ change simulation semantics or project formats.
 
 ## Phase gates
 
-- [ ] Graphics-independent `WorkbenchApplication` owns lifecycle, publication,
+- [x] Graphics-independent `WorkbenchApplication` owns lifecycle, publication,
       results, edits, selection, workspace, exports, and diagnostics.
-- [ ] Qt shell launches with stable central tabs, docks, actions, object names,
+- [x] Qt shell launches with stable central tabs, docks, actions, object names,
       and versioned geometry/state restoration.
 - [ ] Qt bridge provides bounded Live/Fast progression, no idle timer, queued
       finalizer publication, and clean cancellation/shutdown.

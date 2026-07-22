@@ -10,7 +10,9 @@ project(
 option(CPSSIM_WARNINGS_AS_ERRORS "Treat project warnings as errors" ON)
 option(CPSSIM_ENABLE_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
 option(CPSSIM_ENABLE_CLANG_TIDY "Run clang-tidy while compiling project targets" OFF)
-option(CPSSIM_BUILD_GUI "Build the optional Dear ImGui visualization executable" OFF)
+option(CPSSIM_BUILD_GUI "Compatibility switch for the Dear ImGui GUI" OFF)
+option(CPSSIM_BUILD_IMGUI_GUI "Build the legacy Dear ImGui frontend" OFF)
+option(CPSSIM_BUILD_QT_GUI "Build the Qt 6 Widgets frontend" OFF)
 
 set(CMAKE_CXX_EXTENSIONS OFF)
 
@@ -305,7 +307,7 @@ target_link_libraries(cpssim_bosch_gui_application PRIVATE nlohmann_json::nlohma
 cpssim_set_project_warnings(cpssim_bosch_gui_application)
 cpssim_enable_sanitizers(cpssim_bosch_gui_application)
 
-if(CPSSIM_BUILD_GUI)
+if(CPSSIM_BUILD_GUI OR CPSSIM_BUILD_IMGUI_GUI)
     find_package(OpenGL REQUIRED)
     find_package(glfw3 3.3 CONFIG REQUIRED)
 
@@ -397,6 +399,70 @@ if(CPSSIM_BUILD_GUI)
     cpssim_enable_sanitizers(cpssim_gui)
 endif()
 
+if(CPSSIM_BUILD_QT_GUI)
+    find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Widgets Test OpenGLWidgets)
+
+    include(FetchContent)
+    string(MAKE_C_IDENTIFIER "${CMAKE_GENERATOR}" CPSSIM_QT_DEPENDENCY_GENERATOR)
+    set(
+        FETCHCONTENT_BASE_DIR
+        "${CMAKE_CURRENT_SOURCE_DIR}/build/_deps/${CPSSIM_QT_DEPENDENCY_GENERATOR}"
+    )
+    FetchContent_Declare(
+        qtnodes
+        GIT_REPOSITORY https://github.com/paceholder/nodeeditor.git
+        GIT_TAG 1b173f885b52e4fd9616f663ea288435ccf1d0d8
+        GIT_SHALLOW FALSE
+        PATCH_COMMAND
+            "${CMAKE_COMMAND}"
+            -DCPSSIM_QTNODES_SOURCE_DIR=<SOURCE_DIR>
+            -DCPSSIM_QTNODES_PATCH=${CMAKE_CURRENT_SOURCE_DIR}/cmake/patches/qtnodes-embedded-build.patch
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/PatchQtNodes.cmake"
+    )
+    set(CPSSIM_SAVED_QT_NODES_DEVELOPER_DEFAULTS "${QT_NODES_DEVELOPER_DEFAULTS}")
+    set(CPSSIM_SAVED_USE_QT6 "${USE_QT6}")
+    set(CPSSIM_SAVED_BUILD_TESTING "${BUILD_TESTING}")
+    set(CPSSIM_SAVED_BUILD_SHARED_LIBS "${BUILD_SHARED_LIBS}")
+    set(QT_NODES_DEVELOPER_DEFAULTS OFF CACHE BOOL "" FORCE)
+    set(USE_QT6 ON CACHE BOOL "" FORCE)
+    set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+    FetchContent_MakeAvailable(qtnodes)
+    set(QT_NODES_DEVELOPER_DEFAULTS "${CPSSIM_SAVED_QT_NODES_DEVELOPER_DEFAULTS}" CACHE BOOL "" FORCE)
+    set(USE_QT6 "${CPSSIM_SAVED_USE_QT6}" CACHE BOOL "" FORCE)
+    set(BUILD_TESTING "${CPSSIM_SAVED_BUILD_TESTING}" CACHE BOOL "" FORCE)
+    set(BUILD_SHARED_LIBS "${CPSSIM_SAVED_BUILD_SHARED_LIBS}" CACHE BOOL "" FORCE)
+
+    add_library(
+        cpssim_qt_gui_support STATIC
+        apps/qt_gui/main_window.cpp
+    )
+    target_compile_features(cpssim_qt_gui_support PUBLIC cxx_std_20)
+    target_include_directories(
+        cpssim_qt_gui_support
+        PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>"
+    )
+    target_link_libraries(
+        cpssim_qt_gui_support
+        PUBLIC
+            cpssim_gui_support
+            Qt6::Core
+            Qt6::Gui
+            Qt6::Widgets
+            Qt6::OpenGLWidgets
+            QtNodes::QtNodes
+    )
+    set_target_properties(cpssim_qt_gui_support PROPERTIES AUTOMOC ON)
+    cpssim_set_project_warnings(cpssim_qt_gui_support)
+    cpssim_enable_sanitizers(cpssim_qt_gui_support)
+
+    add_executable(cpssim_qt_gui apps/qt_gui/main.cpp)
+    target_link_libraries(cpssim_qt_gui PRIVATE cpssim_qt_gui_support)
+    set_target_properties(cpssim_qt_gui PROPERTIES AUTOMOC ON)
+    cpssim_set_project_warnings(cpssim_qt_gui)
+    cpssim_enable_sanitizers(cpssim_qt_gui)
+endif()
+
 add_executable(cpssim_bosch_conformance apps/conformance/main.cpp)
 target_link_libraries(cpssim_bosch_conformance PRIVATE cpssim_bosch_reference)
 
@@ -468,6 +534,27 @@ if(BUILD_TESTING)
         LIBRARIES cpssim::core
         LABEL core
     )
+
+    if(CPSSIM_BUILD_QT_GUI)
+        add_executable(
+            cpssim_qt_gui_tests
+            tests/qt_gui/main_window_test.cpp
+        )
+        target_link_libraries(
+            cpssim_qt_gui_tests
+            PRIVATE cpssim_qt_gui_support Qt6::Test
+        )
+        set_target_properties(cpssim_qt_gui_tests PROPERTIES AUTOMOC ON CXX_CLANG_TIDY "")
+        cpssim_set_project_warnings(cpssim_qt_gui_tests)
+        cpssim_enable_sanitizers(cpssim_qt_gui_tests)
+        add_test(NAME cpssim_qt_gui_tests COMMAND cpssim_qt_gui_tests)
+        set_tests_properties(
+            cpssim_qt_gui_tests
+            PROPERTIES
+                ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                LABELS gui
+        )
+    endif()
 
     cpssim_add_catch_tests(
         cpssim_config_tests

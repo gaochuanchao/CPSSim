@@ -169,6 +169,20 @@ implementation. No Makefile edit is needed.
 
 ## GUI build and launch
 
+During the Goal 7 parity period the existing `gui` preset builds Dear ImGui,
+while `qt-gui` builds the native Qt 6 Widgets shell and `gui-both` verifies
+both frontends:
+
+```bash
+cmake --preset qt-gui
+cmake --build --preset qt-gui --target cpssim_qt_gui
+QT_QPA_PLATFORM=offscreen ctest --test-dir build/qt-gui -R cpssim_qt_gui_tests
+```
+
+Qt 6.4 or newer Core, Gui, Widgets, Test, and OpenGLWidgets development
+components are required. QtNodes is fetched only for the Qt frontend at the
+immutable commit recorded in ADR-0026.
+
 Launch the tracked example with its default inclusive horizon:
 
 ```bash

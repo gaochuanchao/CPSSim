@@ -69,6 +69,23 @@
       }
     },
     {
+      "name": "qt-gui",
+      "displayName": "GCC development with Qt Widgets",
+      "inherits": "dev",
+      "cacheVariables": {
+        "CPSSIM_BUILD_QT_GUI": "ON"
+      }
+    },
+    {
+      "name": "gui-both",
+      "displayName": "GCC development with both GUI frontends",
+      "inherits": "dev",
+      "cacheVariables": {
+        "CPSSIM_BUILD_IMGUI_GUI": "ON",
+        "CPSSIM_BUILD_QT_GUI": "ON"
+      }
+    },
+    {
       "name": "make-dev",
       "displayName": "GCC development applications with Unix Makefiles",
       "inherits": "dev",
@@ -122,6 +139,14 @@
     {
       "name": "gui",
       "configurePreset": "gui"
+    },
+    {
+      "name": "qt-gui",
+      "configurePreset": "qt-gui"
+    },
+    {
+      "name": "gui-both",
+      "configurePreset": "gui-both"
     },
     {
       "name": "make-dev",
