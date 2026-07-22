@@ -496,6 +496,16 @@ void QtMainWindow::bind_workbench(QtWorkbenchBridge* bridge) {
     system_builder_ = new QtSystemBuilderWidget{*bridge_, *structural_edits_, builder_dock};
     connect(system_builder_, &QtSystemBuilderWidget::taskCreated, architecture,
             &QtArchitectureView::place_task_near_view_center);
+    connect(architecture, &QtArchitectureView::editSelectionRequested, this,
+            [this] {
+                auto* dock = findChild<QDockWidget*>("dock.systemBuilder");
+                if (dock == nullptr || system_builder_ == nullptr) {
+                    return;
+                }
+                dock->show();
+                dock->raise();
+                system_builder_->setFocus();
+            });
     install_dock_content(builder_dock, system_builder_);
     builder_placeholder->deleteLater();
     auto* explorer_dock = findChild<QDockWidget*>("dock.explorer");

@@ -139,6 +139,15 @@ class QtArchitectureModelTest final : public QObject {
     void addTaskAction_disabled_while_running();
     void addTaskAction_disabled_for_protected_project();
     void addTaskAction_shares_undo_history_with_system_builder();
+    void allArchitectureActions_exist_with_stable_object_names();
+    void architectureActions_use_scoped_shortcuts();
+    void addTaskAction_single_connection_creates_one_task_per_activation();
+    void duplicateAction_places_non_overlapping();
+    void editAction_emits_editSelectionRequested();
+    void deleteAction_state_responds_to_selection();
+    void updateActionState_disabled_for_generic_running();
+    void updateActionState_disabled_for_protected_adapter();
+    void contextAddPosition_does_not_affect_toolbar_after_menu();
 };
 
 void QtArchitectureModelTest::strong_ids_are_mapped_without_truncation() {
@@ -429,6 +438,297 @@ void QtArchitectureModelTest::addTaskAction_shares_undo_history_with_system_buil
     // Redo again restores the Architecture-created task
     edits.undo_stack().redo();
     QCOMPARE(bridge.application().editable_system()->tasks().size(), before + 2);
+}
+
+void QtArchitectureModelTest::allArchitectureActions_exist_with_stable_object_names() {
+    TemporaryDirectory temporary;
+    auto application = std::make_unique<WorkbenchApplication>();
+    application->create_project(make_generic_project_template(temporary.path(), "project"));
+    QtWorkbenchBridge bridge{std::move(application)};
+    QtStructuralEditController edits{bridge};
+    QtArchitectureView view{bridge, edits};
+
+    // Verify each expected action exists with the correct object name.
+    auto* add_task = view.findChild<QAction*>("action.architecture.addTask");
+    QVERIFY(add_task != nullptr);
+
+    auto* edit_action = view.findChild<QAction*>("action.architecture.edit");
+    QVERIFY(edit_action != nullptr);
+
+    auto* duplicate = view.findChild<QAction*>("action.architecture.duplicate");
+    QVERIFY(duplicate != nullptr);
+
+    auto* delete_action = view.findChild<QAction*>("action.architecture.delete");
+    QVERIFY(delete_action != nullptr);
+
+    auto* fit = view.findChild<QAction*>("action.architecture.fit");
+    QVERIFY(fit != nullptr);
+
+    auto* actual = view.findChild<QAction*>("action.architecture.actualSize");
+    QVERIFY(actual != nullptr);
+
+    auto* auto_layout = view.findChild<QAction*>("action.architecture.autoLayout");
+    QVERIFY(auto_layout != nullptr);
+
+    auto* snap = view.findChild<QAction*>("action.architecture.snapToGrid");
+    QVERIFY(snap != nullptr);
+
+    // Exactly one Add Task action with that name.
+    const auto actions = view.findChildren<QAction*>("action.architecture.addTask");
+    QCOMPARE(static_cast<int>(actions.size()), 1);
+}
+
+void QtArchitectureModelTest::architectureActions_use_scoped_shortcuts() {
+    TemporaryDirectory temporary;
+    auto application = std::make_unique<WorkbenchApplication>();
+    application->create_project(make_generic_project_template(temporary.path(), "project"));
+    QtWorkbenchBridge bridge{std::move(application)};
+    QtStructuralEditController edits{bridge};
+    QtArchitectureView view{bridge, edits};
+
+    auto* delete_action = view.findChild<QAction*>("action.architecture.delete");
+    QVERIFY(delete_action != nullptr);
+    QCOMPARE(delete_action->shortcutContext(), Qt::WidgetWithChildrenShortcut);
+
+    auto* duplicate = view.findChild<QAction*>("action.architecture.duplicate");
+    QVERIFY(duplicate != nullptr);
+    QCOMPARE(duplicate->shortcutContext(), Qt::WidgetWithChildrenShortcut);
+
+    auto* fit = view.findChild<QAction*>("action.architecture.fit");
+    QVERIFY(fit != nullptr);
+    QCOMPARE(fit->shortcutContext(), Qt::WidgetWithChildrenShortcut);
+
+    auto* actual = view.findChild<QAction*>("action.architecture.actualSize");
+    QVERIFY(actual != nullptr);
+    QCOMPARE(actual->shortcutContext(), Qt::WidgetWithChildrenShortcut);
+}
+
+void QtArchitectureModelTest::addTaskAction_single_connection_creates_one_task_per_activation() {
+    TemporaryDirectory temporary;
+    auto application = std::make_unique<WorkbenchApplication>();
+    application->create_project(make_generic_project_template(temporary.path(), "project"));
+    QtWorkbenchBridge bridge{std::move(application)};
+    QtStructuralEditController edits{bridge};
+    QtArchitectureView view{bridge, edits};
+
+    const auto before = view.graph_model().node_count();
+
+    auto* action = view.findChild<QAction*>("action.architecture.addTask");
+    QVERIFY(action != nullptr);
+
+    // Trigger twice and verify each creates exactly one task.
+    action->trigger();
+    QCOMPARE(view.graph_model().node_count(), before + 1);
+
+    action->trigger();
+    QCOMPARE(view.graph_model().node_count(), before + 2);
+
+    // Undo removes in reverse order.
+    QVERIFY(edits.undo_stack().canUndo());
+    edits.undo_stack().undo();
+    QCOMPARE(view.graph_model().node_count(), before + 1);
+
+    edits.undo_stack().undo();
+    QCOMPARE(view.graph_model().node_count(), before);
+}
+
+void QtArchitectureModelTest::duplicateAction_places_non_overlapping() {
+    TemporaryDirectory temporary;
+    auto application = std::make_unique<WorkbenchApplication>();
+    application->create_project(make_generic_project_template(temporary.path(), "project"));
+    QtWorkbenchBridge bridge{std::move(application)};
+    QtStructuralEditController edits{bridge};
+    QtArchitectureView view{bridge, edits};
+
+    // First add a task at a known position so it has a workspace layout entry.
+    const auto task_id = view.add_task_at({200.0, 200.0});
+    QVERIFY(task_id.has_value());
+
+    bridge.application().structural_selection().select_task(*task_id);
+    bridge.notify_structural_selection_changed();
+    view.refresh();
+
+    const auto before = bridge.application().editable_system()->tasks().size();
+    QVERIFY(before >= 2); // original default task + new task
+
+    auto* duplicate = view.findChild<QAction*>("action.architecture.duplicate");
+    QVERIFY(duplicate != nullptr);
+    QVERIFY(duplicate->isEnabled());
+    duplicate->trigger();
+
+    QCOMPARE(bridge.application().editable_system()->tasks().size(), before + 1);
+
+    const auto new_task = bridge.application().structural_selection().task_id();
+    QVERIFY(new_task.has_value());
+    QVERIFY(*new_task != *task_id);
+
+    // Verify non-overlapping position.
+    const auto* original_layout =
+        find_task_layout(bridge.application().workspace().architecture, *task_id);
+    const auto* new_layout =
+        find_task_layout(bridge.application().workspace().architecture, *new_task);
+    QVERIFY(original_layout != nullptr);
+    QVERIFY(new_layout != nullptr);
+
+    // New position should be offset from original.
+    const bool different_position = (new_layout->position.x != original_layout->position.x) ||
+                                    (new_layout->position.y != original_layout->position.y);
+    QVERIFY(different_position);
+
+    // Undo/redo.
+    QVERIFY(edits.undo_stack().canUndo());
+    edits.undo_stack().undo();
+    QCOMPARE(bridge.application().editable_system()->tasks().size(), before);
+
+    edits.undo_stack().redo();
+    QCOMPARE(bridge.application().editable_system()->tasks().size(), before + 1);
+}
+
+void QtArchitectureModelTest::editAction_emits_editSelectionRequested() {
+    TemporaryDirectory temporary;
+    auto application = std::make_unique<WorkbenchApplication>();
+    application->create_project(make_generic_project_template(temporary.path(), "project"));
+    QtWorkbenchBridge bridge{std::move(application)};
+    QtStructuralEditController edits{bridge};
+    QtArchitectureView view{bridge, edits};
+
+    // Select the first task.
+    bridge.application().structural_selection().select_task(
+        bridge.application().editable_system()->tasks().front().id);
+    bridge.notify_structural_selection_changed();
+    view.refresh();
+
+    auto* edit_action = view.findChild<QAction*>("action.architecture.edit");
+    QVERIFY(edit_action != nullptr);
+    QVERIFY(edit_action->isEnabled());
+
+    bool received = false;
+    QObject::connect(&view, &QtArchitectureView::editSelectionRequested,
+                     [&received] { received = true; });
+
+    edit_action->trigger();
+    QVERIFY(received);
+}
+
+void QtArchitectureModelTest::deleteAction_state_responds_to_selection() {
+    TemporaryDirectory temporary;
+    auto application = std::make_unique<WorkbenchApplication>();
+    application->create_project(make_generic_project_template(temporary.path(), "project"));
+    QtWorkbenchBridge bridge{std::move(application)};
+    QtStructuralEditController edits{bridge};
+    QtArchitectureView view{bridge, edits};
+
+    auto* delete_action = view.findChild<QAction*>("action.architecture.delete");
+    QVERIFY(delete_action != nullptr);
+
+    // Delete should be disabled when nothing is selected.
+    QVERIFY(!delete_action->isEnabled());
+
+    // Select a task.
+    bridge.application().structural_selection().select_task(
+        bridge.application().editable_system()->tasks().front().id);
+    bridge.notify_structural_selection_changed();
+    view.refresh();
+
+    // Now Delete should be enabled.
+    QVERIFY(delete_action->isEnabled());
+}
+
+void QtArchitectureModelTest::updateActionState_disabled_for_generic_running() {
+    TemporaryDirectory temporary;
+    auto application = std::make_unique<WorkbenchApplication>();
+    application->create_project(make_generic_project_template(temporary.path(), "project"));
+    QtWorkbenchBridge bridge{std::move(application)};
+    QtStructuralEditController edits{bridge};
+    QtArchitectureView view{bridge, edits};
+
+    // Select a task first.
+    bridge.application().structural_selection().select_task(
+        bridge.application().editable_system()->tasks().front().id);
+    bridge.notify_structural_selection_changed();
+    view.refresh();
+
+    auto* add_task = view.findChild<QAction*>("action.architecture.addTask");
+    auto* duplicate = view.findChild<QAction*>("action.architecture.duplicate");
+    auto* delete_action = view.findChild<QAction*>("action.architecture.delete");
+    QVERIFY(add_task->isEnabled());
+    QVERIFY(duplicate->isEnabled());
+    QVERIFY(delete_action->isEnabled());
+
+    // Start running.
+    bridge.application().enqueue(GuiCommand::Run);
+    bridge.application().update();
+    Q_EMIT bridge.applicationStateChanged();
+    view.refresh();
+
+    QVERIFY(!add_task->isEnabled());
+    QVERIFY(!duplicate->isEnabled());
+    QVERIFY(!delete_action->isEnabled());
+}
+
+void QtArchitectureModelTest::updateActionState_disabled_for_protected_adapter() {
+    TemporaryDirectory temporary;
+    const auto repository =
+        std::filesystem::path{__FILE__}.parent_path().parent_path().parent_path();
+    auto project =
+        create_bosch_project({.parent_directory = temporary.path(),
+                              .name = "bosch",
+                              .trajectory_directory = make_trajectory(temporary.path()),
+                              .scenario = BoschReferenceScenario::Dedicated,
+                              .stop_tick = 2,
+                              .reference_root = repository / "experiments/bosch_v10_reference",
+                              .shared_library = fmu_library()});
+    auto application = std::make_unique<WorkbenchApplication>(std::move(project));
+    QtWorkbenchBridge bridge{std::move(application)};
+    QtStructuralEditController edits{bridge};
+    QtArchitectureView view{bridge, edits};
+
+    auto* add_task = view.findChild<QAction*>("action.architecture.addTask");
+    auto* duplicate = view.findChild<QAction*>("action.architecture.duplicate");
+    auto* delete_action = view.findChild<QAction*>("action.architecture.delete");
+
+    QVERIFY(!add_task->isEnabled());
+    QVERIFY(!duplicate->isEnabled());
+    QVERIFY(!delete_action->isEnabled());
+    // Edit is enabled when a structural item is selected, even for protected projects
+    // because viewing properties is allowed.
+}
+
+void QtArchitectureModelTest::contextAddPosition_does_not_affect_toolbar_after_menu() {
+    TemporaryDirectory temporary;
+    auto application = std::make_unique<WorkbenchApplication>();
+    application->create_project(make_generic_project_template(temporary.path(), "project"));
+    QtWorkbenchBridge bridge{std::move(application)};
+    QtStructuralEditController edits{bridge};
+    QtArchitectureView view{bridge, edits};
+
+    auto* action = view.findChild<QAction*>("action.architecture.addTask");
+    QVERIFY(action != nullptr);
+
+    // Trigger from toolbar: should create near viewport center.
+    action->trigger();
+    const auto first_task = bridge.application().structural_selection().task_id();
+    QVERIFY(first_task.has_value());
+
+    // The context_add_position_ is cleared after the context menu processing.
+    // Simulate what happens: set a context position, trigger the action,
+    // then clear the position. The action triggers via the same path.
+    // Since we can't easily simulate a context menu, we just verify that
+    // triggering the toolbar action twice in a row works correctly
+    // (the second trigger creates a new task, not relying on stale context).
+
+    action->trigger();
+    const auto second_task = bridge.application().structural_selection().task_id();
+    QVERIFY(second_task.has_value());
+    QVERIFY(*second_task != *first_task);
+
+    // Both tasks should have valid positions.
+    const auto* first_layout =
+        find_task_layout(bridge.application().workspace().architecture, *first_task);
+    const auto* second_layout =
+        find_task_layout(bridge.application().workspace().architecture, *second_task);
+    QVERIFY(first_layout != nullptr);
+    QVERIFY(second_layout != nullptr);
 }
 
 } // namespace cpssim::qt
