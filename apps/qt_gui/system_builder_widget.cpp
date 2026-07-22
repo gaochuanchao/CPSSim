@@ -310,10 +310,18 @@ void QtSystemBuilderWidget::build_pages() {
     form->addRow(empty_message_);
 
     system_page_ = form_page(pages_, form);
+    /*
+    * Keep fields beside their labels when space permits.
+    * Move fields below their labels when the dock becomes narrow.
+    */
+    form->setRowWrapPolicy(QFormLayout::WrapLongRows);
+
     tick_period_ = new QLineEdit(system_page_);
     tick_period_->setObjectName("systemBuilder.tickPeriod");
+    tick_period_->setFixedWidth(140);
     preemption_ = new QComboBox(system_page_);
     preemption_->setObjectName("systemBuilder.preemption");
+    preemption_->setFixedWidth(140);
     preemption_->addItems({"Preemptive", "Non-preemptive"});
     form->addRow("Tick period (ns):", tick_period_);
     form->addRow("Preemption mode:", preemption_);
@@ -321,10 +329,13 @@ void QtSystemBuilderWidget::build_pages() {
     form->addRow(system_diagnostic_);
 
     resource_page_ = form_page(pages_, form);
+    // form->setRowWrapPolicy(QFormLayout::WrapLongRows);
     resource_id_ = new QLineEdit(resource_page_);
     resource_name_ = new QLineEdit(resource_page_);
     resource_id_->setObjectName("systemBuilder.resourceId");
+    resource_id_->setFixedWidth(50);
     resource_name_->setObjectName("systemBuilder.resourceName");
+    resource_name_->setFixedWidth(100);
     form->addRow("Resource ID:", resource_id_);
     form->addRow("Name:", resource_name_);
     resource_diagnostic_ = diagnostic_label(resource_page_, "systemBuilder.resourceDiagnostic");
@@ -350,9 +361,20 @@ void QtSystemBuilderWidget::build_pages() {
 
     assignment_status_ = new QLabel(task_page_);
     assignment_status_->setObjectName("systemBuilder.assignmentStatus");
-    profile_button_ = new QPushButton(QStringLiteral("Edit Execution Profile"), task_page_);
-    profile_button_->setObjectName("systemBuilder.editExecutionProfile");
-    profile_button_->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    profile_button_ =
+        new QPushButton(
+            QStringLiteral("Edit Execution Profile"),
+            task_page_);
+    profile_button_->setObjectName(
+        "systemBuilder.editExecutionProfile");
+    profile_button_->setSizePolicy(
+        QSizePolicy::Fixed,
+        QSizePolicy::Fixed);
+    profile_button_->setMinimumHeight(32);
+    profile_button_->setFlat(false);
+    profile_button_->setAutoDefault(false);
+    profile_button_->setDefault(false);
+
     protected_help_ = new QLabel(task_page_);
     protected_help_->setWordWrap(true);
     task_id_->setObjectName("systemBuilder.taskId");
@@ -363,20 +385,13 @@ void QtSystemBuilderWidget::build_pages() {
     form->addRow("Deadline:", task_deadline_);
     form->addRow("Offset:", task_offset_);
     form->addRow("Priority:", task_priority_);
-    form->addRow("Assigned Res.:", task_assignment_);
+    form->addRow("Resource:", task_assignment_);
     form->addRow("Status:", assignment_status_);
     form->addRow(profile_button_);
 
-    profile_button_->setStyleSheet(
-        R"(
-        QPushButton[profileComplete="false"] {
-            border: 2px solid #d94b4b;
-            border-radius: 4px;
-        }
-        QPushButton[profileComplete="true"] {
-            border: none;
-        }
-        )");
+    form->setAlignment(profile_button_, Qt::AlignLeft);
+
+    /* No stylesheet — using native Fusion button appearance. */
 
     form->addRow(protected_help_);
     task_diagnostic_ = diagnostic_label(task_page_, "systemBuilder.taskDiagnostic");
@@ -811,14 +826,28 @@ bool QtSystemBuilderWidget::task_profiles_complete(TaskId task_id) const {
     return true;
 }
 
-void QtSystemBuilderWidget::refresh_profile_button_state(TaskId task_id) {
-    const bool complete = task_profiles_complete(task_id);
-    profile_button_->setProperty("profileComplete", complete);
-    profile_button_->setText(complete ? QStringLiteral("Edit Execution Profile")
-                                      : QStringLiteral("Edit Execution Profile — Incomplete"));
-    profile_button_->style()->unpolish(profile_button_);
-    profile_button_->style()->polish(profile_button_);
-    profile_button_->update();
+void QtSystemBuilderWidget::refresh_profile_button_state(
+    TaskId task_id) {
+
+    const bool complete =
+        task_profiles_complete(task_id);
+
+    profile_button_->setText(
+        complete
+            ? QStringLiteral(
+                  "Edit Execution Profile")
+            : QStringLiteral(
+                  "Edit Execution Profile — Incomplete"));
+
+    profile_button_->setToolTip(
+        complete
+            ? QStringLiteral(
+                  "Review or modify the execution times "
+                  "for this task.")
+            : QStringLiteral(
+                  "The execution profile is incomplete. "
+                  "Every accessible resource requires a "
+                  "valid execution time."));
 }
 
 bool QtSystemBuilderWidget::editing_enabled() const {
