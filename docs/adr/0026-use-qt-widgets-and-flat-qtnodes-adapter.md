@@ -69,6 +69,20 @@ worker completion is adopted on the Qt GUI thread using a queued invocation.
 preferences only.  CPSSim project/workspace values continue to own semantic
 and architecture-position state.  Stable `objectName` values identify docks.
 
+Goal 7.1 stabilizes this decision with two additional ownership rules. Qt
+appearance and main-window geometry/dock state are global user preferences in
+`QSettings`; a project's workspace theme cannot override them or make the
+project dirty. Dock state version 2 is restored only when entering Workbench,
+and ordinary application synchronization never changes dock visibility.
+
+Resource Assignments is a strictly read-only model/view projection. Explorer
+owns structural creation, while the selected Task page owns assignment and
+per-resource WCET editing through undo-backed draft commands. Architecture
+receives stable identities only after those commands succeed. Its fine/major
+grid, center placement, auto layout, drag-release snap, and persisted positions
+share a 20-pixel unit. Unsupported logical creation remains disabled rather
+than mutating only the QtNodes scene.
+
 ## Consequences
 
 - `cpssim_core` remains free of Qt, Dear ImGui, and QtNodes.

@@ -32,32 +32,37 @@ continuations. Paused, Finished, and NotConfigured states retain no simulation
 timer. Completed-result worker notification is queued onto the GUI thread, and
 bridge shutdown clears the callback before cancelling and joining finalization.
 
-The native Architecture prototype uses `QtNodes::AbstractGraphModel`,
+The native Architecture view uses `QtNodes::AbstractGraphModel`,
 `BasicGraphicsScene`, and `GraphicsView`. Its model is a read-only semantic
 adapter over `GuiArchitectureGraph`: it exposes task nodes plus logical and
 communication connections, permits cycles, and filters resource nodes and
 assignment edges. `QtNodeIdMap` allocates retained 32-bit adapter IDs and keeps
 the complete strong CPSSim identity in a bidirectional map; it never casts or
-truncates entity values. Node movement writes task positions to the shared
-versioned workspace, while Add Task mutates `EditableSystemDraft` first and
-then rebuilds the scene.
+truncates entity values. Node movement snaps to the shared 20-pixel grid on
+release and writes task positions to the versioned workspace. Explorer Add
+Task mutates `EditableSystemDraft` through the undo-backed workflow first,
+then asks the rebuilt scene to place that stable Task ID near the current view
+center.
 
 Task nodes use a CPSSim painter layered over the QtNodes base painter. A narrow
 accent and a text badge both identify the assigned resource; timing remains a
 separate compact line, and the border is reserved for selection/validation.
 The accent is a stable hash of `ResourceId` into a fixed theme-adjusted palette,
 so unrelated resource insertion cannot recolor existing assignments.
-`QtResourceAssignmentModel` is the authoritative mapping projection with
+`QtResourceAssignmentModel` is a read-only mapping projection with
 swatch, task, resource, profile/WCET, priority, accessibility, and status
-columns. Its combo delegate mutates only the shared draft, and table/canvas
-selection both update `StructuralSelection`.
+columns. It exposes no editable item flags, delegate, or mutation path.
+Table/canvas selection both update `StructuralSelection`; assignment and WCET
+mutations live exclusively on the selected Task page in System Builder.
 
 Qt file actions call the same atomic project APIs as the legacy frontend.
 Native dialogs select explicit paths; a five-page Bosch wizard constructs the
 complete project before bridge replacement; failed or cancelled operations do
 not replace the active project. Recent history remains a bounded user
-preference, while project workspace state owns themes, execution presentation
-settings, signal selection, and architecture positions. The Qt toolbar exposes
+preference. The Qt theme is a global `QSettings` preference
+(`appearance/theme_v1`), while project workspace state owns execution
+presentation settings, signal selection, and architecture positions. The Qt
+toolbar exposes
 Live/Fast and separate Events/Ticks batch values without adding run-plan
 semantics.
 
@@ -330,12 +335,14 @@ Architecture tab's detached presentation input and is labelled as a read-only
 preview. It never becomes engine input until Apply and restart succeeds.
 
 The Qt frontend adapts this same lifecycle with reusable system, resource,
-task/profile, connection, and empty editor pages. Its component library and
-field editors create `QUndoStack` commands containing detached draft,
-assignment, and structural-selection state; commands never mutate QtNodes as
-domain truth. Validation diagnostics stay graphics-independent and are
-projected into the selected form and its section summary. The undo history is
-discarded on project replacement.
+task, connection, and empty editor pages. Explorer owns explicitly named
+create/duplicate/delete actions; System Builder is a scrollable property
+editor with no component library. Task assignment and per-resource WCET edits,
+field edits, and structural commands create `QUndoStack` snapshots of detached
+draft, assignment, and structural-selection state. Commands never mutate
+QtNodes as domain truth. Validation diagnostics stay graphics-independent and
+are projected into the selected form and its section summary. The undo history
+is discarded on project replacement.
 
 Save Project reads the applied session, not the draft. Open, close, Save As,
 generic-project creation, and Bosch-project replacement prompt when system
@@ -445,13 +452,13 @@ export remains based on full-resolution series. No permanent plotting
 dependency has been selected; the benchmark and decision boundary are recorded
 in [Qt Native Plot Prototype Evaluation](QT_NATIVE_PLOT_EVALUATION.md).
 
-Select mode updates persistent structural selection for tasks, resources, and
-connections. Arrange mode persists task positions and independent resource
-position/size overrides. Assign mode changes only draft task/resource
-assignments and never applies them automatically. Compact one-line task boxes
-use deterministic input/output ports and orthogonal routes. Auto Layout,
-per-entity reset/auto-size, pan, zoom, and mode are workspace presentation
-state. Selection remains available while Running, while controls stay read-only.
+The Qt flat view updates persistent structural selection for tasks and
+connections. Resources remain outside the scene and are selected through
+Explorer or the read-only Resource Assignments overview. Task dragging,
+Explorer center placement, and Auto Layout persist grid-aligned workspace
+positions; Fit and 100% affect only the view transform. Assignment editing is
+performed on the Task page, never by a scene-only drag. Selection remains
+available while Running, while structural controls stay read-only.
 
 ### Scheduling timeline
 
@@ -564,21 +571,25 @@ Simulation, the controller, and all FMI calls remain on the GUI thread. Only
 post-Finish derivation uses a worker, across the immutable boundary described
 above. The worker never runs simulation and never calls graphics APIs.
 
-Four persistence domains remain separate:
+Five persistence domains remain separate:
 
 1. project metadata and project-owned relative references;
 2. experiment configuration;
 3. run plan; and
-4. GUI workspace and user preferences.
+4. project GUI workspace; and
+5. global Qt appearance and dock/geometry user preferences.
 
 Only experiment configuration and run plan affect simulation input. Workspace
-schema 5 persists theme, panel visibility, ordered upper/lower tabs, splitters,
-Fast pacing, visualizer preferences, event filters/columns, selected signals,
-Architecture mode/pan/zoom/entity geometry, and Results section ratios.
+schema 5 persists the legacy ImGui theme, panel visibility, ordered upper/lower
+tabs, splitters, Fast pacing, visualizer preferences, event filters/columns,
+selected signals, Architecture mode/pan/zoom/entity geometry, and Results
+section ratios.
 Schemas 1-4 migrate safely. Unknown
 fields and unsupported versions reject the optional workspace and report a
 fallback diagnostic; invalid known enum/ratio values use safe defaults. The
-separate recent-project preference file is also presentation-only.
+separate recent-project preference file is also presentation-only. Qt ignores
+the project theme field: its global theme is stored in QSettings. Qt dock state
+uses only version-2 keys; version-1 state is deliberately not restored.
 
 ## 12. Testing strategy
 

@@ -197,7 +197,7 @@ the C++ behavior silently.
   in [ADR-0011](../adr/0011-plan-user-configured-task-channels.md);
 - multiple servers/scheduling domains, resource capacity sharing, migration,
   richer networks, and richer GUI analysis need explicit designs;
-- the current fixed GUI workbench has no docking,
+- the legacy Dear ImGui workbench has no native docking,
   unit-grouped/multiple signal axes, or simulation worker thread; timeline and
   signal viewports and text scale are not persisted; run-plan fields may be
   edited or loaded only while no run exists or the active run is
@@ -205,8 +205,8 @@ the C++ behavior silently.
 - architecture task/resource layout, pan/zoom, and Select/Arrange/Assign mode
   are workspace-only; Assign changes the pending plan and never migrates active
   jobs or applies automatically;
-- current-monitor display scale updates automatically; theme changes rebuild
-  an unscaled base style before that scale is applied once; workspace schemas
+- legacy current-monitor display scale updates automatically; theme changes
+  rebuild an unscaled base style before that scale is applied once; workspace schemas
   1 and 2 migrate to schema 3, which also persists Results visibility and the
   active Results tab; schemas through 4 migrate to schema 5, which adds
   Architecture geometry/mode and Results section ratios;
@@ -283,11 +283,11 @@ bidirectionally to QtNodes' 32-bit IDs and are never truncated.
 The accepted decision is
 [ADR-0026](../adr/0026-use-qt-widgets-and-flat-qtnodes-adapter.md), and the
 prototype/assignment/parity gates are tracked in the
-[Qt migration checklist](../gui/QT_MIGRATION_CHECKLIST.md). Do not make Qt the
-default or remove Dear ImGui until the parity gate passes.
+[Qt migration checklist](../gui/QT_MIGRATION_CHECKLIST.md). The parity gate has
+passed and Qt is the default `cpssim_gui`; do not remove Dear ImGui without a
+later explicit goal.
 
-The native shell and lifecycle bridge are present but Qt is not yet the
-default. `QtWorkbenchBridge` translates shared QActions into queued
+`QtWorkbenchBridge` translates shared QActions into queued
 `GuiCommand` values, bounds Live callbacks to roughly 16 ms, cooperatively
 continues Fast batches with zero-delay events, publishes worker results through
 the Qt GUI thread, and owns no simulation state itself.
@@ -296,19 +296,21 @@ The flat QtNodes prototype gate now passes automated coverage: Bosch loads
 paused with six task nodes and five semantic connections; generic cycles are
 accepted; selection, add-at-center collision offsets, strong-ID rebuilds, and
 workspace position reopen are verified. Resource presentation and assignment
-editing remain intentionally deferred to the next gate. Native mixed-monitor
-DPI movement still requires a desktop manual check; Qt-owned scaling is used
-and offscreen scale-factor launches do not add simulator behavior.
+navigation use a separate flat table. Native mixed-monitor DPI movement still
+requires a desktop manual check; Qt-owned scaling is used and offscreen
+scale-factor launches do not add simulator behavior.
 The assignment gate now passes: deterministic theme-aware colors derive only
 from `ResourceId`; task nodes also display the resource name or `Unassigned`;
 the `QAbstractTableModel` exposes mapping, WCET, priority, accessibility, and
-status; its combo delegate edits the draft; and table/canvas selection is
-bidirectional through `StructuralSelection`. No resource container or
-assignment edge is created.
+status as a strictly read-only overview; and table/canvas selection is
+bidirectional through `StructuralSelection`. Assignment and WCET edits are
+made only on the Task page. No resource container or assignment edge is
+created.
 
-The Qt System Builder phase is complete. A persistent `QStackedWidget` provides
-system, task/profile, resource, connection, and empty pages above a resizable
-component library. Field edits and confirmed create/delete operations restore
+The Qt System Builder phase is complete. A scrollable persistent
+`QStackedWidget` provides system, task, resource, connection, and empty pages;
+Explorer context menus replace the removed component library. Field,
+assignment, WCET, and confirmed create/delete operations restore
 complete detached draft/assignment/selection snapshots through `QUndoStack`;
 Undo/Redo actions are shared by the Edit menu and shortcuts. Structured
 validation is shown on the selected page and in the section summary. The stack
@@ -316,6 +318,40 @@ is cleared when project ownership changes, so an old command cannot mutate a
 replacement project. Bosch task identities and route structure remain
 protected, and the applied session remains unchanged until the existing atomic
 Apply and restart workflow succeeds.
+
+Goal 7.1 stabilizes the native shell: global Qt theme uses QSettings rather
+than project workspace, Home disables workbench-only actions, and version-2
+dock state is restored only on Home-to-Workbench transitions. Ordinary
+progress/status/theme/result synchronization never changes dock visibility or
+raises Results. Six-pixel separators, Ctrl+J bottom collapse/restore, and
+explicit bottom re-docking keep floating analysis panels recoverable.
+
+Experiment Explorer is now the only structural creation surface. Resource
+Assignments is a read-only task navigation table; the selected Task page owns
+assignment and per-resource WCET editing with undo/redo and explicit missing
+profiles. Architecture creation receives the stable Task ID after the domain
+command and places it near the view center. Fine/major grid drawing, center
+placement, auto layout, drag-release snapping, and persisted positions share a
+20-pixel constant. Generic logical connection creation remains disabled until
+it has an authoritative persisted application command.
+
+Goal 7.1 verification on 2026-07-22 used Qt 6.4.2 on Ubuntu 24.04:
+
+- the complete configured build passed, followed by 294/294 offscreen CTest
+  tests including Qt, CLI, FMI, canonical-ordering, project, and both Bosch
+  conformance cases;
+- the four changed Qt suites passed with AddressSanitizer/UBSan (leak detection
+  disabled because LeakSanitizer cannot operate under this managed process
+  tracer); the sanitizer run found and verified the undo-action teardown fix;
+- `gui-both` built the legacy `cpssim_imgui_gui` target;
+- a five-second offscreen idle Home run used 0.06 s user and 0.01 s system CPU
+  (reported as 1%), and a forced scale-factor-2 launch remained stable; and
+- `git diff --check` passed.
+
+Offscreen automation cannot validate visible separator feel, native floating
+dock interaction, or physical movement between monitors with different DPI.
+Those remain desktop checks; no result is inferred from the scale-factor
+smoke test.
 
 The Qt runtime-inspection phase is also complete. Experiment Explorer uses a
 small tree model of stable structural IDs and shares `StructuralSelection` with

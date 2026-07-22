@@ -27,10 +27,11 @@ change simulation semantics or project formats.
       cycles, synchronizes structural selection, adds at center with stable
       occupied offset, and preserves strong identities across rebuilds.
 - [x] Assignment gate shows a stable accent and resource-name badge (including
-      `Unassigned`), edits through a `QAbstractTableModel`, synchronizes table
+      `Unassigned`), uses a read-only `QAbstractTableModel`, synchronizes table
       and canvas selection, and has no resource containers or assignment edges.
-- [x] System Builder/component library mutate the CPSSim draft through commands
-      and `QUndoStack`, never through scene-only state.
+- [x] Explorer context actions and the scrollable System Builder mutate the
+      CPSSim draft through commands and `QUndoStack`, never through scene-only
+      state; assignment and WCET editing belongs to the selected Task page.
 - [x] Explorer, run configuration, runtime inspector, resources, events, and
       diagnostics retain their Goal 6 ownership and selection behavior.
 - [x] Results, timeline, signals, and the integrated native plot use immutable

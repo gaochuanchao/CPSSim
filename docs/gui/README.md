@@ -58,8 +58,9 @@ use the Bosch Challenge wizard. A created/opened project starts with a paused
 active run. To change its run plan:
 
 1. In **Experiment Explorer**, expand Tasks and Resources to inspect the input.
-2. In **Run Configuration**, choose one accessible resource for every task.
-3. Set the draft stop tick.
+2. Select each task in **Experiment Explorer** and use **System Builder** to
+   choose its resource and define the required per-resource WCET profile.
+3. Set the draft stop tick in **Run Configuration**.
 4. Select **Validate changes**. Any problem appears beside the relevant task or field.
 5. Select **Apply and restart**. This creates a new paused simulation.
 6. Use **Next event** to study one complete logical event tick, or **Run** to
@@ -82,9 +83,10 @@ ticks or canonical event ordering.
 ### Explorer and System Builder
 
 Generic and Bosch-compatible projects place **System Builder** directly below
-**Experiment Explorer**. Select System, a section, resource, task, execution profile, or
-message route in Explorer to open its corresponding property form. All edits
-remain detached until **Apply and restart** succeeds.
+**Experiment Explorer**. Explorer contains Project, Resources, Tasks, and
+Connections; selecting an entity opens its property form. Execution profiles
+are edited on the owning Task page rather than appearing as separate tree
+items. All edits remain detached until **Apply and restart** succeeds.
 
 - IDs are stable when names or timing fields change.
 - Right-click a section to add an entity; the new entity is selected and its
@@ -92,8 +94,9 @@ remain detached until **Apply and restart** succeeds.
 - Right-click an entity to duplicate it or request deletion. Task/resource
   deletion lists affected profiles, routes, and pending assignments before a
   confirmed draft-only cascade.
-- Each matrix cell enables or removes one deterministic execution profile.
-- Each task needs an explicit default resource assignment before Apply.
+- Each Task page owns its resource assignment and model/view table of
+  per-resource deterministic execution profiles. Missing WCET remains explicit.
+- Each task needs an explicit resource assignment and matching WCET before Apply.
 - A valid modified system appears in Architecture as a labelled read-only
   preview.
 
@@ -105,12 +108,12 @@ and required route endpoints while allowing timing, resources, profiles,
 assignments, route timing, stop tick, and policy edits. Canonical fingerprints
 label the applied system as a reference baseline or modified Bosch experiment.
 
-The native Qt frontend presents the selected-item editor above its component
-library in a draggable vertical splitter. Resource, task, execution-profile,
-and message-route creation uses the same detached Explorer workflow as the
-legacy frontend. Form edits and confirmed deletion are undoable from the shared
-Edit → Undo/Redo actions; changing projects clears that history. Validation
-appears beside the selected editor and never changes the applied simulation.
+The native Qt frontend uses Explorer context menus for structural creation,
+duplication, and deletion. System Builder is a scrollable selected-item
+property editor; it has no redundant component library. Form edits and
+confirmed structural actions are undoable from the shared Edit → Undo/Redo
+actions; changing projects clears that history. Validation appears beside the
+selected editor and never changes the applied simulation.
 
 Qt runtime panels use model/view adapters rather than item-per-record tables.
 Canonical Events keeps canonical sequence order, supports type/task/resource/
@@ -129,12 +132,13 @@ shared tick selection, and draws Bosch overlays from completed analysis. The
 prototype uses Qt painting rather than adopting a permanent plotting library;
 see [the native plot evaluation](QT_NATIVE_PLOT_EVALUATION.md).
 
-Window and table placement use a separate optional `imgui.ini` in the project
-root. The tracked [`apps/gui/imgui.ini`](imgui.ini) is the fixed default and is
-never a Dear ImGui output target. Layout changes are staged in a temporary file;
+The legacy Dear ImGui frontend uses a separate optional `imgui.ini` in the
+project root. The tracked [`apps/gui/imgui.ini`](imgui.ini) is its fixed default
+and is never an output target. Layout changes are staged in a temporary file;
 **Save Project** or **Save Project As** publishes the current layout to the
 project, while closing or replacing a project without saving deletes the staged
-file. A project without `imgui.ini` always uses the fixed default.
+file. A project without `imgui.ini` always uses the fixed default. The default
+Qt frontend instead uses versioned global `QSettings` geometry/dock state.
 
 ## 3. Workbench tour
 
@@ -152,18 +156,19 @@ file. A project without `imgui.ini` always uses the fixed default.
 +------------------------------------------------------------------+
 ```
 
-The left and right sidebars, upper/lower center groups, and Results sections have draggable
-horizontal splitters with minimum heights. Right-click a center tab to move it
-between groups; **View → Reset Panel Arrangement** restores the defaults. Their
-normalized ratios and panel visibility persist in the project workspace. Use
-**View → Theme → Light/Dark** to change both the base ImGui style and window
-background. The same menu shows the current monitor scale and provides an
-adjustable text-size slider, which remains an in-memory multiplier on top of
-automatic DPI scaling. **View → Restore Default Layout** reloads the fixed
-layout immediately. Save the project to remove its custom layout permanently;
-without a save, reopening the project restores its previously saved layout.
-The base style uses compact eight-unit scrollbars, scaled once for the active
-monitor, so horizontal and vertical scrolling consume less panel space.
+Qt docks expose visible six-pixel resize separators. Close, float, tabify, or
+restore panels through **View** and each dock's title/context controls. Use
+**View → Collapse Bottom Analysis Area** (`Ctrl+J`) to collapse or restore the
+bottom group, and **Dock in Bottom Analysis Group** on a floating bottom dock
+to return it without floating Results. The version-2 Qt geometry/dock state is
+a user preference and is restored only on a Home-to-Workbench transition.
+Ordinary status, progress, result, and theme updates never change visibility.
+
+**View → Theme → Light/Dark** is a global Qt preference stored in
+`QSettings`, independent of project `workspace.json`, and remains selected
+across project open/close. On Home, file/opening actions and Theme remain
+available while simulation, save/close, undo/redo, layout-reset, and dock
+toggles are disabled.
 
 ### Structural and runtime selection
 
@@ -200,24 +205,21 @@ for the ownership and file-format decisions.
 
 ### Architecture view
 
-The graph displays compact tasks and independently sized resources. Solid
-connections are logical, presentation-only dependencies with latency zero;
-dashed connections are communication. Bosch communication displays 80 ticks,
-while its adapter-owned one-tick handoff is intentionally hidden.
-It supports:
+The Qt graph is flat: every task is an independent QtNodes node, resources are
+not containers, and assignments are not edges. A stable accent stripe plus a
+visible resource badge shows each assignment without relying on color alone.
+Solid connections are logical, presentation-only dependencies with latency
+zero; dashed connections are communication. Bosch communication displays 80
+ticks, while its adapter-owned one-tick handoff is intentionally hidden.
 
-- wheel zoom and middle-button pan;
-- Select mode for persistent task, resource, and connection selection;
-- Arrange mode for task/resource movement and resource resizing;
-- Assign mode for dragging a task to an accessible draft resource;
-- fit, auto layout, auto-size, and per-entity layout reset; and
-- workspace persistence of mode, pan, zoom, positions, and resource sizes.
-
-A drag changes only the draft. The applied assignment remains visible until
-**Apply and restart** succeeds. Selection remains available while Running, but
-editing is disabled with a prompt to pause.
-At extreme fit/zoom levels, canvas labels retain a safe minimum font-bake size;
-zoom in to make their content readable.
+Use wheel zoom, pan, **Fit**, **100%**, **Auto Layout**, and **Snap to Grid**.
+The fine grid, major grid, center placement, auto layout, drag-release snap,
+and persisted positions share one 20-pixel constant. Add resources, tasks, and
+supported communication connections from Explorer context menus. Unsupported
+logical creation is disabled because it lacks authoritative generic project
+persistence; QtNodes itself never creates domain entities or connections.
+Selection remains available while Running, but structural controls stay
+read-only until paused.
 
 ### Scheduling timeline
 
@@ -346,8 +348,10 @@ mapped explicitly, cycles are allowed, and drag/add positions are stored in
 
 Every task shows a stable resource-colored stripe and the resource name (or
 `Unassigned`) in a badge. The dockable Resource Assignments table repeats this
-mapping and is the edit surface; changing its combo updates only the draft and
-does not alter the applied runtime until Apply and restart.
+mapping as a strictly read-only overview. Clicking any cell selects the whole
+task row and opens that Task page in System Builder, where assignment and WCET
+edits are made. Draft changes do not alter the applied runtime until Apply and
+restart.
 
 ## 5. Where to make a change
 
@@ -495,10 +499,11 @@ explains how to choose broader checks.
 - Reset rebuilds runtime state from validated immutable inputs and the active
   run plan.
 - Labels, row positions, and colors are presentation—not identity or semantics.
-- The current workbench is single-threaded and uses a fixed resizable layout,
-  not docking.
-- Theme, panel visibility, splitters, active tabs, event filters/columns, and
-  selected signals are persisted; text size and canvas viewports remain local.
+- Simulation remains single-threaded; the Qt workbench uses native dock widgets
+  whose visibility is never changed by ordinary synchronization.
+- Qt theme and dock geometry/visibility are global QSettings preferences;
+  project workspace persists other presentation-only filters, tabs, ranges,
+  signals, and architecture positions without affecting simulation input.
 - Dear ImGui settings are manually staged and saved per project; the tracked
   default layout is read-only to the application.
 
