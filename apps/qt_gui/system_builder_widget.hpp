@@ -13,6 +13,7 @@
 class QComboBox;
 class QLabel;
 class QLineEdit;
+class QPushButton;
 class QStackedWidget;
 class QTableView;
 class QUndoStack;
@@ -22,15 +23,15 @@ namespace cpssim::qt {
 struct QtTaskExecutionProfileRow {
     ResourceId resource_id;
     QString resource_name;
+    bool accessible{true};
     std::optional<Tick> execution_time;
 };
 
-class QtTaskExecutionProfileModel final : public QAbstractTableModel {
+class QtTaskExecutionProfileEditModel final : public QAbstractTableModel {
   public:
-    enum Column { Resource, ExecutionTime, Accessible, Status, Count };
-    using EditCallback = std::function<bool(ResourceId, std::optional<Tick>)>;
+    enum Column { Resource, Accessible, ExecutionTime, Status, Count };
 
-    explicit QtTaskExecutionProfileModel(EditCallback edit_callback, QObject* parent = nullptr);
+    explicit QtTaskExecutionProfileEditModel(QObject* parent = nullptr);
     int rowCount(const QModelIndex& parent = {}) const override;
     int columnCount(const QModelIndex& parent = {}) const override;
     QVariant data(const QModelIndex& index, int role = Qt::DisplayRole) const override;
@@ -38,14 +39,13 @@ class QtTaskExecutionProfileModel final : public QAbstractTableModel {
                         int role = Qt::DisplayRole) const override;
     Qt::ItemFlags flags(const QModelIndex& index) const override;
     bool setData(const QModelIndex& index, const QVariant& value, int role = Qt::EditRole) override;
-    void set_task(std::optional<TaskId> task_id, const EditableSystemDraft* draft,
-                  bool editing_enabled);
+    void load(TaskId task_id, const EditableSystemDraft& draft);
+    const std::vector<QtTaskExecutionProfileRow>& rows() const { return rows_; }
+    bool complete() const;
     const QtTaskExecutionProfileRow* row_at(int row) const;
 
   private:
-    EditCallback edit_callback_;
     std::vector<QtTaskExecutionProfileRow> rows_;
-    bool editing_enabled_{false};
 };
 
 class QtSystemBuilderWidget final : public QWidget {
@@ -78,6 +78,9 @@ class QtSystemBuilderWidget final : public QWidget {
     void refresh_diagnostics();
     bool editing_enabled() const;
     ProjectSystemEditPolicy edit_policy() const;
+    void open_execution_profile_dialog();
+    bool task_profiles_complete(TaskId task_id) const;
+    void refresh_profile_button_state(TaskId task_id);
 
     QtWorkbenchBridge& bridge_;
     QUndoStack* undo_stack_{nullptr};
@@ -106,8 +109,7 @@ class QtSystemBuilderWidget final : public QWidget {
     QLineEdit* task_priority_{nullptr};
     QComboBox* task_assignment_{nullptr};
     QLabel* assignment_status_{nullptr};
-    QtTaskExecutionProfileModel* profile_model_{nullptr};
-    QTableView* profile_table_{nullptr};
+    QPushButton* profile_button_{nullptr};
     QComboBox* connection_source_{nullptr};
     QComboBox* connection_destination_{nullptr};
     QLabel* connection_kind_{nullptr};

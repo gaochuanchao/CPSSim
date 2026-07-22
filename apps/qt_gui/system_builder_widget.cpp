@@ -2,11 +2,15 @@
 #include "apps/qt_gui/system_builder_widget.hpp"
 
 #include <QComboBox>
+#include <QDialog>
+#include <QDialogButtonBox>
 #include <QFormLayout>
 #include <QFrame>
 #include <QHeaderView>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMessageBox>
+#include <QPushButton>
 #include <QRegularExpression>
 #include <QRegularExpressionValidator>
 #include <QScrollArea>
@@ -121,52 +125,66 @@ QLabel* diagnostic_label(QWidget* parent, const char* object_name) {
 
 } // namespace
 
-QtTaskExecutionProfileModel::QtTaskExecutionProfileModel(EditCallback edit_callback,
-                                                         QObject* parent)
-    : QAbstractTableModel(parent), edit_callback_{std::move(edit_callback)} {}
+QtTaskExecutionProfileEditModel::QtTaskExecutionProfileEditModel(QObject* parent)
+    : QAbstractTableModel(parent) {}
 
-int QtTaskExecutionProfileModel::rowCount(const QModelIndex& parent) const {
+int QtTaskExecutionProfileEditModel::rowCount(const QModelIndex& parent) const {
     return parent.isValid() ? 0 : static_cast<int>(rows_.size());
 }
 
-int QtTaskExecutionProfileModel::columnCount(const QModelIndex& parent) const {
+int QtTaskExecutionProfileEditModel::columnCount(const QModelIndex& parent) const {
     return parent.isValid() ? 0 : Count;
 }
 
-QVariant QtTaskExecutionProfileModel::data(const QModelIndex& index, int role) const {
+QVariant QtTaskExecutionProfileEditModel::data(const QModelIndex& index, int role) const {
     const auto* row = row_at(index.row());
-    if (row == nullptr || (role != Qt::DisplayRole && role != Qt::EditRole)) {
+    if (row == nullptr) {
         return {};
     }
     switch (index.column()) {
     case Resource:
-        return row->resource_name;
-    case ExecutionTime:
-        return row->execution_time.has_value()
-                   ? QVariant{static_cast<qlonglong>(*row->execution_time)}
-                   : QVariant{};
+        if (role == Qt::DisplayRole) {
+            return row->resource_name;
+        }
+        return {};
     case Accessible:
-        return row->execution_time.has_value() ? QStringLiteral("Yes") : QStringLiteral("No");
+        if (role == Qt::CheckStateRole) {
+            return row->accessible ? Qt::Checked : Qt::Unchecked;
+        }
+        return {};
+    case ExecutionTime:
+        if (role == Qt::DisplayRole || role == Qt::EditRole) {
+            return row->execution_time.has_value()
+                       ? QVariant{static_cast<qlonglong>(*row->execution_time)}
+                       : QVariant{};
+        }
+        return {};
     case Status:
-        return row->execution_time.has_value() ? QStringLiteral("Available")
-                                               : QStringLiteral("Missing WCET");
+        if (role == Qt::DisplayRole) {
+            if (!row->accessible) {
+                return QStringLiteral("Inaccessible");
+            }
+            return row->execution_time.has_value() ? QStringLiteral("Complete")
+                                                   : QStringLiteral("Missing WCET");
+        }
+        return {};
     default:
         return {};
     }
 }
 
-QVariant QtTaskExecutionProfileModel::headerData(int section, Qt::Orientation orientation,
-                                                 int role) const {
+QVariant QtTaskExecutionProfileEditModel::headerData(int section, Qt::Orientation orientation,
+                                                     int role) const {
     if (orientation != Qt::Horizontal || role != Qt::DisplayRole) {
         return QAbstractTableModel::headerData(section, orientation, role);
     }
     switch (section) {
     case Resource:
         return QStringLiteral("Resource");
-    case ExecutionTime:
-        return QStringLiteral("Execution time/WCET");
     case Accessible:
         return QStringLiteral("Accessible");
+    case ExecutionTime:
+        return QStringLiteral("Execution time / WCET");
     case Status:
         return QStringLiteral("Status");
     default:
@@ -174,49 +192,79 @@ QVariant QtTaskExecutionProfileModel::headerData(int section, Qt::Orientation or
     }
 }
 
-Qt::ItemFlags QtTaskExecutionProfileModel::flags(const QModelIndex& index) const {
+Qt::ItemFlags QtTaskExecutionProfileEditModel::flags(const QModelIndex& index) const {
     auto result = QAbstractTableModel::flags(index);
-    if (editing_enabled_ && index.isValid() && index.column() == ExecutionTime) {
+    if (!index.isValid()) {
+        return result;
+    }
+    if (index.column() == Accessible) {
+        result |= Qt::ItemIsUserCheckable;
+    }
+    if (index.column() == ExecutionTime) {
         result |= Qt::ItemIsEditable;
     }
     return result;
 }
 
-bool QtTaskExecutionProfileModel::setData(const QModelIndex& index, const QVariant& value,
-                                          int role) {
-    const auto* row = row_at(index.row());
-    if (row == nullptr || index.column() != ExecutionTime || role != Qt::EditRole ||
-        !editing_enabled_) {
+bool QtTaskExecutionProfileEditModel::setData(const QModelIndex& index, const QVariant& value,
+                                              int role) {
+    auto* row = const_cast<QtTaskExecutionProfileRow*>(row_at(index.row()));
+    if (row == nullptr) {
         return false;
     }
-    const auto text = value.toString().trimmed();
-    std::optional<Tick> execution;
-    if (!text.isEmpty()) {
-        bool okay = false;
-        const auto parsed = text.toLongLong(&okay);
-        if (!okay || parsed < 0) {
-            return false;
+    if (index.column() == Accessible && role == Qt::CheckStateRole) {
+        row->accessible = (value.toInt() == Qt::Checked);
+        if (!row->accessible) {
+            row->execution_time.reset();
         }
-        execution = parsed;
+        Q_EMIT dataChanged(index, index, {Qt::CheckStateRole, Qt::DisplayRole});
+        // Also update Status and ExecutionTime cells
+        const auto topLeft = createIndex(index.row(), ExecutionTime);
+        const auto bottomRight = createIndex(index.row(), Status);
+        Q_EMIT dataChanged(topLeft, bottomRight, {Qt::DisplayRole, Qt::EditRole});
+        return true;
     }
-    return edit_callback_(row->resource_id, execution);
+    if (index.column() == ExecutionTime && role == Qt::EditRole) {
+        const auto text = value.toString().trimmed();
+        if (text.isEmpty()) {
+            row->execution_time.reset();
+        } else {
+            bool okay = false;
+            const auto parsed = text.toLongLong(&okay);
+            if (!okay || parsed < 0) {
+                return false;
+            }
+            row->execution_time = parsed;
+            row->accessible = true;
+        }
+        Q_EMIT dataChanged(index, index, {Qt::DisplayRole, Qt::EditRole});
+        // Also update Status and Accessible cells
+        const auto topLeft = createIndex(index.row(), Accessible);
+        const auto bottomRight = createIndex(index.row(), Status);
+        Q_EMIT dataChanged(topLeft, bottomRight, {Qt::CheckStateRole, Qt::DisplayRole});
+        return true;
+    }
+    return false;
 }
 
-void QtTaskExecutionProfileModel::set_task(std::optional<TaskId> task_id,
-                                           const EditableSystemDraft* draft, bool editing_enabled) {
+void QtTaskExecutionProfileEditModel::load(TaskId task_id, const EditableSystemDraft& draft) {
     beginResetModel();
     rows_.clear();
-    editing_enabled_ = editing_enabled;
-    if (task_id.has_value() && draft != nullptr) {
-        for (const auto& resource : draft->resources()) {
-            rows_.push_back({resource.id, QString::fromStdString(resource.name),
-                             draft->execution_profile(*task_id, resource.id)});
-        }
+    for (const auto& resource : draft.resources()) {
+        const auto profile = draft.execution_profile(task_id, resource.id);
+        rows_.push_back({resource.id, QString::fromStdString(resource.name),
+                         profile.has_value(), profile});
     }
     endResetModel();
 }
 
-const QtTaskExecutionProfileRow* QtTaskExecutionProfileModel::row_at(int row) const {
+bool QtTaskExecutionProfileEditModel::complete() const {
+    return std::all_of(rows_.begin(), rows_.end(), [](const auto& row) {
+        return !row.accessible || row.execution_time.has_value();
+    });
+}
+
+const QtTaskExecutionProfileRow* QtTaskExecutionProfileEditModel::row_at(int row) const {
     return row >= 0 && row < static_cast<int>(rows_.size()) ? &rows_[static_cast<std::size_t>(row)]
                                                             : nullptr;
 }
@@ -227,38 +275,6 @@ QtSystemBuilderWidget::QtSystemBuilderWidget(QtWorkbenchBridge& bridge, QWidget*
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
     auto* scroll = new QScrollArea(this);
-    profile_model_ = new QtTaskExecutionProfileModel(
-        [this](ResourceId resource_id, std::optional<Tick> execution) {
-            const auto task_id = bridge_.application().structural_selection().task_id();
-            if (!task_id.has_value() || !editing_enabled()) {
-                return false;
-            }
-            if (!execution.has_value()) {
-                const auto assignment =
-                    std::find_if(bridge_.application().run_assignments().begin(),
-                                 bridge_.application().run_assignments().end(),
-                                 [task_id](const auto& row) { return row.task_id == *task_id; });
-                if (assignment != bridge_.application().run_assignments().end() &&
-                    assignment->resource_id == resource_id) {
-                    bridge_.application().set_status(
-                        "Cannot remove the WCET profile used by the current assignment.", true);
-                    Q_EMIT bridge_.statusChanged();
-                    return false;
-                }
-            }
-            return push_mutation(execution.has_value() ? QStringLiteral("Change task WCET")
-                                                       : QStringLiteral("Remove task WCET"),
-                                 [task_id, resource_id, execution](auto& draft, auto&, auto&) {
-                                     if (execution.has_value()) {
-                                         draft.set_execution_profile(*task_id, resource_id,
-                                                                     *execution);
-                                     } else {
-                                         static_cast<void>(draft.remove_execution_profile(
-                                             DraftExecutionProfileKey{*task_id, resource_id}));
-                                     }
-                                 });
-        },
-        this);
     scroll->setObjectName("systemBuilder.scrollArea");
     scroll->setWidgetResizable(true);
     scroll->setFrameShape(QFrame::NoFrame);
@@ -298,8 +314,8 @@ void QtSystemBuilderWidget::build_pages() {
     preemption_ = new QComboBox(system_page_);
     preemption_->setObjectName("systemBuilder.preemption");
     preemption_->addItems({"Preemptive", "Non-preemptive"});
-    form->addRow("Tick period (ns)", tick_period_);
-    form->addRow("Preemption mode", preemption_);
+    form->addRow("Tick period (ns):", tick_period_);
+    form->addRow("Preemption mode:", preemption_);
     system_diagnostic_ = diagnostic_label(system_page_, "systemBuilder.systemDiagnostic");
     form->addRow(system_diagnostic_);
 
@@ -308,8 +324,8 @@ void QtSystemBuilderWidget::build_pages() {
     resource_name_ = new QLineEdit(resource_page_);
     resource_id_->setObjectName("systemBuilder.resourceId");
     resource_name_->setObjectName("systemBuilder.resourceName");
-    form->addRow("Resource ID", resource_id_);
-    form->addRow("Name", resource_name_);
+    form->addRow("Resource ID:", resource_id_);
+    form->addRow("Name:", resource_name_);
     resource_diagnostic_ = diagnostic_label(resource_page_, "systemBuilder.resourceDiagnostic");
     form->addRow(resource_diagnostic_);
 
@@ -322,27 +338,45 @@ void QtSystemBuilderWidget::build_pages() {
     task_priority_ = new QLineEdit(task_page_);
     task_assignment_ = new QComboBox(task_page_);
     task_assignment_->setObjectName("systemBuilder.taskAssignment");
+    
+    task_id_->setFixedWidth(100);
+    task_name_->setFixedWidth(100);
+    task_period_->setFixedWidth(100);
+    task_deadline_->setFixedWidth(100);
+    task_offset_->setFixedWidth(100);
+    task_priority_->setFixedWidth(100);
+    task_assignment_->setFixedWidth(100);
+
     assignment_status_ = new QLabel(task_page_);
     assignment_status_->setObjectName("systemBuilder.assignmentStatus");
-    profile_table_ = new QTableView(task_page_);
-    profile_table_->setObjectName("systemBuilder.executionProfiles");
-    profile_model_->setParent(profile_table_);
-    profile_table_->setModel(profile_model_);
-    profile_table_->setMinimumHeight(150);
-    profile_table_->horizontalHeader()->setStretchLastSection(true);
+    profile_button_ = new QPushButton(QStringLiteral("Edit Execution Profile"), task_page_);
+    profile_button_->setObjectName("systemBuilder.editExecutionProfile");
+    profile_button_->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     protected_help_ = new QLabel(task_page_);
     protected_help_->setWordWrap(true);
     task_id_->setObjectName("systemBuilder.taskId");
     task_name_->setObjectName("systemBuilder.taskName");
-    form->addRow("Task ID", task_id_);
-    form->addRow("Name", task_name_);
-    form->addRow("Period", task_period_);
-    form->addRow("Deadline", task_deadline_);
-    form->addRow("Offset", task_offset_);
-    form->addRow("Priority", task_priority_);
-    form->addRow("Assigned resource", task_assignment_);
-    form->addRow("Assignment status", assignment_status_);
-    form->addRow("Execution profiles", profile_table_);
+    form->addRow("Task ID:", task_id_);
+    form->addRow("Name:", task_name_);
+    form->addRow("Period:", task_period_);
+    form->addRow("Deadline:", task_deadline_);
+    form->addRow("Offset:", task_offset_);
+    form->addRow("Priority:", task_priority_);
+    form->addRow("Assigned Res.:", task_assignment_);
+    form->addRow("Status:", assignment_status_);
+    form->addRow(profile_button_);
+
+    profile_button_->setStyleSheet(
+        R"(
+        QPushButton[profileComplete="false"] {
+            border: 2px solid #d94b4b;
+            border-radius: 4px;
+        }
+        QPushButton[profileComplete="true"] {
+            border: none;
+        }
+        )");
+
     form->addRow(protected_help_);
     task_diagnostic_ = diagnostic_label(task_page_, "systemBuilder.taskDiagnostic");
     form->addRow(task_diagnostic_);
@@ -354,12 +388,12 @@ void QtSystemBuilderWidget::build_pages() {
     connection_latency_ = new QLabel(connection_page_);
     route_send_offset_ = new QLineEdit(connection_page_);
     route_delay_ = new QLineEdit(connection_page_);
-    form->addRow("Source", connection_source_);
-    form->addRow("Destination", connection_destination_);
-    form->addRow("Kind", connection_kind_);
-    form->addRow("Displayed latency", connection_latency_);
-    form->addRow("Send offset", route_send_offset_);
-    form->addRow("Delay", route_delay_);
+    form->addRow("Source:", connection_source_);
+    form->addRow("Destination:", connection_destination_);
+    form->addRow("Kind:", connection_kind_);
+    form->addRow("Displayed latency:", connection_latency_);
+    form->addRow("Send offset:", route_send_offset_);
+    form->addRow("Delay:", route_delay_);
     auto* help = new QLabel(
         "Logical dependencies create no network events. Bosch communication displays 80 ticks; "
         "the adapter-owned one-tick handoff is hidden.",
@@ -553,6 +587,9 @@ void QtSystemBuilderWidget::connect_editors() {
     };
     endpoint_edit(connection_source_, true);
     endpoint_edit(connection_destination_, false);
+
+    connect(profile_button_, &QPushButton::clicked, this,
+            &QtSystemBuilderWidget::open_execution_profile_dialog);
 }
 
 bool QtSystemBuilderWidget::push_mutation(const QString& text, DraftMutator mutator) {
@@ -587,6 +624,13 @@ bool QtSystemBuilderWidget::create_component(StructuralSection section) {
     DraftState before{*application.editable_system(), application.run_assignments(),
                       application.structural_selection()};
     auto after = before;
+
+    // Record the previous last resource before creating the new one
+    std::optional<ResourceId> previous_last_resource;
+    if (section == StructuralSection::Resources && !after.draft.resources().empty()) {
+        previous_last_resource = after.draft.resources().back().id;
+    }
+
     SystemExplorerInteraction interaction;
     auto result = interaction.create(section, after.draft, after.selection);
     if (!result.changed) {
@@ -594,6 +638,20 @@ bool QtSystemBuilderWidget::create_component(StructuralSection section) {
         Q_EMIT bridge_.statusChanged();
         return false;
     }
+
+    // Copy execution profiles from the previous last resource to the newly added resource
+    if (section == StructuralSection::Resources && previous_last_resource.has_value() &&
+        !after.draft.resources().empty()) {
+        const auto new_resource = after.draft.resources().back().id;
+        for (const auto& task : after.draft.tasks()) {
+            const auto inherited_wcet =
+                after.draft.execution_profile(task.id, *previous_last_resource);
+            if (inherited_wcet.has_value()) {
+                after.draft.set_execution_profile(task.id, new_resource, *inherited_wcet);
+            }
+        }
+    }
+
     for (const auto& task : after.draft.tasks()) {
         const auto exists = std::any_of(after.assignments.begin(), after.assignments.end(),
                                         [&](const auto& row) { return row.task_id == task.id; });
@@ -670,6 +728,96 @@ bool QtSystemBuilderWidget::duplicate_selected() {
     undo_stack_->push(new RestoreDraftCommand{bridge_, std::move(before), std::move(after),
                                               QStringLiteral("Duplicate component")});
     return true;
+}
+
+void QtSystemBuilderWidget::open_execution_profile_dialog() {
+    const auto task_id = bridge_.application().structural_selection().task_id();
+    if (!task_id.has_value() || !editing_enabled()) {
+        return;
+    }
+
+    const auto& draft = *bridge_.application().editable_system();
+
+    QDialog dialog(this);
+    dialog.setWindowTitle(QStringLiteral("Execution Profiles"));
+    dialog.setModal(true);
+    dialog.resize(680, 360);
+
+    auto* layout = new QVBoxLayout(&dialog);
+
+    auto* table = new QTableView(&dialog);
+
+    auto* dialog_model = new QtTaskExecutionProfileEditModel(&dialog);
+    dialog_model->load(*task_id, draft);
+
+    table->setModel(dialog_model);
+    table->horizontalHeader()->setStretchLastSection(true);
+    table->verticalHeader()->setVisible(false);
+    table->setSelectionBehavior(QAbstractItemView::SelectRows);
+    table->setSelectionMode(QAbstractItemView::SingleSelection);
+
+    layout->addWidget(table);
+
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Cancel, &dialog);
+    auto* done_button = buttons->addButton(QStringLiteral("Done"), QDialogButtonBox::AcceptRole);
+    layout->addWidget(buttons);
+
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+
+    connect(done_button, &QPushButton::clicked, &dialog, [this, task_id, dialog_model, &dialog]() {
+        if (!dialog_model->complete()) {
+            QMessageBox::warning(
+                &dialog, QStringLiteral("Incomplete Execution Profile"),
+                QStringLiteral("Every accessible resource must have a valid WCET."));
+            return;
+        }
+
+        const auto& rows = dialog_model->rows();
+
+        const bool changed = push_mutation(
+            QStringLiteral("Edit task execution profiles"),
+            [task_id, &rows](auto& system_draft, auto&, auto&) {
+                for (const auto& row : rows) {
+                    if (row.accessible) {
+                        system_draft.set_execution_profile(*task_id, row.resource_id,
+                                                           *row.execution_time);
+                    } else {
+                        static_cast<void>(system_draft.remove_execution_profile(
+                            DraftExecutionProfileKey{*task_id, row.resource_id}));
+                    }
+                }
+            });
+
+        if (changed) {
+            dialog.accept();
+        }
+    });
+
+    dialog.exec();
+
+    refresh_task_page(*task_id);
+}
+
+bool QtSystemBuilderWidget::task_profiles_complete(TaskId task_id) const {
+    const auto& draft = *bridge_.application().editable_system();
+
+    for (const auto& resource : draft.resources()) {
+        const auto profile = draft.execution_profile(task_id, resource.id);
+        if (!profile.has_value() || *profile <= 0) {
+            return false;
+        }
+    }
+    return true;
+}
+
+void QtSystemBuilderWidget::refresh_profile_button_state(TaskId task_id) {
+    const bool complete = task_profiles_complete(task_id);
+    profile_button_->setProperty("profileComplete", complete);
+    profile_button_->setText(complete ? QStringLiteral("Edit Execution Profile")
+                                      : QStringLiteral("Edit Execution Profile — Incomplete"));
+    profile_button_->style()->unpolish(profile_button_);
+    profile_button_->style()->polish(profile_button_);
+    profile_button_->update();
 }
 
 bool QtSystemBuilderWidget::editing_enabled() const {
@@ -799,7 +947,7 @@ void QtSystemBuilderWidget::refresh_task_page(TaskId id,
     assignment_status_->setText(!assigned.has_value() ? QStringLiteral("Unassigned")
                                 : wcet.has_value()    ? QStringLiteral("Valid")
                                                       : QStringLiteral("Missing WCET profile"));
-    profile_model_->set_task(id, &draft, editing_enabled());
+    refresh_profile_button_state(id);
 }
 
 void QtSystemBuilderWidget::refresh_connection_page() {

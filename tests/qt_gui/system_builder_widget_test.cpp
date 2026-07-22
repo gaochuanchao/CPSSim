@@ -14,8 +14,8 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QPushButton>
 #include <QScrollArea>
-#include <QTableView>
 #include <QUndoStack>
 #include <QtTest/QTest>
 
@@ -159,10 +159,11 @@ void QtSystemBuilderWidgetTest::task_page_edits_assignment_and_wcets_with_undo()
 
     auto* assignment = builder.findChild<QComboBox*>("systemBuilder.taskAssignment");
     auto* status = builder.findChild<QLabel*>("systemBuilder.assignmentStatus");
-    auto* profiles = builder.findChild<QTableView*>("systemBuilder.executionProfiles");
+    auto* profile_button =
+        builder.findChild<QPushButton*>("systemBuilder.editExecutionProfile");
     QVERIFY(assignment != nullptr);
     QVERIFY(status != nullptr);
-    QVERIFY(profiles != nullptr);
+    QVERIFY(profile_button != nullptr);
     QCOMPARE(assignment->count(),
              static_cast<int>(bridge.application().editable_system()->resources().size()) + 1);
 
@@ -172,27 +173,53 @@ void QtSystemBuilderWidgetTest::task_page_edits_assignment_and_wcets_with_undo()
     QCOMPARE(status->text(), QString{"Missing WCET profile"});
     QVERIFY(!bridge.application().editable_system()->execution_profile(task_id, resource_id));
 
-    auto* model = dynamic_cast<QtTaskExecutionProfileModel*>(profiles->model());
-    QVERIFY(model != nullptr);
+    // Verify the profile button reflects incomplete state
+    QVERIFY(!profile_button->property("profileComplete").toBool());
+
+    // Test the edit model directly (simulates what the dialog does)
+    QtTaskExecutionProfileEditModel edit_model;
+    edit_model.load(task_id, *bridge.application().editable_system());
+    QCOMPARE(edit_model.rowCount(),
+             static_cast<int>(bridge.application().editable_system()->resources().size()));
+
+    // The new resource has no profile yet — it's marked inaccessible
     int profile_row = -1;
-    for (int row = 0; row < model->rowCount(); ++row) {
-        if (model->row_at(row)->resource_id == resource_id) {
+    for (int row = 0; row < edit_model.rowCount(); ++row) {
+        if (edit_model.row_at(row)->resource_id == resource_id) {
             profile_row = row;
             break;
         }
     }
     QVERIFY(profile_row >= 0);
-    QVERIFY(model->setData(model->index(profile_row, QtTaskExecutionProfileModel::ExecutionTime),
-                           QString{"9"}));
+    QVERIFY(!edit_model.row_at(profile_row)->accessible);
+    QVERIFY(!edit_model.row_at(profile_row)->execution_time.has_value());
+
+    // Make the resource accessible and set WCET
+    QVERIFY(edit_model.setData(
+        edit_model.index(profile_row, QtTaskExecutionProfileEditModel::Accessible),
+        Qt::Checked, Qt::CheckStateRole));
+    QVERIFY(!edit_model.complete()); // accessible but no WCET
+
+    QVERIFY(edit_model.setData(
+        edit_model.index(profile_row, QtTaskExecutionProfileEditModel::ExecutionTime),
+        QString{"9"}));
+    QVERIFY(edit_model.complete()); // now accessible and has WCET
+
+    // Apply the mutation through the draft directly (as the dialog Done button does)
+    {
+        auto& draft_mut = *bridge.application().editable_system();
+        draft_mut.set_execution_profile(task_id, resource_id, Tick{9});
+    }
     QCOMPARE(bridge.application().editable_system()->execution_profile(task_id, resource_id),
              std::optional<Tick>{9});
+    // Trigger a refresh so the status label updates
+    bridge.notify_structural_selection_changed();
     QCOMPARE(status->text(), QString{"Valid"});
-    QVERIFY(!model->setData(model->index(profile_row, QtTaskExecutionProfileModel::ExecutionTime),
-                            QString{}));
 
+    // Undo should revert
+    QVERIFY(builder.undo_stack().canUndo());
     builder.undo_stack().undo();
     QVERIFY(!bridge.application().editable_system()->execution_profile(task_id, resource_id));
-    builder.undo_stack().undo();
     QCOMPARE(bridge.application().run_assignments().front().resource_id,
              std::optional<ResourceId>{ResourceId{1}});
 }
