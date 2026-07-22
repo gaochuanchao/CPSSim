@@ -47,30 +47,43 @@ class QtArchitectureGraphicsView final : public QtNodes::GraphicsView {
 
   protected:
     void drawBackground(QPainter* painter, const QRectF& rect) override {
-        QtNodes::GraphicsView::drawBackground(painter, rect);
         painter->save();
+
+        painter->fillRect(rect, palette().color(QPalette::Base));
+
         painter->setRenderHint(QPainter::Antialiasing, false);
-        auto minor = palette().color(QPalette::Mid);
-        auto major = palette().color(QPalette::Highlight);
-        minor.setAlpha(55);
-        major.setAlpha(80);
+
+        auto minor_color = palette().color(QPalette::Mid);
+        auto major_color = minor_color;
+
+        minor_color.setAlpha(35);
+        major_color.setAlpha(75);
+
+        QPen minor_pen{minor_color};
+        minor_pen.setWidthF(0.0);
+
+        QPen major_pen{major_color};
+        major_pen.setWidthF(0.0);
+
         const auto first_x =
             std::floor(rect.left() / architecture_grid_step) * architecture_grid_step;
         const auto first_y =
             std::floor(rect.top() / architecture_grid_step) * architecture_grid_step;
-        const auto major_step = architecture_grid_step * architecture_major_grid_every;
+
         for (qreal x = first_x; x <= rect.right(); x += architecture_grid_step) {
-            const auto major_line =
-                std::abs(std::remainder(x, major_step)) < std::numeric_limits<qreal>::epsilon();
-            painter->setPen(major_line ? major : minor);
+            const auto index =
+                static_cast<qint64>(std::llround(x / architecture_grid_step));
+            painter->setPen(index % architecture_major_grid_every == 0 ? major_pen : minor_pen);
             painter->drawLine(QLineF{x, rect.top(), x, rect.bottom()});
         }
+
         for (qreal y = first_y; y <= rect.bottom(); y += architecture_grid_step) {
-            const auto major_line =
-                std::abs(std::remainder(y, major_step)) < std::numeric_limits<qreal>::epsilon();
-            painter->setPen(major_line ? major : minor);
+            const auto index =
+                static_cast<qint64>(std::llround(y / architecture_grid_step));
+            painter->setPen(index % architecture_major_grid_every == 0 ? major_pen : minor_pen);
             painter->drawLine(QLineF{rect.left(), y, rect.right(), y});
         }
+
         painter->restore();
     }
 

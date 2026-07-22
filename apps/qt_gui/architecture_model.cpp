@@ -4,6 +4,7 @@
 #include "apps/qt_gui/workbench_style.hpp"
 
 #include <QtNodes/NodeDelegateModel>
+#include <QtNodes/StyleCollection>
 
 #include <QVariant>
 #include <QWidget>
@@ -293,6 +294,8 @@ QVariant QtArchitectureGraphModel::nodeData(QtNodes::NodeId node_id, QtNodes::No
         return false;
     case QtNodes::NodeRole::Label:
         return QString{};
+    case QtNodes::NodeRole::Style:
+        return QtNodes::StyleCollection::nodeStyle().toJson().toVariantMap();
     default:
         return {};
     }

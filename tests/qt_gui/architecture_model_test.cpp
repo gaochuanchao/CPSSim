@@ -15,6 +15,7 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QJsonObject>
 #include <QUndoStack>
 #include <QtTest/QTest>
 
@@ -158,6 +159,12 @@ class QtArchitectureModelTest final : public QObject {
     void undoRemovesVisibleSceneNode();
     void redoRestoresVisibleSceneNode();
     void boschProtectedStillRendersReadOnly();
+
+    // Style-role and scene-visibility regression tests.
+    void nodeRoleStyle_returns_valid_nonzero_opacity();
+    void everyTaskNodeGraphicsObject_is_visible_with_positive_opacity();
+    void addTaskCreatesVisibleSceneNode_with_positive_effective_opacity();
+    void undoRemovesGraphicsObject_redoRestoresWithOpacity();
 };
 
 void QtArchitectureModelTest::strong_ids_are_mapped_without_truncation() {
@@ -934,6 +941,126 @@ void QtArchitectureModelTest::boschProtectedStillRendersReadOnly() {
     for (const auto node_id : view.graph_model().allNodeIds()) {
         QVERIFY(view.graphics_scene().nodeGraphicsObject(node_id) != nullptr);
     }
+}
+
+void QtArchitectureModelTest::nodeRoleStyle_returns_valid_nonzero_opacity() {
+    TemporaryDirectory temporary;
+    auto application = std::make_unique<WorkbenchApplication>();
+    application->create_project(make_generic_project_template(temporary.path(), "project"));
+    QtWorkbenchBridge bridge{std::move(application)};
+    QtStructuralEditController edits{bridge};
+    QtArchitectureView view{bridge, edits};
+
+    QApplication::processEvents();
+
+    const auto node_ids = view.graph_model().allNodeIds();
+    QVERIFY(!node_ids.empty());
+
+    for (const auto node_id : node_ids) {
+        const auto style_value =
+            view.graph_model().nodeData(node_id, QtNodes::NodeRole::Style);
+
+        QVERIFY(style_value.isValid());
+        QVERIFY(!style_value.isNull());
+
+        const auto root = QJsonObject::fromVariantMap(style_value.toMap());
+
+        QVERIFY(root.contains("NodeStyle"));
+
+        const auto style = root.value("NodeStyle").toObject();
+
+        QVERIFY(style.contains("Opacity"));
+        QVERIFY(style.value("Opacity").toDouble() > 0.0);
+    }
+}
+
+void QtArchitectureModelTest::everyTaskNodeGraphicsObject_is_visible_with_positive_opacity() {
+    TemporaryDirectory temporary;
+    auto application = std::make_unique<WorkbenchApplication>();
+    application->create_project(make_generic_project_template(temporary.path(), "project"));
+    QtWorkbenchBridge bridge{std::move(application)};
+    QtStructuralEditController edits{bridge};
+    QtArchitectureView view{bridge, edits};
+
+    QApplication::processEvents();
+
+    const auto node_ids = view.graph_model().allNodeIds();
+    QVERIFY(!node_ids.empty());
+
+    for (const auto node_id : node_ids) {
+        auto* item = view.graphics_scene().nodeGraphicsObject(node_id);
+        QVERIFY(item != nullptr);
+        QVERIFY(item->isVisible());
+        QVERIFY(item->opacity() > 0.0);
+        QVERIFY(item->effectiveOpacity() > 0.0);
+        QVERIFY(!item->boundingRect().isEmpty());
+    }
+
+    // The scene itemsBoundingRect must be valid (not null/nan).
+    QVERIFY(view.graphics_scene().itemsBoundingRect().isValid());
+}
+
+void QtArchitectureModelTest::addTaskCreatesVisibleSceneNode_with_positive_effective_opacity() {
+    TemporaryDirectory temporary;
+    auto application = std::make_unique<WorkbenchApplication>();
+    application->create_project(make_generic_project_template(temporary.path(), "project"));
+    QtWorkbenchBridge bridge{std::move(application)};
+    QtStructuralEditController edits{bridge};
+    QtArchitectureView view{bridge, edits};
+
+    auto* action = view.findChild<QAction*>("action.architecture.addTask");
+    QVERIFY(action != nullptr);
+
+    action->trigger();
+    QApplication::processEvents();
+
+    const auto new_task = bridge.application().structural_selection().task_id();
+    QVERIFY(new_task.has_value());
+    const auto new_node_id = view.graph_model().node_id_for(task_graph_node_id(*new_task));
+    QVERIFY(new_node_id.has_value());
+
+    auto* item = view.graphics_scene().nodeGraphicsObject(*new_node_id);
+    QVERIFY(item != nullptr);
+    QVERIFY(item->opacity() > 0.0);
+    QVERIFY(item->effectiveOpacity() > 0.0);
+    QVERIFY(!item->boundingRect().isEmpty());
+}
+
+void QtArchitectureModelTest::undoRemovesGraphicsObject_redoRestoresWithOpacity() {
+    TemporaryDirectory temporary;
+    auto application = std::make_unique<WorkbenchApplication>();
+    application->create_project(make_generic_project_template(temporary.path(), "project"));
+    QtWorkbenchBridge bridge{std::move(application)};
+    QtStructuralEditController edits{bridge};
+    QtArchitectureView view{bridge, edits};
+
+    auto* action = view.findChild<QAction*>("action.architecture.addTask");
+    QVERIFY(action != nullptr);
+
+    action->trigger();
+    QApplication::processEvents();
+
+    const auto new_task = bridge.application().structural_selection().task_id();
+    QVERIFY(new_task.has_value());
+    const auto new_node_id = view.graph_model().node_id_for(task_graph_node_id(*new_task));
+    QVERIFY(new_node_id.has_value());
+
+    // Undo removes the graphics object.
+    QVERIFY(edits.undo_stack().canUndo());
+    edits.undo_stack().undo();
+    view.refresh();
+    QApplication::processEvents();
+    QVERIFY(view.graphics_scene().nodeGraphicsObject(*new_node_id) == nullptr);
+
+    // Redo restores the graphics object with positive effective opacity.
+    QVERIFY(edits.undo_stack().canRedo());
+    edits.undo_stack().redo();
+    view.refresh();
+    QApplication::processEvents();
+
+    auto* restored = view.graphics_scene().nodeGraphicsObject(*new_node_id);
+    QVERIFY(restored != nullptr);
+    QVERIFY(restored->effectiveOpacity() > 0.0);
 }
 
 } // namespace cpssim::qt
