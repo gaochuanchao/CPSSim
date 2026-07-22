@@ -219,8 +219,10 @@ void QtMainWindow::build_central_pages() {
 
     workbench_page_ = new QWidget(pages_);
     workbench_page_->setObjectName("workbenchPage");
+    workbench_page_->setAttribute(Qt::WA_StyledBackground, true);
     auto* workbench_layout = new QVBoxLayout(workbench_page_);
-    workbench_layout->setContentsMargins(0, 0, 0, 0);
+    workbench_layout->setContentsMargins(1, 1, 1, 1);
+    workbench_layout->setSpacing(0);
     central_tabs_ = new QTabWidget(workbench_page_);
     central_tabs_->setObjectName("centralTabs");
     central_tabs_->setDocumentMode(true);
@@ -977,9 +979,9 @@ void QtMainWindow::apply_theme() {
 
             /*
              * The middle workbench is not a QDockWidget.
-             * Apply the same boundary to its tab pane.
+             * Apply the same boundary to its outer container.
              */
-            QTabWidget#centralTabs::pane {
+            QWidget#workbenchPage {
                 border: 1px solid %1;
             }
             )")

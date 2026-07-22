@@ -77,7 +77,8 @@ QtExperimentExplorerWidget::QtExperimentExplorerWidget(QtWorkbenchBridge& bridge
     tree_->setContextMenuPolicy(Qt::CustomContextMenu);
     tree_->header()->setStretchLastSection(true);
     auto* layout = new QVBoxLayout(this);
-    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setContentsMargins(1, 1, 1, 1);
+    layout->setSpacing(0);
     layout->addWidget(tree_);
     connect(tree_->selectionModel(), &QItemSelectionModel::currentChanged, this,
             [this](const QModelIndex&, const QModelIndex&) { apply_current_selection(); });

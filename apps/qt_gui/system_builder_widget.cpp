@@ -273,7 +273,8 @@ QtSystemBuilderWidget::QtSystemBuilderWidget(QtWorkbenchBridge& bridge, QWidget*
     : QWidget(parent), bridge_{bridge}, undo_stack_{new QUndoStack(this)} {
     setObjectName("view.systemBuilder");
     auto* layout = new QVBoxLayout(this);
-    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setContentsMargins(1, 1, 1, 1);
+    layout->setSpacing(0);
     auto* scroll = new QScrollArea(this);
     scroll->setObjectName("systemBuilder.scrollArea");
     scroll->setWidgetResizable(true);
