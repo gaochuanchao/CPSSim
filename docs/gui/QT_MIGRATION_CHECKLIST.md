@@ -23,7 +23,7 @@ change simulation semantics or project formats.
       and versioned geometry/state restoration.
 - [x] Qt bridge provides bounded Live/Fast progression, no idle timer, queued
       finalizer publication, and clean cancellation/shutdown.
-- [ ] Flat QtNodes prototype renders tasks and semantic connections, accepts
+- [x] Flat QtNodes prototype renders tasks and semantic connections, accepts
       cycles, synchronizes structural selection, adds at center with stable
       occupied offset, and preserves strong identities across rebuilds.
 - [ ] Assignment gate shows a stable accent and resource-name badge (including

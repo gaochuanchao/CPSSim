@@ -32,6 +32,16 @@ continuations. Paused, Finished, and NotConfigured states retain no simulation
 timer. Completed-result worker notification is queued onto the GUI thread, and
 bridge shutdown clears the callback before cancelling and joining finalization.
 
+The native Architecture prototype uses `QtNodes::AbstractGraphModel`,
+`BasicGraphicsScene`, and `GraphicsView`. Its model is a read-only semantic
+adapter over `GuiArchitectureGraph`: it exposes task nodes plus logical and
+communication connections, permits cycles, and filters resource nodes and
+assignment edges. `QtNodeIdMap` allocates retained 32-bit adapter IDs and keeps
+the complete strong CPSSim identity in a bidirectional map; it never casts or
+truncates entity values. Node movement writes task positions to the shared
+versioned workspace, while Add Task mutates `EditableSystemDraft` first and
+then rebuilds the scene.
+
 The arrows are one-way dependencies. Core code never includes or links GUI
 headers. GUI support may use public core interfaces but does not depend on Dear
 ImGui, GLFW, or OpenGL.

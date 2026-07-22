@@ -1,6 +1,7 @@
 /*** Implement the native Qt Widgets workbench shell. ***/
 #include "apps/qt_gui/main_window.hpp"
 
+#include "apps/qt_gui/architecture_view.hpp"
 #include "apps/qt_gui/workbench_bridge.hpp"
 
 #include <QAction>
@@ -251,6 +252,12 @@ void QtMainWindow::bind_workbench(QtWorkbenchBridge* bridge) {
         return;
     }
     bridge_ = bridge;
+    auto* architecture = new QtArchitectureView{*bridge_, central_tabs_};
+    auto* placeholder_page = central_tabs_->widget(0);
+    central_tabs_->removeTab(0);
+    central_tabs_->insertTab(0, architecture, "Architecture");
+    central_tabs_->setCurrentIndex(0);
+    placeholder_page->deleteLater();
     connect(run_action_, &QAction::triggered, bridge_, &QtWorkbenchBridge::run);
     connect(pause_action_, &QAction::triggered, bridge_, &QtWorkbenchBridge::pause);
     connect(reset_action_, &QAction::triggered, bridge_, &QtWorkbenchBridge::reset);

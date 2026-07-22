@@ -19,6 +19,9 @@
 
 namespace cpssim {
 
+class EditableSystemDraft;
+struct DraftTaskAssignment;
+
 /*** Copies one immutable resource identity and display name. ***/
 struct GuiResourcePresentation {
     ResourceId id;
@@ -97,6 +100,11 @@ ExperimentPresentationSnapshot build_experiment_presentation(const ExperimentCon
 ExperimentPresentationSnapshot
 build_experiment_presentation(const ExperimentConfig& config,
                               const std::vector<TaskAssignment>& assignments);
+
+/*** Projects draft fields for editing previews without accepting them as valid config. ***/
+ExperimentPresentationSnapshot
+build_draft_experiment_presentation(const EditableSystemDraft& draft,
+                                    const std::vector<DraftTaskAssignment>& assignments);
 
 // Finds one immutable presentation record by stable identifier.
 const GuiResourcePresentation* find_resource(const ExperimentPresentationSnapshot& experiment,

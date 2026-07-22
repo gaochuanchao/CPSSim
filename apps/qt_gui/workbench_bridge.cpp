@@ -161,4 +161,8 @@ void QtWorkbenchBridge::close_project() {
     Q_EMIT completedResultChanged();
 }
 
+void QtWorkbenchBridge::notify_structural_selection_changed() {
+    Q_EMIT structuralSelectionChanged();
+}
+
 } // namespace cpssim::qt

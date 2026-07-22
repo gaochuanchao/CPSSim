@@ -8,6 +8,9 @@
 
 #include "cpssim/gui/presentation_model.hpp"
 
+#include "cpssim/gui/draft_run_plan.hpp"
+#include "cpssim/gui/editable_system_draft.hpp"
+
 #include <algorithm>
 #include <stdexcept>
 
@@ -130,6 +133,43 @@ build_experiment_presentation(const ExperimentConfig& config,
                               const std::vector<TaskAssignment>& assignments) {
     auto result = build_experiment_presentation(config);
     result.assignments = build_assignments(config, assignments);
+    return result;
+}
+
+ExperimentPresentationSnapshot
+build_draft_experiment_presentation(const EditableSystemDraft& draft,
+                                    const std::vector<DraftTaskAssignment>& assignments) {
+    ExperimentPresentationSnapshot result;
+    result.tick_period = std::chrono::nanoseconds{draft.tick_period_ns()};
+    result.preemption_mode = draft.preemption_mode();
+    for (const auto& resource : draft.resources()) {
+        result.resources.push_back({resource.id, resource.name});
+    }
+    for (const auto& task : draft.tasks()) {
+        result.tasks.push_back(
+            {task.id, task.name, task.period, task.deadline, task.offset, task.priority});
+    }
+    for (const auto& profile : draft.profiles()) {
+        result.profiles.push_back({profile.task_id, profile.resource_id, profile.execution_time});
+    }
+    for (const auto& route : draft.routes()) {
+        result.routes.push_back(
+            {{route.source_task_id, route.destination_task_id}, route.send_offset, route.delay});
+    }
+    for (const auto& assignment : assignments) {
+        if (!assignment.resource_id.has_value()) {
+            continue;
+        }
+        const auto task =
+            std::find_if(result.tasks.begin(), result.tasks.end(),
+                         [&](const auto& row) { return row.id == assignment.task_id; });
+        const auto resource =
+            std::find_if(result.resources.begin(), result.resources.end(),
+                         [&](const auto& row) { return row.id == *assignment.resource_id; });
+        if (task != result.tasks.end() && resource != result.resources.end()) {
+            result.assignments.push_back({assignment.task_id, *assignment.resource_id});
+        }
+    }
     return result;
 }
 

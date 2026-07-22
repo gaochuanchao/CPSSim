@@ -285,8 +285,16 @@ The native shell and lifecycle bridge are present but Qt is not yet the
 default. `QtWorkbenchBridge` translates shared QActions into queued
 `GuiCommand` values, bounds Live callbacks to roughly 16 ms, cooperatively
 continues Fast batches with zero-delay events, publishes worker results through
-the Qt GUI thread, and owns no simulation state itself. The flat QtNodes
-prototype is the next migration gate.
+the Qt GUI thread, and owns no simulation state itself.
+
+The flat QtNodes prototype gate now passes automated coverage: Bosch loads
+paused with six task nodes and five semantic connections; generic cycles are
+accepted; selection, add-at-center collision offsets, strong-ID rebuilds, and
+workspace position reopen are verified. Resource presentation and assignment
+editing remain intentionally deferred to the next gate. Native mixed-monitor
+DPI movement still requires a desktop manual check; Qt-owned scaling is used
+and offscreen scale-factor launches do not add simulator behavior.
+The resource-badge and assignment-table gate is next.
 
 Goal 6 validation completed on 2026-07-21:
 

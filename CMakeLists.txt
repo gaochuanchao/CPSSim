@@ -436,6 +436,8 @@ if(CPSSIM_BUILD_QT_GUI)
 
     add_library(
         cpssim_qt_gui_support STATIC
+        apps/qt_gui/architecture_model.cpp
+        apps/qt_gui/architecture_view.cpp
         apps/qt_gui/main_window.cpp
         apps/qt_gui/workbench_bridge.cpp
     )
@@ -444,6 +446,10 @@ if(CPSSIM_BUILD_QT_GUI)
     target_include_directories(
         cpssim_qt_gui_support
         PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>"
+    )
+    target_include_directories(
+        cpssim_qt_gui_support
+        SYSTEM PUBLIC "$<BUILD_INTERFACE:${qtnodes_SOURCE_DIR}/include>"
     )
     target_link_libraries(
         cpssim_qt_gui_support
@@ -575,6 +581,30 @@ if(BUILD_TESTING)
             cpssim_qt_bridge_tests
             PROPERTIES
                 ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                LABELS gui
+        )
+
+        add_executable(
+            cpssim_qt_architecture_tests
+            tests/qt_gui/architecture_model_test.cpp
+        )
+        target_link_libraries(
+            cpssim_qt_architecture_tests
+            PRIVATE cpssim_qt_gui_support Qt6::Test
+        )
+        add_dependencies(cpssim_qt_architecture_tests cpssim_bosch_fmu_linux)
+        set_target_properties(
+            cpssim_qt_architecture_tests
+            PROPERTIES AUTOMOC ON CXX_CLANG_TIDY ""
+        )
+        cpssim_set_project_warnings(cpssim_qt_architecture_tests)
+        cpssim_enable_sanitizers(cpssim_qt_architecture_tests)
+        add_test(NAME cpssim_qt_architecture_tests COMMAND cpssim_qt_architecture_tests)
+        set_tests_properties(
+            cpssim_qt_architecture_tests
+            PROPERTIES
+                ENVIRONMENT
+                    "QT_QPA_PLATFORM=offscreen;CPSSIM_G1_BOSCH_FMU_LIBRARY=$<TARGET_FILE:cpssim_bosch_fmu_linux>"
                 LABELS gui
         )
     endif()

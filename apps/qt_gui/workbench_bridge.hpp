@@ -42,6 +42,7 @@ class QtWorkbenchBridge final : public QObject {
     void open_project(const std::filesystem::path& project_file);
     void close_project();
     void shutdown();
+    void notify_structural_selection_changed();
 
   public Q_SLOTS:
     void run();
@@ -57,6 +58,7 @@ class QtWorkbenchBridge final : public QObject {
     void presentationChanged(quint64 generation);
     void completedResultChanged();
     void statusChanged();
+    void structuralSelectionChanged();
 
   private:
     void enqueue(GuiCommand command);

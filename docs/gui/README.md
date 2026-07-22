@@ -314,6 +314,12 @@ emit commands only; they never call the engine. Live progression is bounded by
 a 16 ms precise timer, Fast progression uses cooperative queued continuations,
 and there is no timer while the simulation is paused, finished, or absent.
 
+Its Architecture tab is a flat QtNodes adapter. Tasks are independent nodes;
+only logical dependencies and communication channels are edges. Resources and
+assignments are intentionally absent from graph structure. Strong IDs are
+mapped explicitly, cycles are allowed, and drag/add positions are stored in
+`workspace.json` rather than QtNodes scene serialization.
+
 ## 5. Where to make a change
 
 Use the smallest layer that owns the behavior:
