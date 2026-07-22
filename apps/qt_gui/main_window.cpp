@@ -61,6 +61,30 @@ QWidget* placeholder(const QString& text, QWidget* parent = nullptr) {
     return widget;
 }
 
+void install_dock_content(
+    QDockWidget* dock,
+    QWidget* content) {
+
+    if (dock == nullptr || content == nullptr) {
+        return;
+    }
+
+    /*
+     * Mark the actual panel widget rather than the QDockWidget
+     * wrapper. The application stylesheet uses this property
+     * to draw the visible one-pixel panel frame.
+     */
+    content->setProperty(
+        "cpssimDockContent",
+        true);
+
+    content->setAttribute(
+        Qt::WA_StyledBackground,
+        true);
+
+    dock->setWidget(content);
+}
+
 } // namespace
 
 QtMainWindow::QtMainWindow(bool restore_user_layout, QWidget* parent)
@@ -210,18 +234,34 @@ void QtMainWindow::build_central_pages() {
     pages_->addWidget(workbench_page_);
 }
 
-QDockWidget* QtMainWindow::make_dock(const QString& title, const QString& object_name,
-                                     Qt::DockWidgetArea area) {
+QDockWidget* QtMainWindow::make_dock(
+    const QString& title,
+    const QString& object_name,
+    Qt::DockWidgetArea area) {
+
     auto* dock = new QDockWidget(title, this);
     dock->setObjectName(object_name);
-    dock->setWidget(placeholder(title + "\nQt migration panel", dock));
-    dock->setFeatures(QDockWidget::DockWidgetClosable | QDockWidget::DockWidgetMovable |
-                      QDockWidget::DockWidgetFloatable);
+
+    install_dock_content(
+        dock,
+        placeholder(
+            title + "\nQt migration panel",
+            dock));
+
+    dock->setFeatures(
+        QDockWidget::DockWidgetClosable |
+        QDockWidget::DockWidgetMovable |
+        QDockWidget::DockWidgetFloatable);
+
     dock->setMinimumSize(120, 80);
     dock->widget()->setMinimumSize(0, 0);
-    dock->widget()->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    dock->widget()->setSizePolicy(
+        QSizePolicy::Expanding,
+        QSizePolicy::Expanding);
+
     addDockWidget(area, dock);
     docks_.push_back(dock);
+
     return dock;
 }
 
@@ -445,24 +485,39 @@ void QtMainWindow::bind_workbench(QtWorkbenchBridge* bridge) {
     replace_tab(3, integrated_plot, "Integrated Plot");
     auto* assignments_dock = findChild<QDockWidget*>("dock.resourceAssignments");
     auto* assignments_placeholder = assignments_dock->widget();
-    assignments_dock->setWidget(new QtResourceAssignmentsWidget{*bridge_, assignments_dock});
+    // assignments_dock->setWidget(new QtResourceAssignmentsWidget{*bridge_, assignments_dock});
+    install_dock_content(assignments_dock, new QtResourceAssignmentsWidget{*bridge_, assignments_dock});
     assignments_placeholder->deleteLater();
     auto* builder_dock = findChild<QDockWidget*>("dock.systemBuilder");
     auto* builder_placeholder = builder_dock->widget();
     system_builder_ = new QtSystemBuilderWidget{*bridge_, builder_dock};
     connect(system_builder_, &QtSystemBuilderWidget::taskCreated, architecture,
             &QtArchitectureView::place_task_near_view_center);
-    builder_dock->setWidget(system_builder_);
+    // builder_dock->setWidget(system_builder_);
+    install_dock_content(builder_dock, system_builder_);
     builder_placeholder->deleteLater();
     auto* explorer_dock = findChild<QDockWidget*>("dock.explorer");
     auto* explorer_placeholder = explorer_dock->widget();
-    explorer_dock->setWidget(
-        new QtExperimentExplorerWidget{*bridge_, *system_builder_, explorer_dock});
+    // explorer_dock->setWidget(
+    //     new QtExperimentExplorerWidget{*bridge_, *system_builder_, explorer_dock});
+    install_dock_content( explorer_dock, new QtExperimentExplorerWidget{*bridge_, *system_builder_, explorer_dock});
     explorer_placeholder->deleteLater();
+    // const auto replace_dock = [this](const char* name, QWidget* replacement) {
+    //     auto* dock = findChild<QDockWidget*>(name);
+    //     auto* old = dock->widget();
+    //     dock->setWidget(replacement);
+    //     old->deleteLater();
+    // };
     const auto replace_dock = [this](const char* name, QWidget* replacement) {
-        auto* dock = findChild<QDockWidget*>(name);
+        auto* dock =
+            findChild<QDockWidget*>(name);
+
         auto* old = dock->widget();
-        dock->setWidget(replacement);
+
+        install_dock_content(
+            dock,
+            replacement);
+
         old->deleteLater();
     };
     auto* run_dock = findChild<QDockWidget*>("dock.runConfiguration");
@@ -916,7 +971,7 @@ void QtMainWindow::apply_theme() {
              * Give every docked workbench panel a consistent
              * one-pixel outer boundary.
              */
-            QDockWidget {
+            QWidget[cpssimDockContent="true"] {
                 border: 1px solid %1;
             }
 

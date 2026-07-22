@@ -192,8 +192,8 @@ void QtMainWindowTest::bottom_analysis_collapses_restores_and_redocks() {
     window.dock_in_bottom_analysis(assignments);
     QVERIFY(!assignments->isFloating());
     QCOMPARE(window.dockWidgetArea(assignments), Qt::BottomDockWidgetArea);
-    QVERIFY(qApp->styleSheet().contains("QMainWindow::separator"));
-    QVERIFY(qApp->styleSheet().contains("QSplitter::handle"));
+    QVERIFY(qApp->styleSheet().contains("QMainWindow#cpssimQtMainWindow::separator"));
+    QVERIFY(qApp->styleSheet().contains("cpssimDockContent"));
 }
 
 } // namespace cpssim::qt
