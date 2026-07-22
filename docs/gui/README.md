@@ -320,6 +320,11 @@ assignments are intentionally absent from graph structure. Strong IDs are
 mapped explicitly, cycles are allowed, and drag/add positions are stored in
 `workspace.json` rather than QtNodes scene serialization.
 
+Every task shows a stable resource-colored stripe and the resource name (or
+`Unassigned`) in a badge. The dockable Resource Assignments table repeats this
+mapping and is the edit surface; changing its combo updates only the draft and
+does not alter the applied runtime until Apply and restart.
+
 ## 5. Where to make a change
 
 Use the smallest layer that owns the behavior:

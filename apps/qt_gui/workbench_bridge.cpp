@@ -165,4 +165,24 @@ void QtWorkbenchBridge::notify_structural_selection_changed() {
     Q_EMIT structuralSelectionChanged();
 }
 
+bool QtWorkbenchBridge::assign_task(TaskId task_id, std::optional<ResourceId> resource_id) {
+    if (!application_->set_task_assignment(task_id, resource_id)) {
+        Q_EMIT statusChanged();
+        return false;
+    }
+    Q_EMIT draftChanged();
+    Q_EMIT structuralSelectionChanged();
+    Q_EMIT statusChanged();
+    return true;
+}
+
+void QtWorkbenchBridge::set_resource_highlight(std::optional<ResourceId> resource_id) {
+    if (resource_highlight_ == resource_id) {
+        resource_highlight_.reset();
+    } else {
+        resource_highlight_ = resource_id;
+    }
+    Q_EMIT resourceHighlightChanged();
+}
+
 } // namespace cpssim::qt

@@ -290,6 +290,40 @@ bool WorkbenchApplication::apply_system_draft() {
     return true;
 }
 
+bool WorkbenchApplication::set_task_assignment(TaskId task_id,
+                                               std::optional<ResourceId> resource_id) {
+    if (!system_draft_.has_value() || run_state() == GuiRunState::Running) {
+        set_status("Pause the simulation before editing resource assignments.", true);
+        return false;
+    }
+    const auto task = std::find_if(system_draft_->tasks().begin(), system_draft_->tasks().end(),
+                                   [task_id](const auto& row) { return row.id == task_id; });
+    if (task == system_draft_->tasks().end()) {
+        set_status("The selected task is unavailable.", true);
+        return false;
+    }
+    if (resource_id.has_value()) {
+        const auto resource =
+            std::find_if(system_draft_->resources().begin(), system_draft_->resources().end(),
+                         [resource_id](const auto& row) { return row.id == *resource_id; });
+        if (resource == system_draft_->resources().end()) {
+            set_status("The selected resource is unavailable.", true);
+            return false;
+        }
+    }
+    const auto assignment =
+        std::find_if(run_assignments_.begin(), run_assignments_.end(),
+                     [task_id](const auto& row) { return row.task_id == task_id; });
+    if (assignment == run_assignments_.end()) {
+        set_status("The task has no editable run assignment row.", true);
+        return false;
+    }
+    assignment->resource_id = resource_id;
+    structural_selection_.select_task(task_id);
+    validate_system_draft();
+    return true;
+}
+
 bool WorkbenchApplication::enqueue(GuiCommand command) {
     return has_active_session() && active_session().enqueue(command);
 }

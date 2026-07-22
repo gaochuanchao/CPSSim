@@ -437,9 +437,12 @@ if(CPSSIM_BUILD_QT_GUI)
     add_library(
         cpssim_qt_gui_support STATIC
         apps/qt_gui/architecture_model.cpp
+        apps/qt_gui/architecture_node_painter.cpp
         apps/qt_gui/architecture_view.cpp
         apps/qt_gui/main_window.cpp
+        apps/qt_gui/resource_assignment_model.cpp
         apps/qt_gui/workbench_bridge.cpp
+        apps/qt_gui/workbench_style.cpp
     )
     target_compile_features(cpssim_qt_gui_support PUBLIC cxx_std_20)
     target_compile_definitions(cpssim_qt_gui_support PUBLIC QT_NO_KEYWORDS)
@@ -605,6 +608,28 @@ if(BUILD_TESTING)
             PROPERTIES
                 ENVIRONMENT
                     "QT_QPA_PLATFORM=offscreen;CPSSIM_G1_BOSCH_FMU_LIBRARY=$<TARGET_FILE:cpssim_bosch_fmu_linux>"
+                LABELS gui
+        )
+
+        add_executable(
+            cpssim_qt_assignment_tests
+            tests/qt_gui/resource_assignment_model_test.cpp
+        )
+        target_link_libraries(
+            cpssim_qt_assignment_tests
+            PRIVATE cpssim_qt_gui_support Qt6::Test
+        )
+        set_target_properties(
+            cpssim_qt_assignment_tests
+            PROPERTIES AUTOMOC ON CXX_CLANG_TIDY ""
+        )
+        cpssim_set_project_warnings(cpssim_qt_assignment_tests)
+        cpssim_enable_sanitizers(cpssim_qt_assignment_tests)
+        add_test(NAME cpssim_qt_assignment_tests COMMAND cpssim_qt_assignment_tests)
+        set_tests_properties(
+            cpssim_qt_assignment_tests
+            PROPERTIES
+                ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                 LABELS gui
         )
     endif()

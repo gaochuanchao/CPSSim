@@ -111,6 +111,7 @@ class WorkbenchApplication {
     void initialize_system_draft();
     void validate_system_draft();
     bool apply_system_draft();
+    bool set_task_assignment(TaskId task_id, std::optional<ResourceId> resource_id);
 
     bool enqueue(GuiCommand command);
     bool update();

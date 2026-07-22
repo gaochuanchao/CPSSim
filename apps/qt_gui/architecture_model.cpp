@@ -1,6 +1,10 @@
 /*** Implement the read-only semantic QtNodes Architecture adapter. ***/
 #include "apps/qt_gui/architecture_model.hpp"
 
+#include "apps/qt_gui/workbench_style.hpp"
+
+#include <QtNodes/NodeDelegateModel>
+
 #include <QVariant>
 #include <QWidget>
 
@@ -10,6 +14,46 @@
 #include <stdexcept>
 
 namespace cpssim::qt {
+
+std::vector<QtTaskNodePresentation>
+build_task_node_presentations(const ExperimentPresentationSnapshot& experiment, GuiTheme theme,
+                              std::optional<ResourceId> highlighted_resource) {
+    std::vector<QtTaskNodePresentation> result;
+    result.reserve(experiment.tasks.size());
+    for (const auto& task : experiment.tasks) {
+        QtTaskNodePresentation row{.task_id = task.id,
+                                   .resource_id = std::nullopt,
+                                   .resource_name = QStringLiteral("Unassigned"),
+                                   .accent = unassigned_accent_color(theme),
+                                   .period = task.period,
+                                   .deadline = task.deadline,
+                                   .execution_time = std::nullopt,
+                                   .assignment_valid = false,
+                                   .highlighted = false};
+        const auto assignment = find_assignment(experiment, task.id);
+        if (assignment != nullptr) {
+            row.resource_id = assignment->resource_id;
+            row.accent = resource_accent_color(assignment->resource_id, theme);
+            if (const auto* resource = find_resource(experiment, assignment->resource_id);
+                resource != nullptr) {
+                row.resource_name = QString::fromStdString(resource->name);
+            }
+            const auto profile = std::find_if(
+                experiment.profiles.begin(), experiment.profiles.end(), [&](const auto& candidate) {
+                    return candidate.task_id == task.id &&
+                           candidate.resource_id == assignment->resource_id;
+                });
+            if (profile != experiment.profiles.end()) {
+                row.execution_time = profile->execution_time;
+                row.assignment_valid = true;
+            }
+        }
+        row.highlighted =
+            highlighted_resource.has_value() && row.resource_id == highlighted_resource;
+        result.push_back(std::move(row));
+    }
+    return result;
+}
 
 QtNodes::NodeId QtNodeIdMap::adapter_id(GuiGraphNodeId entity) {
     if (const auto found = entity_to_adapter_.find(entity); found != entity_to_adapter_.end()) {
@@ -63,7 +107,9 @@ QtArchitectureGraphModel::QtArchitectureGraphModel(QObject* parent)
     setParent(parent);
 }
 
-void QtArchitectureGraphModel::rebuild(const GuiArchitectureGraph& graph) {
+void QtArchitectureGraphModel::rebuild(
+    const GuiArchitectureGraph& graph,
+    const std::vector<QtTaskNodePresentation>& task_presentations) {
     nodes_.clear();
     connections_.clear();
     std::size_t flat_index = 0;
@@ -77,10 +123,17 @@ void QtArchitectureGraphModel::rebuild(const GuiArchitectureGraph& graph) {
             position = QPointF{40.0 + static_cast<qreal>(flat_index % 4) * 240.0,
                                40.0 + static_cast<qreal>(flat_index / 4) * 140.0};
         }
+        const auto presentation = std::find_if(
+            task_presentations.begin(), task_presentations.end(), [&](const auto& candidate) {
+                return candidate.task_id == std::get<TaskId>(node.entity);
+            });
         nodes_.emplace(id, NodeRecord{.entity = node.id,
                                       .caption = QString::fromStdString(node.label),
                                       .position = position,
-                                      .size = QSize{180, 86}});
+                                      .size = QSize{230, 96},
+                                      .presentation = presentation == task_presentations.end()
+                                                          ? std::nullopt
+                                                          : std::optional{*presentation}});
         ++flat_index;
     }
 
@@ -122,6 +175,14 @@ std::vector<QRectF> QtArchitectureGraphModel::occupied_rectangles() const {
         result.emplace_back(node.position, node.size);
     }
     return result;
+}
+
+const QtTaskNodePresentation*
+QtArchitectureGraphModel::task_presentation(QtNodes::NodeId node_id) const {
+    const auto found = nodes_.find(node_id);
+    return found == nodes_.end() || !found->second.presentation.has_value()
+               ? nullptr
+               : &*found->second.presentation;
 }
 
 QtNodes::NodeId QtArchitectureGraphModel::newNodeId() { return ids_.next_adapter_id(); }
@@ -198,6 +259,13 @@ QVariant QtArchitectureGraphModel::nodeData(QtNodes::NodeId node_id, QtNodes::No
         return node.output_count;
     case QtNodes::NodeRole::Widget:
         return QVariant::fromValue(static_cast<QWidget*>(nullptr));
+    case QtNodes::NodeRole::ValidationState:
+        if (node.presentation.has_value() && !node.presentation->assignment_valid) {
+            return QVariant::fromValue(QtNodes::NodeValidationState{
+                QtNodes::NodeValidationState::State::Error,
+                QStringLiteral("Task is unassigned or lacks an execution profile")});
+        }
+        return QVariant::fromValue(QtNodes::NodeValidationState{});
     case QtNodes::NodeRole::LabelVisible:
         return false;
     case QtNodes::NodeRole::Label:

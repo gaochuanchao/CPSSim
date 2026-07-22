@@ -2,6 +2,7 @@
 #include "apps/qt_gui/main_window.hpp"
 
 #include "apps/qt_gui/architecture_view.hpp"
+#include "apps/qt_gui/resource_assignment_model.hpp"
 #include "apps/qt_gui/workbench_bridge.hpp"
 
 #include <QAction>
@@ -258,6 +259,10 @@ void QtMainWindow::bind_workbench(QtWorkbenchBridge* bridge) {
     central_tabs_->insertTab(0, architecture, "Architecture");
     central_tabs_->setCurrentIndex(0);
     placeholder_page->deleteLater();
+    auto* assignments_dock = findChild<QDockWidget*>("dock.resourceAssignments");
+    auto* assignments_placeholder = assignments_dock->widget();
+    assignments_dock->setWidget(new QtResourceAssignmentsWidget{*bridge_, assignments_dock});
+    assignments_placeholder->deleteLater();
     connect(run_action_, &QAction::triggered, bridge_, &QtWorkbenchBridge::run);
     connect(pause_action_, &QAction::triggered, bridge_, &QtWorkbenchBridge::pause);
     connect(reset_action_, &QAction::triggered, bridge_, &QtWorkbenchBridge::reset);

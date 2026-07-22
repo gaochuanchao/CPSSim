@@ -43,6 +43,9 @@ class QtWorkbenchBridge final : public QObject {
     void close_project();
     void shutdown();
     void notify_structural_selection_changed();
+    bool assign_task(TaskId task_id, std::optional<ResourceId> resource_id);
+    void set_resource_highlight(std::optional<ResourceId> resource_id);
+    std::optional<ResourceId> resource_highlight() const noexcept { return resource_highlight_; }
 
   public Q_SLOTS:
     void run();
@@ -59,6 +62,8 @@ class QtWorkbenchBridge final : public QObject {
     void completedResultChanged();
     void statusChanged();
     void structuralSelectionChanged();
+    void draftChanged();
+    void resourceHighlightChanged();
 
   private:
     void enqueue(GuiCommand command);
@@ -73,6 +78,7 @@ class QtWorkbenchBridge final : public QObject {
     QTimer live_timer_;
     bool fast_continuation_pending_{false};
     bool shutting_down_{false};
+    std::optional<ResourceId> resource_highlight_;
 };
 
 } // namespace cpssim::qt

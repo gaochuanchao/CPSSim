@@ -2,10 +2,12 @@
 #pragma once
 
 #include "cpssim/gui/architecture_graph.hpp"
+#include "cpssim/gui/workspace_state.hpp"
 
 #include <QtNodes/AbstractGraphModel>
 #include <QtNodes/NodeData>
 
+#include <QColor>
 #include <QPointF>
 #include <QRectF>
 #include <QSize>
@@ -20,6 +22,22 @@
 #include <vector>
 
 namespace cpssim::qt {
+
+struct QtTaskNodePresentation {
+    TaskId task_id;
+    std::optional<ResourceId> resource_id;
+    QString resource_name;
+    QColor accent;
+    Tick period{};
+    Tick deadline{};
+    std::optional<Tick> execution_time;
+    bool assignment_valid{false};
+    bool highlighted{false};
+};
+
+std::vector<QtTaskNodePresentation>
+build_task_node_presentations(const ExperimentPresentationSnapshot& experiment, GuiTheme theme,
+                              std::optional<ResourceId> highlighted_resource = std::nullopt);
 
 class QtNodeIdMap {
   public:
@@ -43,13 +61,15 @@ class QtArchitectureGraphModel final : public QtNodes::AbstractGraphModel {
 
     explicit QtArchitectureGraphModel(QObject* parent = nullptr);
 
-    void rebuild(const GuiArchitectureGraph& graph);
+    void rebuild(const GuiArchitectureGraph& graph,
+                 const std::vector<QtTaskNodePresentation>& task_presentations = {});
     void set_position_changed(PositionChanged callback) { position_changed_ = std::move(callback); }
     std::optional<QtNodes::NodeId> node_id_for(GuiGraphNodeId entity) const;
     std::optional<GuiGraphNodeId> entity_for(QtNodes::NodeId node_id) const;
     std::size_t node_count() const noexcept { return nodes_.size(); }
     std::size_t connection_count() const noexcept { return connections_.size(); }
     std::vector<QRectF> occupied_rectangles() const;
+    const QtTaskNodePresentation* task_presentation(QtNodes::NodeId node_id) const;
 
     QtNodes::NodeId newNodeId() override;
     std::unordered_set<QtNodes::NodeId> allNodeIds() const override;
@@ -81,6 +101,7 @@ class QtArchitectureGraphModel final : public QtNodes::AbstractGraphModel {
         QSize size;
         QtNodes::PortCount input_count{};
         QtNodes::PortCount output_count{};
+        std::optional<QtTaskNodePresentation> presentation;
     };
 
     QtNodeIdMap ids_;

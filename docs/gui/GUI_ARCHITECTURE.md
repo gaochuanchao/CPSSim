@@ -42,6 +42,16 @@ truncates entity values. Node movement writes task positions to the shared
 versioned workspace, while Add Task mutates `EditableSystemDraft` first and
 then rebuilds the scene.
 
+Task nodes use a CPSSim painter layered over the QtNodes base painter. A narrow
+accent and a text badge both identify the assigned resource; timing remains a
+separate compact line, and the border is reserved for selection/validation.
+The accent is a stable hash of `ResourceId` into a fixed theme-adjusted palette,
+so unrelated resource insertion cannot recolor existing assignments.
+`QtResourceAssignmentModel` is the authoritative mapping projection with
+swatch, task, resource, profile/WCET, priority, accessibility, and status
+columns. Its combo delegate mutates only the shared draft, and table/canvas
+selection both update `StructuralSelection`.
+
 The arrows are one-way dependencies. Core code never includes or links GUI
 headers. GUI support may use public core interfaces but does not depend on Dear
 ImGui, GLFW, or OpenGL.

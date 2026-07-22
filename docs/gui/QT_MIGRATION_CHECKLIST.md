@@ -26,7 +26,7 @@ change simulation semantics or project formats.
 - [x] Flat QtNodes prototype renders tasks and semantic connections, accepts
       cycles, synchronizes structural selection, adds at center with stable
       occupied offset, and preserves strong identities across rebuilds.
-- [ ] Assignment gate shows a stable accent and resource-name badge (including
+- [x] Assignment gate shows a stable accent and resource-name badge (including
       `Unassigned`), edits through a `QAbstractTableModel`, synchronizes table
       and canvas selection, and has no resource containers or assignment edges.
 - [ ] System Builder/component library mutate the CPSSim draft through commands

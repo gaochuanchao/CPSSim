@@ -1,6 +1,7 @@
 /*** Render CPSSim tasks and semantic connections through flat QtNodes. ***/
 #include "apps/qt_gui/architecture_view.hpp"
 
+#include "apps/qt_gui/architecture_node_painter.hpp"
 #include "apps/qt_gui/workbench_bridge.hpp"
 
 #include "cpssim/application/bosch_project_factory.hpp"
@@ -48,6 +49,7 @@ QtArchitectureView::QtArchitectureView(QtWorkbenchBridge& bridge, QWidget* paren
     setObjectName("view.architecture");
     view_->setObjectName("architecture.graphicsView");
     view_->setScaleRange(0.1, 4.0);
+    scene_->setNodePainter(std::make_unique<QtArchitectureNodePainter>());
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
     auto* toolbar = new QToolBar("Architecture", this);
@@ -71,6 +73,9 @@ QtArchitectureView::QtArchitectureView(QtWorkbenchBridge& bridge, QWidget* paren
             &QtArchitectureView::refresh);
     connect(&bridge_, &QtWorkbenchBridge::structuralSelectionChanged, this,
             &QtArchitectureView::synchronize_scene_selection);
+    connect(&bridge_, &QtWorkbenchBridge::draftChanged, this, &QtArchitectureView::refresh);
+    connect(&bridge_, &QtWorkbenchBridge::resourceHighlightChanged, this,
+            &QtArchitectureView::refresh);
     model_.set_position_changed([this](GuiGraphNodeId entity, QPointF position) {
         persist_node_position(entity, position);
     });
@@ -96,7 +101,23 @@ void QtArchitectureView::refresh() {
         bosch ? bosch_functional_dependencies() : std::vector<GuiFunctionalDependency>{};
     auto graph = build_architecture_graph(presentation, dependencies, bosch,
                                           &application.workspace().architecture);
-    model_.rebuild(flat_graph(std::move(graph), application.workspace().architecture));
+    const auto tasks = build_task_node_presentations(presentation, application.workspace().theme,
+                                                     bridge_.resource_highlight());
+    model_.rebuild(flat_graph(std::move(graph), application.workspace().architecture), tasks);
+    for (const auto node_id : model_.allNodeIds()) {
+        const auto* task = model_.task_presentation(node_id);
+        if (task == nullptr) {
+            continue;
+        }
+        if (auto* item = scene_->nodeGraphicsObject(node_id); item != nullptr) {
+            item->setToolTip(task->assignment_valid
+                                 ? QString{"Assigned to %1 with execution time %2 ticks"}
+                                       .arg(task->resource_name)
+                                       .arg(*task->execution_time)
+                                 : QString{"%1: assignment is incomplete or inaccessible"}.arg(
+                                       task->resource_name));
+        }
+    }
     synchronize_scene_selection();
 }
 

@@ -294,7 +294,13 @@ workspace position reopen are verified. Resource presentation and assignment
 editing remain intentionally deferred to the next gate. Native mixed-monitor
 DPI movement still requires a desktop manual check; Qt-owned scaling is used
 and offscreen scale-factor launches do not add simulator behavior.
-The resource-badge and assignment-table gate is next.
+The assignment gate now passes: deterministic theme-aware colors derive only
+from `ResourceId`; task nodes also display the resource name or `Unassigned`;
+the `QAbstractTableModel` exposes mapping, WCET, priority, accessibility, and
+status; its combo delegate edits the draft; and table/canvas selection is
+bidirectional through `StructuralSelection`. No resource container or
+assignment edge is created. System Builder/component-library migration is the
+next phase.
 
 Goal 6 validation completed on 2026-07-21:
 
