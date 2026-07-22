@@ -16,10 +16,13 @@ class GraphicsView;
 namespace cpssim::qt {
 
 class QtWorkbenchBridge;
+class QtStructuralEditController;
 
 class QtArchitectureView final : public QWidget {
   public:
-    explicit QtArchitectureView(QtWorkbenchBridge& bridge, QWidget* parent = nullptr);
+    explicit QtArchitectureView(QtWorkbenchBridge& bridge,
+                                QtStructuralEditController& edits,
+                                QWidget* parent = nullptr);
     ~QtArchitectureView() override;
 
     QtArchitectureGraphModel& graph_model() noexcept { return model_; }
@@ -38,6 +41,7 @@ class QtArchitectureView final : public QWidget {
     void synchronize_scene_selection();
 
     QtWorkbenchBridge& bridge_;
+    QtStructuralEditController& edits_;
     QtArchitectureGraphModel model_;
     std::unique_ptr<QtNodes::BasicGraphicsScene> scene_;
     std::unique_ptr<QtNodes::GraphicsView> view_;

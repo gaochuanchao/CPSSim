@@ -2,6 +2,7 @@
 #include "apps/qt_gui/architecture_view.hpp"
 
 #include "apps/qt_gui/architecture_node_painter.hpp"
+#include "apps/qt_gui/structural_edit_controller.hpp"
 #include "apps/qt_gui/workbench_bridge.hpp"
 #include "apps/qt_gui/workbench_style.hpp"
 
@@ -82,8 +83,10 @@ GuiArchitectureGraph flat_graph(GuiArchitectureGraph graph,
 
 } // namespace
 
-QtArchitectureView::QtArchitectureView(QtWorkbenchBridge& bridge, QWidget* parent)
-    : QWidget(parent), bridge_{bridge}, model_{this},
+QtArchitectureView::QtArchitectureView(QtWorkbenchBridge& bridge,
+                                     QtStructuralEditController& edits,
+                                     QWidget* parent)
+    : QWidget(parent), bridge_{bridge}, edits_{edits}, model_{this},
       scene_{std::make_unique<QtNodes::BasicGraphicsScene>(model_)},
       view_{std::make_unique<QtArchitectureGraphicsView>(scene_.get())} {
     setObjectName("view.architecture");
@@ -218,27 +221,12 @@ std::optional<TaskId> QtArchitectureView::add_task_at(QPointF scene_position) {
         application.run_state() == GuiRunState::Running) {
         return std::nullopt;
     }
-    if (application.has_active_project() &&
-        project_system_edit_policy(application.active_project().metadata()) !=
-            ProjectSystemEditPolicy::Generic) {
-        application.set_status("Adapter-owned task identities are protected.", true);
-        Q_EMIT bridge_.statusChanged();
-        return std::nullopt;
-    }
-    auto result = application.explorer_interaction().create(StructuralSection::Tasks,
-                                                            *application.editable_system(),
-                                                            application.structural_selection());
-    if (!result.changed) {
-        application.set_status(result.diagnostic.empty() ? "A task could not be created."
-                                                         : std::move(result.diagnostic),
-                               true);
-        return std::nullopt;
-    }
-    application.synchronize_system_assignments();
-    const auto task_id = application.structural_selection().task_id();
+
+    const auto task_id = edits_.create_task();
     if (!task_id.has_value()) {
         return std::nullopt;
     }
+
     const auto position = next_available_node_position(scene_position, QSizeF{180.0, 86.0},
                                                        model_.occupied_rectangles());
     const auto snapped = snap_architecture_position(position);

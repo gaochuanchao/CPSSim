@@ -3,6 +3,7 @@
 #include <QObject>
 #else
 #include "apps/qt_gui/main_window.hpp"
+#include "apps/qt_gui/structural_edit_controller.hpp"
 #include "apps/qt_gui/system_builder_widget.hpp"
 #include "apps/qt_gui/workbench_bridge.hpp"
 
@@ -66,7 +67,8 @@ class QtSystemBuilderWidgetTest final : public QObject {
 void QtSystemBuilderWidgetTest::selection_uses_reusable_editor_pages() {
     TemporaryDirectory temporary;
     QtWorkbenchBridge bridge{make_application(temporary.path())};
-    QtSystemBuilderWidget builder{bridge};
+    QtStructuralEditController edits{bridge};
+    QtSystemBuilderWidget builder{bridge, edits};
     const auto task = bridge.application().editable_system()->tasks().front().id;
     bridge.application().structural_selection().select_task(task);
     bridge.notify_structural_selection_changed();
@@ -79,7 +81,8 @@ void QtSystemBuilderWidgetTest::selection_uses_reusable_editor_pages() {
 void QtSystemBuilderWidgetTest::creation_and_deletion_are_domain_undo_commands() {
     TemporaryDirectory temporary;
     QtWorkbenchBridge bridge{make_application(temporary.path())};
-    QtSystemBuilderWidget builder{bridge};
+    QtStructuralEditController edits{bridge};
+    QtSystemBuilderWidget builder{bridge, edits};
     const auto active_task_count = bridge.application().active_session().config().tasks().size();
     const auto before = bridge.application().editable_system()->tasks().size();
 
@@ -87,24 +90,25 @@ void QtSystemBuilderWidgetTest::creation_and_deletion_are_domain_undo_commands()
     QCOMPARE(bridge.application().editable_system()->tasks().size(), before + 1);
     QVERIFY(bridge.application().structural_selection().task_id().has_value());
     QCOMPARE(bridge.application().active_session().config().tasks().size(), active_task_count);
-    QVERIFY(builder.undo_stack().canUndo());
+    QVERIFY(edits.undo_stack().canUndo());
 
-    builder.undo_stack().undo();
+    edits.undo_stack().undo();
     QCOMPARE(bridge.application().editable_system()->tasks().size(), before);
-    builder.undo_stack().redo();
+    edits.undo_stack().redo();
     QCOMPARE(bridge.application().editable_system()->tasks().size(), before + 1);
     QVERIFY(builder.delete_selected(false) == false);
     QCOMPARE(bridge.application().editable_system()->tasks().size(), before + 1);
     QVERIFY(builder.delete_selected(true));
     QCOMPARE(bridge.application().editable_system()->tasks().size(), before);
-    builder.undo_stack().undo();
+    edits.undo_stack().undo();
     QCOMPARE(bridge.application().editable_system()->tasks().size(), before + 1);
 }
 
 void QtSystemBuilderWidgetTest::structured_validation_is_shown_on_selected_page() {
     TemporaryDirectory temporary;
     QtWorkbenchBridge bridge{make_application(temporary.path())};
-    QtSystemBuilderWidget builder{bridge};
+    QtStructuralEditController edits{bridge};
+    QtSystemBuilderWidget builder{bridge, edits};
     auto draft = *bridge.application().editable_system();
     const auto task = draft.tasks().front();
     draft.set_task_timing(0, {.period = 0, .deadline = task.deadline, .offset = task.offset},
@@ -138,7 +142,8 @@ void QtSystemBuilderWidgetTest::
     builder_is_a_scrollable_property_editor_without_component_library() {
     TemporaryDirectory temporary;
     QtWorkbenchBridge bridge{make_application(temporary.path())};
-    QtSystemBuilderWidget builder{bridge};
+    QtStructuralEditController edits{bridge};
+    QtSystemBuilderWidget builder{bridge, edits};
     QVERIFY(builder.findChild<QScrollArea*>("systemBuilder.scrollArea") != nullptr);
     QVERIFY(builder.findChild<QListWidget*>("systemBuilder.componentLibrary") == nullptr);
     QVERIFY(builder.findChild<QObject*>("splitter.systemBuilder") == nullptr);
@@ -155,7 +160,8 @@ void QtSystemBuilderWidgetTest::task_page_edits_assignment_and_wcets_with_undo()
     selection.select_task(task_id);
     application->restore_system_draft(std::move(draft), application->run_assignments(), selection);
     QtWorkbenchBridge bridge{std::move(application)};
-    QtSystemBuilderWidget builder{bridge};
+    QtStructuralEditController edits{bridge};
+    QtSystemBuilderWidget builder{bridge, edits};
 
     auto* assignment = builder.findChild<QComboBox*>("systemBuilder.taskAssignment");
     auto* status = builder.findChild<QLabel*>("systemBuilder.assignmentStatus");
@@ -217,8 +223,8 @@ void QtSystemBuilderWidgetTest::task_page_edits_assignment_and_wcets_with_undo()
     QCOMPARE(status->text(), QString{"Valid"});
 
     // Undo should revert
-    QVERIFY(builder.undo_stack().canUndo());
-    builder.undo_stack().undo();
+    QVERIFY(edits.undo_stack().canUndo());
+    edits.undo_stack().undo();
     QVERIFY(!bridge.application().editable_system()->execution_profile(task_id, resource_id));
     QCOMPARE(bridge.application().run_assignments().front().resource_id,
              std::optional<ResourceId>{ResourceId{1}});

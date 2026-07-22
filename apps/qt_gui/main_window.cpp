@@ -7,6 +7,7 @@
 #include "apps/qt_gui/explorer_widget.hpp"
 #include "apps/qt_gui/resource_assignment_model.hpp"
 #include "apps/qt_gui/runtime_widgets.hpp"
+#include "apps/qt_gui/structural_edit_controller.hpp"
 #include "apps/qt_gui/system_builder_widget.hpp"
 #include "apps/qt_gui/workbench_bridge.hpp"
 #include "apps/qt_gui/workbench_style.hpp"
@@ -454,10 +455,10 @@ void QtMainWindow::set_workbench_chrome_visible(bool visible) {
     save_project_as_action_->setEnabled(visible);
     close_project_action_->setEnabled(visible);
     restore_layout_action_->setEnabled(visible);
-    undo_action_->setEnabled(visible && system_builder_ != nullptr &&
-                             system_builder_->undo_stack().canUndo());
-    redo_action_->setEnabled(visible && system_builder_ != nullptr &&
-                             system_builder_->undo_stack().canRedo());
+    undo_action_->setEnabled(visible && structural_edits_ != nullptr &&
+                             structural_edits_->undo_stack().canUndo());
+    redo_action_->setEnabled(visible && structural_edits_ != nullptr &&
+                             structural_edits_->undo_stack().canRedo());
     for (auto* dock : docks_) {
         dock->toggleViewAction()->setEnabled(visible);
     }
@@ -469,7 +470,8 @@ void QtMainWindow::bind_workbench(QtWorkbenchBridge* bridge) {
         return;
     }
     bridge_ = bridge;
-    auto* architecture = new QtArchitectureView{*bridge_, central_tabs_};
+    structural_edits_ = new QtStructuralEditController{*bridge_, this};
+    auto* architecture = new QtArchitectureView{*bridge_, *structural_edits_, central_tabs_};
     auto* placeholder_page = central_tabs_->widget(0);
     central_tabs_->removeTab(0);
     central_tabs_->insertTab(0, architecture, "Architecture");
@@ -487,29 +489,19 @@ void QtMainWindow::bind_workbench(QtWorkbenchBridge* bridge) {
     replace_tab(3, integrated_plot, "Integrated Plot");
     auto* assignments_dock = findChild<QDockWidget*>("dock.resourceAssignments");
     auto* assignments_placeholder = assignments_dock->widget();
-    // assignments_dock->setWidget(new QtResourceAssignmentsWidget{*bridge_, assignments_dock});
     install_dock_content(assignments_dock, new QtResourceAssignmentsWidget{*bridge_, assignments_dock});
     assignments_placeholder->deleteLater();
     auto* builder_dock = findChild<QDockWidget*>("dock.systemBuilder");
     auto* builder_placeholder = builder_dock->widget();
-    system_builder_ = new QtSystemBuilderWidget{*bridge_, builder_dock};
+    system_builder_ = new QtSystemBuilderWidget{*bridge_, *structural_edits_, builder_dock};
     connect(system_builder_, &QtSystemBuilderWidget::taskCreated, architecture,
             &QtArchitectureView::place_task_near_view_center);
-    // builder_dock->setWidget(system_builder_);
     install_dock_content(builder_dock, system_builder_);
     builder_placeholder->deleteLater();
     auto* explorer_dock = findChild<QDockWidget*>("dock.explorer");
     auto* explorer_placeholder = explorer_dock->widget();
-    // explorer_dock->setWidget(
-    //     new QtExperimentExplorerWidget{*bridge_, *system_builder_, explorer_dock});
     install_dock_content( explorer_dock, new QtExperimentExplorerWidget{*bridge_, *system_builder_, explorer_dock});
     explorer_placeholder->deleteLater();
-    // const auto replace_dock = [this](const char* name, QWidget* replacement) {
-    //     auto* dock = findChild<QDockWidget*>(name);
-    //     auto* old = dock->widget();
-    //     dock->setWidget(replacement);
-    //     old->deleteLater();
-    // };
     const auto replace_dock = [this](const char* name, QWidget* replacement) {
         auto* dock =
             findChild<QDockWidget*>(name);
@@ -537,11 +529,13 @@ void QtMainWindow::bind_workbench(QtWorkbenchBridge* bridge) {
     replace_dock("dock.results", results);
     connect(results, &QtResultsWidget::openIntegratedPlotRequested, this,
             [this] { central_tabs_->setCurrentIndex(3); });
-    connect(undo_action_, &QAction::triggered, &system_builder_->undo_stack(), &QUndoStack::undo);
-    connect(redo_action_, &QAction::triggered, &system_builder_->undo_stack(), &QUndoStack::redo);
-    connect(&system_builder_->undo_stack(), &QUndoStack::canUndoChanged, undo_action_,
+    connect(undo_action_, &QAction::triggered, &structural_edits_->undo_stack(),
+            &QUndoStack::undo);
+    connect(redo_action_, &QAction::triggered, &structural_edits_->undo_stack(),
+            &QUndoStack::redo);
+    connect(&structural_edits_->undo_stack(), &QUndoStack::canUndoChanged, undo_action_,
             [this](bool enabled) { undo_action_->setEnabled(enabled && !home_is_active()); });
-    connect(&system_builder_->undo_stack(), &QUndoStack::canRedoChanged, redo_action_,
+    connect(&structural_edits_->undo_stack(), &QUndoStack::canRedoChanged, redo_action_,
             [this](bool enabled) { redo_action_->setEnabled(enabled && !home_is_active()); });
     connect(run_action_, &QAction::triggered, bridge_, &QtWorkbenchBridge::run);
     connect(pause_action_, &QAction::triggered, bridge_, &QtWorkbenchBridge::pause);

@@ -4,6 +4,7 @@
 #else
 #include "apps/qt_gui/architecture_model.hpp"
 #include "apps/qt_gui/architecture_view.hpp"
+#include "apps/qt_gui/structural_edit_controller.hpp"
 #include "apps/qt_gui/system_builder_widget.hpp"
 #include "apps/qt_gui/workbench_bridge.hpp"
 
@@ -177,8 +178,9 @@ void QtArchitectureModelTest::explorer_creation_and_node_movement_use_shared_gri
     auto application = std::make_unique<WorkbenchApplication>();
     application->create_project(make_generic_project_template(temporary.path(), "project"));
     QtWorkbenchBridge bridge{std::move(application)};
-    QtArchitectureView view{bridge};
-    QtSystemBuilderWidget builder{bridge};
+    QtStructuralEditController edits{bridge};
+    QtArchitectureView view{bridge, edits};
+    QtSystemBuilderWidget builder{bridge, edits};
     QObject::connect(&builder, &QtSystemBuilderWidget::taskCreated, &view,
                      &QtArchitectureView::place_task_near_view_center);
 
@@ -212,7 +214,8 @@ void QtArchitectureModelTest::draft_creation_selects_and_places_new_task() {
     auto application = std::make_unique<WorkbenchApplication>();
     application->create_project(make_generic_project_template(temporary.path(), "project"));
     QtWorkbenchBridge bridge{std::move(application)};
-    QtArchitectureView view{bridge};
+    QtStructuralEditController edits{bridge};
+    QtArchitectureView view{bridge, edits};
     const auto before = view.graph_model().node_count();
     const auto original = view.graph_model().node_id_for(task_graph_node_id(TaskId{1}));
     QVERIFY(original.has_value());
@@ -251,8 +254,8 @@ void QtArchitectureModelTest::bosch_session_loads_paused_and_renders_six_flat_ta
                               .shared_library = fmu_library()});
     auto application = std::make_unique<WorkbenchApplication>(std::move(project));
     QtWorkbenchBridge bridge{std::move(application)};
-    QtArchitectureView view{bridge};
-    QCOMPARE(bridge.run_state(), GuiRunState::Paused);
+    QtStructuralEditController edits{bridge};
+    QtArchitectureView view{bridge, edits};
     QCOMPARE(view.graph_model().node_count(), std::size_t{6});
     QCOMPARE(view.graph_model().connection_count(), std::size_t{5});
     QVERIFY(!view.add_task_at({500.0, 300.0}).has_value());

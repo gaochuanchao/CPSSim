@@ -16,9 +16,10 @@ class QLineEdit;
 class QPushButton;
 class QStackedWidget;
 class QTableView;
-class QUndoStack;
 
 namespace cpssim::qt {
+
+class QtStructuralEditController;
 
 struct QtTaskExecutionProfileRow {
     ResourceId resource_id;
@@ -52,9 +53,10 @@ class QtSystemBuilderWidget final : public QWidget {
     Q_OBJECT
 
   public:
-    explicit QtSystemBuilderWidget(QtWorkbenchBridge& bridge, QWidget* parent = nullptr);
+    explicit QtSystemBuilderWidget(QtWorkbenchBridge& bridge,
+                                   QtStructuralEditController& edits,
+                                   QWidget* parent = nullptr);
 
-    QUndoStack& undo_stack() noexcept { return *undo_stack_; }
     void refresh();
     bool create_component(StructuralSection section);
     bool duplicate_selected();
@@ -64,12 +66,8 @@ class QtSystemBuilderWidget final : public QWidget {
     void taskCreated(TaskId task_id);
 
   private:
-    using DraftMutator = std::function<void(EditableSystemDraft&, std::vector<DraftTaskAssignment>&,
-                                            StructuralSelection&)>;
-
     void build_pages();
     void connect_editors();
-    bool push_mutation(const QString& text, DraftMutator mutator);
     void refresh_system_page();
     void refresh_resource_page(ResourceId resource_id);
     void refresh_task_page(TaskId task_id,
@@ -83,7 +81,7 @@ class QtSystemBuilderWidget final : public QWidget {
     void refresh_profile_button_state(TaskId task_id);
 
     QtWorkbenchBridge& bridge_;
-    QUndoStack* undo_stack_{nullptr};
+    QtStructuralEditController& edits_;
     QStackedWidget* pages_{nullptr};
     QWidget* empty_page_{nullptr};
     QWidget* system_page_{nullptr};
@@ -116,7 +114,6 @@ class QtSystemBuilderWidget final : public QWidget {
     QLabel* connection_latency_{nullptr};
     QLineEdit* route_send_offset_{nullptr};
     QLineEdit* route_delay_{nullptr};
-    std::optional<std::filesystem::path> undo_project_root_;
     bool refreshing_{false};
 };
 

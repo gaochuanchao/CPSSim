@@ -6,6 +6,7 @@
 #include "apps/qt_gui/explorer_widget.hpp"
 #include "apps/qt_gui/main_window.hpp"
 #include "apps/qt_gui/runtime_widgets.hpp"
+#include "apps/qt_gui/structural_edit_controller.hpp"
 #include "apps/qt_gui/system_builder_widget.hpp"
 
 #include "cpssim/application/project/project_template.hpp"
@@ -62,7 +63,8 @@ class QtRuntimeViewsTest final : public QObject {
 void QtRuntimeViewsTest::explorer_updates_only_structural_selection() {
     TemporaryDirectory temporary;
     QtWorkbenchBridge bridge{make_application(temporary.path())};
-    QtSystemBuilderWidget builder{bridge};
+    QtStructuralEditController edits{bridge};
+    QtSystemBuilderWidget builder{bridge, edits};
     QtExperimentExplorerWidget explorer{bridge, builder};
     bridge.application().runtime_selection().select_experiment();
     auto* model = qobject_cast<QStandardItemModel*>(explorer.tree().model());

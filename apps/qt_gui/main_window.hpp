@@ -23,7 +23,6 @@ class QPushButton;
 class QStackedWidget;
 class QTabWidget;
 class QToolBar;
-class QUndoStack;
 class QVBoxLayout;
 
 namespace cpssim::qt {
@@ -32,6 +31,7 @@ inline constexpr int qt_main_window_state_version = 2;
 
 class QtWorkbenchBridge;
 class QtSystemBuilderWidget;
+class QtStructuralEditController;
 
 struct QtFrontendPaths {
     std::filesystem::path projects_directory{"projects"};
@@ -123,6 +123,7 @@ class QtMainWindow final : public QMainWindow {
     QAction* undo_action_{nullptr};
     QAction* redo_action_{nullptr};
     QtSystemBuilderWidget* system_builder_{nullptr};
+    QtStructuralEditController* structural_edits_{nullptr};
     QtWorkbenchBridge* bridge_{nullptr};
     QComboBox* run_mode_combo_{nullptr};
     QComboBox* batch_unit_combo_{nullptr};

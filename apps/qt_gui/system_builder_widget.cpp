@@ -1,5 +1,6 @@
 /*** Implement domain-backed Qt System Builder editors and undo commands. ***/
 #include "apps/qt_gui/system_builder_widget.hpp"
+#include "apps/qt_gui/structural_edit_controller.hpp"
 
 #include <QComboBox>
 #include <QDialog>
@@ -17,8 +18,6 @@
 #include <QSignalBlocker>
 #include <QStackedWidget>
 #include <QTableView>
-#include <QUndoCommand>
-#include <QUndoStack>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -28,32 +27,6 @@
 
 namespace cpssim::qt {
 namespace {
-
-struct DraftState {
-    EditableSystemDraft draft;
-    std::vector<DraftTaskAssignment> assignments;
-    StructuralSelection selection;
-};
-
-class RestoreDraftCommand final : public QUndoCommand {
-  public:
-    RestoreDraftCommand(QtWorkbenchBridge& bridge, DraftState before, DraftState after,
-                        const QString& text)
-        : QUndoCommand(text), bridge_{bridge}, before_{std::move(before)},
-          after_{std::move(after)} {}
-
-    void undo() override { restore(before_); }
-    void redo() override { restore(after_); }
-
-  private:
-    void restore(const DraftState& state) {
-        bridge_.restore_draft(state.draft, state.assignments, state.selection);
-    }
-
-    QtWorkbenchBridge& bridge_;
-    DraftState before_;
-    DraftState after_;
-};
 
 std::optional<std::size_t> resource_index(const EditableSystemDraft& draft, ResourceId id) {
     const auto found = std::find_if(draft.resources().begin(), draft.resources().end(),
@@ -269,8 +242,10 @@ const QtTaskExecutionProfileRow* QtTaskExecutionProfileEditModel::row_at(int row
                                                             : nullptr;
 }
 
-QtSystemBuilderWidget::QtSystemBuilderWidget(QtWorkbenchBridge& bridge, QWidget* parent)
-    : QWidget(parent), bridge_{bridge}, undo_stack_{new QUndoStack(this)} {
+QtSystemBuilderWidget::QtSystemBuilderWidget(QtWorkbenchBridge& bridge,
+                                         QtStructuralEditController& edits,
+                                         QWidget* parent)
+    : QWidget(parent), bridge_{bridge}, edits_{edits} {
     setObjectName("view.systemBuilder");
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(1, 1, 1, 1);
@@ -329,7 +304,6 @@ void QtSystemBuilderWidget::build_pages() {
     form->addRow(system_diagnostic_);
 
     resource_page_ = form_page(pages_, form);
-    // form->setRowWrapPolicy(QFormLayout::WrapLongRows);
     resource_id_ = new QLineEdit(resource_page_);
     resource_name_ = new QLineEdit(resource_page_);
     resource_id_->setObjectName("systemBuilder.resourceId");
@@ -439,13 +413,13 @@ void QtSystemBuilderWidget::connect_editors() {
         const auto value = tick_value(tick_period_);
         if (!value.has_value())
             return;
-        push_mutation("Change tick period",
+        edits_.apply("Change tick period",
                       [value](auto& draft, auto&, auto&) { draft.set_tick_period_ns(*value); });
     });
     connect(preemption_, &QComboBox::currentIndexChanged, this, [this](int index) {
         if (refreshing_ || !editing_enabled())
             return;
-        push_mutation("Change preemption mode", [index](auto& draft, auto&, auto&) {
+        edits_.apply("Change preemption mode", [index](auto& draft, auto&, auto&) {
             draft.set_preemption_mode(index == 0 ? PreemptionMode::Preemptive
                                                  : PreemptionMode::NonPreemptive);
         });
@@ -455,7 +429,7 @@ void QtSystemBuilderWidget::connect_editors() {
         if (refreshing_ || !editing_enabled() || !selected.has_value())
             return;
         const auto name = resource_name_->text().toStdString();
-        push_mutation("Rename resource", [selected, name](auto& draft, auto&, auto&) {
+        edits_.apply("Rename resource", [selected, name](auto& draft, auto&, auto&) {
             if (const auto index = resource_index(draft, *selected); index.has_value())
                 draft.set_resource_name(*index, name);
         });
@@ -466,7 +440,7 @@ void QtSystemBuilderWidget::connect_editors() {
         if (refreshing_ || !editing_enabled() || !selected.has_value() || !value.has_value())
             return;
         const ResourceId replacement{*value};
-        push_mutation("Change resource ID", [selected, replacement](auto& draft, auto& assignments,
+        edits_.apply("Change resource ID", [selected, replacement](auto& draft, auto& assignments,
                                                                     auto& selection) {
             if (const auto index = resource_index(draft, *selected); index.has_value()) {
                 draft.set_resource_id(*index, replacement);
@@ -483,7 +457,7 @@ void QtSystemBuilderWidget::connect_editors() {
             const auto selected = bridge_.application().structural_selection().task_id();
             if (refreshing_ || !editing_enabled() || !selected.has_value())
                 return;
-            push_mutation(text, [this, source, selected](auto& draft, auto&, auto&) {
+            edits_.apply(text, [this, source, selected](auto& draft, auto&, auto&) {
                 const auto index = task_index(draft, *selected);
                 if (!index.has_value())
                     return;
@@ -526,7 +500,7 @@ void QtSystemBuilderWidget::connect_editors() {
             edit_policy() != ProjectSystemEditPolicy::Generic)
             return;
         const TaskId replacement{*value};
-        push_mutation("Change task ID",
+        edits_.apply("Change task ID",
                       [selected, replacement](auto& draft, auto& assignments, auto& selection) {
                           if (const auto index = task_index(draft, *selected); index.has_value()) {
                               draft.set_task_id(*index, replacement);
@@ -545,7 +519,7 @@ void QtSystemBuilderWidget::connect_editors() {
         const auto resource = index == 0 ? std::nullopt
                                          : std::optional<ResourceId>{ResourceId{
                                                task_assignment_->currentData().toULongLong()}};
-        static_cast<void>(push_mutation(
+        static_cast<void>(edits_.apply(
             "Change task assignment", [task_id, resource](auto&, auto& assignments, auto&) {
                 const auto found =
                     std::find_if(assignments.begin(), assignments.end(),
@@ -564,7 +538,7 @@ void QtSystemBuilderWidget::connect_editors() {
             const auto value = tick_value(source);
             if (refreshing_ || !editing_enabled() || !key.has_value() || !value.has_value())
                 return;
-            push_mutation(text, [key, value, source, this](auto& draft, auto&, auto&) {
+            edits_.apply(text, [key, value, source, this](auto& draft, auto&, auto&) {
                 if (const auto index = route_index(draft, *key); index.has_value()) {
                     auto route = draft.routes()[*index];
                     if (source == route_send_offset_)
@@ -586,7 +560,7 @@ void QtSystemBuilderWidget::connect_editors() {
                     edit_policy() != ProjectSystemEditPolicy::Generic)
                     return;
                 const TaskId replacement{source->currentData().toULongLong()};
-                push_mutation("Change route endpoint", [key, replacement, source_endpoint](
+                edits_.apply("Change route endpoint", [key, replacement, source_endpoint](
                                                            auto& draft, auto&, auto& selection) {
                     if (const auto index = route_index(draft, *key); index.has_value()) {
                         auto route = draft.routes()[*index];
@@ -608,142 +582,26 @@ void QtSystemBuilderWidget::connect_editors() {
             &QtSystemBuilderWidget::open_execution_profile_dialog);
 }
 
-bool QtSystemBuilderWidget::push_mutation(const QString& text, DraftMutator mutator) {
-    auto& application = bridge_.application();
-    if (!application.editable_system().has_value())
-        return false;
-    DraftState before{*application.editable_system(), application.run_assignments(),
-                      application.structural_selection()};
-    auto after = before;
-    try {
-        mutator(after.draft, after.assignments, after.selection);
-        undo_stack_->push(
-            new RestoreDraftCommand{bridge_, std::move(before), std::move(after), text});
-        return true;
-    } catch (const std::exception& error) {
-        application.set_status(error.what(), true);
-        Q_EMIT bridge_.statusChanged();
-        return false;
-    }
-}
-
 bool QtSystemBuilderWidget::create_component(StructuralSection section) {
-    auto& application = bridge_.application();
-    if (!editing_enabled() || !application.editable_system().has_value())
-        return false;
-    if ((section == StructuralSection::Tasks || section == StructuralSection::MessageRoutes) &&
-        edit_policy() != ProjectSystemEditPolicy::Generic) {
-        application.set_status("Adapter-owned tasks and route structure are protected.", true);
-        Q_EMIT bridge_.statusChanged();
-        return false;
-    }
-    DraftState before{*application.editable_system(), application.run_assignments(),
-                      application.structural_selection()};
-    auto after = before;
-
-    // Record the previous last resource before creating the new one
-    std::optional<ResourceId> previous_last_resource;
-    if (section == StructuralSection::Resources && !after.draft.resources().empty()) {
-        previous_last_resource = after.draft.resources().back().id;
-    }
-
-    SystemExplorerInteraction interaction;
-    auto result = interaction.create(section, after.draft, after.selection);
-    if (!result.changed) {
-        application.set_status(result.diagnostic, true);
-        Q_EMIT bridge_.statusChanged();
-        return false;
-    }
-
-    // Copy execution profiles from the previous last resource to the newly added resource
-    if (section == StructuralSection::Resources && previous_last_resource.has_value() &&
-        !after.draft.resources().empty()) {
-        const auto new_resource = after.draft.resources().back().id;
-        for (const auto& task : after.draft.tasks()) {
-            const auto inherited_wcet =
-                after.draft.execution_profile(task.id, *previous_last_resource);
-            if (inherited_wcet.has_value()) {
-                after.draft.set_execution_profile(task.id, new_resource, *inherited_wcet);
-            }
-        }
-    }
-
-    for (const auto& task : after.draft.tasks()) {
-        const auto exists = std::any_of(after.assignments.begin(), after.assignments.end(),
-                                        [&](const auto& row) { return row.task_id == task.id; });
-        if (!exists)
-            after.assignments.push_back({task.id, std::nullopt});
-    }
-    undo_stack_->push(new RestoreDraftCommand{bridge_, std::move(before), std::move(after),
-                                              QStringLiteral("Add component")});
-    if (section == StructuralSection::Tasks) {
-        if (const auto task_id = application.structural_selection().task_id();
+    const bool ok = edits_.create_component(section);
+    if (ok && section == StructuralSection::Tasks) {
+        if (const auto task_id =
+                bridge_.application().structural_selection().task_id();
             task_id.has_value()) {
             Q_EMIT taskCreated(*task_id);
         }
     }
-    return true;
+    return ok;
 }
 
 bool QtSystemBuilderWidget::delete_selected(bool confirmed) {
-    if (!confirmed || !editing_enabled())
+    if (!confirmed)
         return false;
-    auto& application = bridge_.application();
-    const auto selection = application.structural_selection();
-    if ((selection.kind() == StructuralSelectionKind::Task ||
-         selection.kind() == StructuralSelectionKind::MessageRoute ||
-         selection.kind() == StructuralSelectionKind::Connection) &&
-        edit_policy() == ProjectSystemEditPolicy::BoschCompatible) {
-        application.set_status("This Bosch structural identity is protected.", true);
-        Q_EMIT bridge_.statusChanged();
-        return false;
-    }
-    DraftState before{*application.editable_system(), application.run_assignments(), selection};
-    auto after = before;
-    SystemExplorerInteraction interaction;
-    if (!interaction.request_delete(after.selection, after.draft, after.assignments))
-        return false;
-    const auto result = interaction.confirm_delete(after.draft, after.assignments, after.selection);
-    if (!result.changed)
-        return false;
-    undo_stack_->push(new RestoreDraftCommand{bridge_, std::move(before), std::move(after),
-                                              QStringLiteral("Delete component")});
-    return true;
+    return edits_.delete_selected();
 }
 
 bool QtSystemBuilderWidget::duplicate_selected() {
-    auto& application = bridge_.application();
-    if (!editing_enabled() || !application.editable_system().has_value()) {
-        return false;
-    }
-    const auto selected = application.structural_selection();
-    if ((selected.kind() == StructuralSelectionKind::Task ||
-         selected.kind() == StructuralSelectionKind::MessageRoute ||
-         selected.kind() == StructuralSelectionKind::Connection) &&
-        edit_policy() != ProjectSystemEditPolicy::Generic) {
-        application.set_status("Adapter-owned tasks and route structure are protected.", true);
-        Q_EMIT bridge_.statusChanged();
-        return false;
-    }
-    DraftState before{*application.editable_system(), application.run_assignments(), selected};
-    auto after = before;
-    SystemExplorerInteraction interaction;
-    const auto result = interaction.duplicate(selected, after.draft, after.selection);
-    if (!result.changed) {
-        application.set_status(result.diagnostic, true);
-        Q_EMIT bridge_.statusChanged();
-        return false;
-    }
-    for (const auto& task : after.draft.tasks()) {
-        const auto exists = std::any_of(after.assignments.begin(), after.assignments.end(),
-                                        [&](const auto& row) { return row.task_id == task.id; });
-        if (!exists) {
-            after.assignments.push_back({task.id, std::nullopt});
-        }
-    }
-    undo_stack_->push(new RestoreDraftCommand{bridge_, std::move(before), std::move(after),
-                                              QStringLiteral("Duplicate component")});
-    return true;
+    return edits_.duplicate_selected();
 }
 
 void QtSystemBuilderWidget::open_execution_profile_dialog() {
@@ -790,7 +648,7 @@ void QtSystemBuilderWidget::open_execution_profile_dialog() {
 
         const auto& rows = dialog_model->rows();
 
-        const bool changed = push_mutation(
+        const bool changed = edits_.apply(
             QStringLiteral("Edit task execution profiles"),
             [task_id, &rows](auto& system_draft, auto&, auto&) {
                 for (const auto& row : rows) {
@@ -851,27 +709,17 @@ void QtSystemBuilderWidget::refresh_profile_button_state(
 }
 
 bool QtSystemBuilderWidget::editing_enabled() const {
-    return bridge_.application().editable_system().has_value() &&
-           bridge_.application().run_state() != GuiRunState::Running;
+    return edits_.editing_enabled();
 }
 
 ProjectSystemEditPolicy QtSystemBuilderWidget::edit_policy() const {
-    const auto& application = bridge_.application();
-    return application.has_active_project()
-               ? project_system_edit_policy(application.active_project().metadata())
-               : ProjectSystemEditPolicy::ReadOnlyAdapter;
+    return edits_.edit_policy();
 }
 
 void QtSystemBuilderWidget::refresh() {
     refreshing_ = true;
     const auto& application = bridge_.application();
-    const auto active_root = application.has_active_project()
-                                 ? std::optional{application.active_project().root()}
-                                 : std::nullopt;
-    if (active_root != undo_project_root_) {
-        undo_stack_->clear();
-        undo_project_root_ = active_root;
-    }
+    edits_.synchronize_active_project();
     setEnabled(application.editable_system().has_value());
     pages_->setEnabled(editing_enabled());
     if (!application.editable_system().has_value()) {

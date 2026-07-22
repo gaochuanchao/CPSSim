@@ -4,6 +4,7 @@
 #else
 #include "apps/qt_gui/architecture_view.hpp"
 #include "apps/qt_gui/resource_assignment_model.hpp"
+#include "apps/qt_gui/structural_edit_controller.hpp"
 #include "apps/qt_gui/system_builder_widget.hpp"
 #include "apps/qt_gui/workbench_style.hpp"
 
@@ -97,9 +98,10 @@ void QtResourceAssignmentModelTest::assignment_overview_is_strictly_read_only() 
 void QtResourceAssignmentModelTest::table_and_canvas_share_structural_selection() {
     TemporaryDirectory temporary;
     QtWorkbenchBridge bridge{make_application(temporary.path())};
-    QtArchitectureView architecture{bridge};
+    QtStructuralEditController edits{bridge};
+    QtArchitectureView architecture{bridge, edits};
     QtResourceAssignmentsWidget assignments{bridge};
-    QtSystemBuilderWidget builder{bridge};
+    QtSystemBuilderWidget builder{bridge, edits};
     const auto task_id = assignments.assignment_model().row_at(0)->task_id;
     assignments.table().selectRow(0);
     QCOMPARE(bridge.application().structural_selection().task_id(), std::optional<TaskId>{task_id});
