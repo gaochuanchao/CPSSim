@@ -27,7 +27,7 @@ class QVBoxLayout;
 
 namespace cpssim::qt {
 
-inline constexpr int qt_main_window_state_version = 1;
+inline constexpr int qt_main_window_state_version = 2;
 
 class QtWorkbenchBridge;
 class QtSystemBuilderWidget;
@@ -100,7 +100,6 @@ class QtMainWindow final : public QMainWindow {
     QVBoxLayout* recent_projects_layout_{nullptr};
     QWidget* workbench_page_{nullptr};
     QTabWidget* central_tabs_{nullptr};
-    QToolBar* dock_toolbar_{nullptr};
     QToolBar* simulation_toolbar_{nullptr};
     QList<QDockWidget*> docks_;
     QAction* new_project_action_{nullptr};
@@ -125,6 +124,7 @@ class QtMainWindow final : public QMainWindow {
     QtFrontendPaths frontend_paths_;
     QtAppearancePreferences appearance_preferences_;
     GuiTheme global_theme_{GuiTheme::Dark};
+    QByteArray workbench_dock_state_;
 };
 
 } // namespace cpssim::qt

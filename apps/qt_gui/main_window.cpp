@@ -46,8 +46,8 @@
 namespace cpssim::qt {
 namespace {
 
-constexpr auto geometry_key = "qt_workbench/geometry_v1";
-constexpr auto state_key = "qt_workbench/state_v1";
+constexpr auto geometry_key = "qt_workbench/geometry_v2";
+constexpr auto state_key = "qt_workbench/state_v2";
 
 QWidget* placeholder(const QString& text, QWidget* parent = nullptr) {
     auto* widget = new QWidget(parent);
@@ -77,6 +77,7 @@ QtMainWindow::QtMainWindow(bool restore_user_layout, QWidget* parent)
     build_docks();
     build_menus_and_toolbars();
     arrange_default_docks();
+    workbench_dock_state_ = save_workbench_state();
     statusBar()->showMessage("Ready");
     if (restore_user_layout_) {
         load_user_layout();
@@ -285,16 +286,6 @@ void QtMainWindow::build_menus_and_toolbars() {
     auto* reset_batch = simulation_toolbar_->addAction("Reset Batch");
     reset_batch->setObjectName("action.resetBatch");
 
-    dock_toolbar_ = new QToolBar("Workbench Panels", this);
-    dock_toolbar_->setObjectName("toolbar.docks");
-    dock_toolbar_->setMovable(false);
-    dock_toolbar_->setOrientation(Qt::Vertical);
-    dock_toolbar_->setToolButtonStyle(Qt::ToolButtonTextOnly);
-    addToolBar(Qt::LeftToolBarArea, dock_toolbar_);
-    for (auto* dock : docks_) {
-        dock_toolbar_->addAction(dock->toggleViewAction());
-    }
-
     connect(dark_theme_action_, &QAction::triggered, this, [this] {
         global_theme_ = GuiTheme::Dark;
         appearance_preferences_.set_theme(global_theme_);
@@ -366,6 +357,9 @@ void QtMainWindow::arrange_default_docks() {
     resizeDocks({findChild<QDockWidget*>("dock.runConfiguration"),
                  findChild<QDockWidget*>("dock.runtimeInspector")},
                 {420, 420}, Qt::Vertical);
+    resizeDocks({findChild<QDockWidget*>("dock.explorer")}, {320}, Qt::Horizontal);
+    resizeDocks({findChild<QDockWidget*>("dock.runConfiguration")}, {300}, Qt::Horizontal);
+    resizeDocks({findChild<QDockWidget*>("dock.resourceAssignments")}, {220}, Qt::Vertical);
 }
 
 bool QtMainWindow::home_is_active() const noexcept {
@@ -374,9 +368,10 @@ bool QtMainWindow::home_is_active() const noexcept {
 
 void QtMainWindow::set_workbench_chrome_visible(bool visible) {
     simulation_toolbar_->setVisible(visible);
-    dock_toolbar_->setVisible(visible);
-    for (auto* dock : docks_) {
-        dock->setVisible(visible);
+    if (!visible) {
+        for (auto* dock : docks_) {
+            dock->hide();
+        }
     }
     save_project_action_->setEnabled(visible);
     save_project_as_action_->setEnabled(visible);
@@ -473,6 +468,8 @@ void QtMainWindow::bind_workbench(QtWorkbenchBridge* bridge) {
             &QtMainWindow::synchronize_workbench_chrome);
     connect(bridge_, &QtWorkbenchBridge::workspaceChanged, this,
             &QtMainWindow::synchronize_workbench_chrome);
+    connect(bridge_, &QtWorkbenchBridge::completedResultChanged, this,
+            &QtMainWindow::synchronize_workbench_chrome);
     connect(bridge_, &QtWorkbenchBridge::applicationStateChanged, this,
             &QtMainWindow::refresh_home);
     apply_theme();
@@ -485,9 +482,9 @@ void QtMainWindow::synchronize_workbench_chrome() {
         return;
     }
     const auto& application = bridge_->application();
-    if (application.screen() == GuiApplicationScreen::Home) {
+    if (application.screen() == GuiApplicationScreen::Home && !home_is_active()) {
         show_home();
-    } else {
+    } else if (application.screen() == GuiApplicationScreen::Workbench && home_is_active()) {
         show_workbench();
     }
     const auto state = application.run_state();
@@ -847,22 +844,37 @@ void QtMainWindow::apply_theme() {
     dark_theme_action_->setChecked(global_theme_ == GuiTheme::Dark);
     light_theme_action_->setChecked(global_theme_ == GuiTheme::Light);
     apply_workbench_theme(global_theme_);
+    if (bridge_ != nullptr) {
+        Q_EMIT bridge_->appearanceChanged();
+    }
 }
 
 void QtMainWindow::show_home() {
+    if (!home_is_active()) {
+        workbench_dock_state_ = save_workbench_state();
+    }
     pages_->setCurrentWidget(home_page_);
     set_workbench_chrome_visible(false);
     statusBar()->showMessage("No active project");
 }
 
 void QtMainWindow::show_workbench() {
+    if (!home_is_active()) {
+        return;
+    }
     pages_->setCurrentWidget(workbench_page_);
     set_workbench_chrome_visible(true);
+    if (!workbench_dock_state_.isEmpty()) {
+        static_cast<void>(restoreState(workbench_dock_state_, qt_main_window_state_version));
+    } else {
+        arrange_default_docks();
+    }
     statusBar()->showMessage("Workbench ready");
 }
 
 void QtMainWindow::restore_default_layout() {
     arrange_default_docks();
+    workbench_dock_state_ = save_workbench_state();
     if (home_is_active()) {
         set_workbench_chrome_visible(false);
     }
@@ -882,14 +894,16 @@ bool QtMainWindow::restore_workbench_layout(const QByteArray& geometry, const QB
 
 void QtMainWindow::load_user_layout() {
     QSettings settings("CPSSim", "CPSSim Qt GUI");
-    static_cast<void>(restore_workbench_layout(settings.value(geometry_key).toByteArray(),
-                                               settings.value(state_key).toByteArray()));
+    const auto state = settings.value(state_key).toByteArray();
+    if (restore_workbench_layout(settings.value(geometry_key).toByteArray(), state)) {
+        workbench_dock_state_ = save_workbench_state();
+    }
 }
 
 void QtMainWindow::save_user_layout() const {
     QSettings settings("CPSSim", "CPSSim Qt GUI");
     settings.setValue(geometry_key, save_workbench_geometry());
-    settings.setValue(state_key, save_workbench_state());
+    settings.setValue(state_key, home_is_active() ? workbench_dock_state_ : save_workbench_state());
 }
 
 void QtMainWindow::closeEvent(QCloseEvent* event) {

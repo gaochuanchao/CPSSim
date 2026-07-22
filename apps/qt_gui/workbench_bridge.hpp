@@ -80,6 +80,7 @@ class QtWorkbenchBridge final : public QObject {
     void runConfigurationChanged();
     void resourceHighlightChanged();
     void workspaceChanged();
+    void appearanceChanged();
 
   private:
     void enqueue(GuiCommand command);

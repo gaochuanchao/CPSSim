@@ -82,6 +82,7 @@ QtArchitectureView::QtArchitectureView(QtWorkbenchBridge& bridge, QWidget* paren
     connect(&bridge_, &QtWorkbenchBridge::resourceHighlightChanged, this,
             &QtArchitectureView::refresh);
     connect(&bridge_, &QtWorkbenchBridge::workspaceChanged, this, &QtArchitectureView::refresh);
+    connect(&bridge_, &QtWorkbenchBridge::appearanceChanged, this, &QtArchitectureView::refresh);
     model_.set_position_changed([this](GuiGraphNodeId entity, QPointF position) {
         persist_node_position(entity, position);
     });

@@ -279,6 +279,8 @@ QtResourceAssignmentsWidget::QtResourceAssignmentsWidget(QtWorkbenchBridge& brid
             &QtResourceAssignmentsWidget::rebuild);
     connect(&bridge_, &QtWorkbenchBridge::applicationStateChanged, this,
             &QtResourceAssignmentsWidget::rebuild);
+    connect(&bridge_, &QtWorkbenchBridge::appearanceChanged, this,
+            &QtResourceAssignmentsWidget::rebuild);
     connect(&bridge_, &QtWorkbenchBridge::structuralSelectionChanged, this,
             &QtResourceAssignmentsWidget::select_table_row);
     connect(table_->selectionModel(), &QItemSelectionModel::currentRowChanged, this,

@@ -2,6 +2,7 @@
 #include "apps/qt_gui/main_window.hpp"
 #include "apps/qt_gui/workbench_bridge.hpp"
 
+#include "cpssim/application/project/project_template.hpp"
 #include "cpssim/application/workbench_application.hpp"
 
 #include <QAction>
@@ -12,6 +13,7 @@
 #include <QSettings>
 #include <QTabWidget>
 #include <QTemporaryDir>
+#include <QToolBar>
 #include <QtTest/QTest>
 
 namespace cpssim::qt {
@@ -25,6 +27,8 @@ class QtMainWindowTest final : public QObject {
     void round_trips_versioned_geometry_and_state();
     void project_workflow_and_recent_history_are_native();
     void execution_controls_and_global_theme_are_independent();
+    void ordinary_updates_never_reopen_closed_results();
+    void home_transition_restores_workbench_visibility_once();
 };
 
 void QtMainWindowTest::starts_on_home_with_stable_actions() {
@@ -128,6 +132,46 @@ void QtMainWindowTest::round_trips_versioned_geometry_and_state() {
                                               source.save_workbench_state()));
     QVERIFY(!restored.findChild<QDockWidget*>("dock.diagnostics")->isVisible());
     QVERIFY(!restored.restore_workbench_layout({}, QByteArray{"not a Qt state"}));
+}
+
+void QtMainWindowTest::ordinary_updates_never_reopen_closed_results() {
+    QTemporaryDir temporary;
+    const std::filesystem::path root{temporary.path().toStdString()};
+    QtMainWindow window{false};
+    auto application = std::make_unique<WorkbenchApplication>();
+    application->create_project(make_generic_project_template(root, "project"));
+    auto* bridge = new QtWorkbenchBridge(std::move(application), &window);
+    window.bind_workbench(bridge);
+    window.show();
+    QCoreApplication::processEvents();
+    auto* results = window.findChild<QDockWidget*>("dock.results");
+    QVERIFY(results != nullptr);
+    results->hide();
+    window.findChild<QAction*>("action.theme.light")->trigger();
+    QVERIFY(!results->isVisible());
+    Q_EMIT bridge->progressChanged();
+    QVERIFY(!results->isVisible());
+    Q_EMIT bridge->statusChanged();
+    QVERIFY(!results->isVisible());
+    Q_EMIT bridge->applicationStateChanged();
+    QVERIFY(!results->isVisible());
+    Q_EMIT bridge->completedResultChanged();
+    QVERIFY(!results->isVisible());
+    QVERIFY(!results->isFloating());
+    QtAppearancePreferences{}.set_theme(GuiTheme::Dark);
+}
+
+void QtMainWindowTest::home_transition_restores_workbench_visibility_once() {
+    QtMainWindow window{false};
+    window.show_workbench();
+    auto* results = window.findChild<QDockWidget*>("dock.results");
+    results->hide();
+    window.show_home();
+    QVERIFY(!results->isVisible());
+    window.show_workbench();
+    QVERIFY(!results->isVisible());
+    QVERIFY(window.findChild<QToolBar*>("toolbar.docks") == nullptr);
+    QCOMPARE(window.dockWidgetArea(results), Qt::BottomDockWidgetArea);
 }
 
 } // namespace cpssim::qt
