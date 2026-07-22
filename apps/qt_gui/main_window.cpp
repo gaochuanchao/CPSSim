@@ -879,39 +879,27 @@ void QtMainWindow::refresh_home() {
 }
 
 void QtMainWindow::apply_theme() {
-    dark_theme_action_->setChecked(global_theme_ == GuiTheme::Dark);
-    light_theme_action_->setChecked(global_theme_ == GuiTheme::Light);
+    dark_theme_action_->setChecked(
+        global_theme_ == GuiTheme::Dark);
+
+    light_theme_action_->setChecked(
+        global_theme_ == GuiTheme::Light);
 
     apply_workbench_theme(global_theme_);
 
+    /*
+     * Keep native dock separators draggable, but do not paint
+     * the separator region. Panel boundaries and title bars
+     * provide the visual separation.
+     */
     qApp->setStyleSheet(
         R"(
-        /*
-         * QMainWindow dock separators.
-         * Keep them thin, visible, and draggable.
-         */
         QMainWindow::separator {
-            background: palette(mid);
-            width: 2px;
-            height: 2px;
+            background: transparent;
         }
 
         QMainWindow::separator:hover {
-            background: palette(highlight);
-        }
-
-        /*
-         * Ordinary QSplitter handles, in case they are used
-         * inside individual panels.
-         */
-        QSplitter::handle {
-            background: palette(mid);
-            width: 2px;
-            height: 2px;
-        }
-
-        QSplitter::handle:hover {
-            background: palette(highlight);
+            background: transparent;
         }
         )");
 
