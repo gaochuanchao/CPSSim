@@ -15,6 +15,11 @@
 
 namespace cpssim::qt {
 
+QPointF snap_architecture_position(QPointF position) {
+    return {std::round(position.x() / architecture_grid_step) * architecture_grid_step,
+            std::round(position.y() / architecture_grid_step) * architecture_grid_step};
+}
+
 std::vector<QtTaskNodePresentation>
 build_task_node_presentations(const ExperimentPresentationSnapshot& experiment, GuiTheme theme,
                               std::optional<ResourceId> highlighted_resource) {
@@ -124,6 +129,7 @@ void QtArchitectureGraphModel::rebuild(
             position = QPointF{40.0 + static_cast<qreal>(flat_index % 4) * 240.0,
                                40.0 + static_cast<qreal>(flat_index / 4) * 140.0};
         }
+        position = snap_architecture_position(position);
         const auto presentation = std::find_if(
             task_presentations.begin(), task_presentations.end(), [&](const auto& candidate) {
                 return candidate.task_id == std::get<TaskId>(node.entity);
@@ -180,11 +186,15 @@ std::optional<GuiGraphNodeId> QtArchitectureGraphModel::entity_for(QtNodes::Node
     return nodes_.contains(node_id) ? ids_.entity_id(node_id) : std::nullopt;
 }
 
-std::vector<QRectF> QtArchitectureGraphModel::occupied_rectangles() const {
+std::vector<QRectF>
+QtArchitectureGraphModel::occupied_rectangles(std::optional<GuiGraphNodeId> excluded) const {
     std::vector<QRectF> result;
     result.reserve(nodes_.size());
     for (const auto& [id, node] : nodes_) {
         static_cast<void>(id);
+        if (excluded == node.entity) {
+            continue;
+        }
         result.emplace_back(node.position, node.size);
     }
     return result;

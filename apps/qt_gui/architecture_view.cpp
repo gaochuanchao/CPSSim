@@ -15,17 +15,54 @@
 #include <QtNodes/internal/NodeGraphicsObject.hpp>
 
 #include <QHBoxLayout>
+#include <QPainter>
 #include <QPushButton>
 #include <QToolBar>
 #include <QVBoxLayout>
 
 #include <algorithm>
+#include <cmath>
+#include <limits>
 #include <optional>
 #include <utility>
 #include <vector>
 
 namespace cpssim::qt {
 namespace {
+
+class QtArchitectureGraphicsView final : public QtNodes::GraphicsView {
+  public:
+    using QtNodes::GraphicsView::GraphicsView;
+
+  protected:
+    void drawBackground(QPainter* painter, const QRectF& rect) override {
+        QtNodes::GraphicsView::drawBackground(painter, rect);
+        painter->save();
+        painter->setRenderHint(QPainter::Antialiasing, false);
+        auto minor = palette().color(QPalette::Mid);
+        auto major = palette().color(QPalette::Highlight);
+        minor.setAlpha(55);
+        major.setAlpha(80);
+        const auto first_x =
+            std::floor(rect.left() / architecture_grid_step) * architecture_grid_step;
+        const auto first_y =
+            std::floor(rect.top() / architecture_grid_step) * architecture_grid_step;
+        const auto major_step = architecture_grid_step * architecture_major_grid_every;
+        for (qreal x = first_x; x <= rect.right(); x += architecture_grid_step) {
+            const auto major_line =
+                std::abs(std::remainder(x, major_step)) < std::numeric_limits<qreal>::epsilon();
+            painter->setPen(major_line ? major : minor);
+            painter->drawLine(QLineF{x, rect.top(), x, rect.bottom()});
+        }
+        for (qreal y = first_y; y <= rect.bottom(); y += architecture_grid_step) {
+            const auto major_line =
+                std::abs(std::remainder(y, major_step)) < std::numeric_limits<qreal>::epsilon();
+            painter->setPen(major_line ? major : minor);
+            painter->drawLine(QLineF{rect.left(), y, rect.right(), y});
+        }
+        painter->restore();
+    }
+};
 
 GuiArchitectureGraph flat_graph(GuiArchitectureGraph graph,
                                 const GuiArchitectureWorkspace& workspace) {
@@ -48,7 +85,7 @@ GuiArchitectureGraph flat_graph(GuiArchitectureGraph graph,
 QtArchitectureView::QtArchitectureView(QtWorkbenchBridge& bridge, QWidget* parent)
     : QWidget(parent), bridge_{bridge}, model_{this},
       scene_{std::make_unique<QtNodes::BasicGraphicsScene>(model_)},
-      view_{std::make_unique<QtNodes::GraphicsView>(scene_.get())} {
+      view_{std::make_unique<QtArchitectureGraphicsView>(scene_.get())} {
     setObjectName("view.architecture");
     view_->setObjectName("architecture.graphicsView");
     view_->setScaleRange(0.1, 4.0);
@@ -57,21 +94,31 @@ QtArchitectureView::QtArchitectureView(QtWorkbenchBridge& bridge, QWidget* paren
     layout->setContentsMargins(0, 0, 0, 0);
     auto* toolbar = new QToolBar("Architecture", this);
     toolbar->setObjectName("toolbar.architecture");
-    auto* add_task = toolbar->addAction("Add Task");
-    add_task->setObjectName("action.architecture.addTask");
     auto* fit = toolbar->addAction("Fit");
     fit->setObjectName("action.architecture.fit");
+    auto* actual_size = toolbar->addAction("100%");
+    actual_size->setObjectName("action.architecture.actualSize");
+    auto* layout_action = toolbar->addAction("Auto Layout");
+    layout_action->setObjectName("action.architecture.autoLayout");
+    auto* snap = toolbar->addAction("Snap to Grid");
+    snap->setObjectName("action.architecture.snapToGrid");
+    snap->setCheckable(true);
+    snap->setChecked(true);
     layout->addWidget(toolbar);
     layout->addWidget(view_.get());
 
-    connect(add_task, &QAction::triggered, this, &QtArchitectureView::add_task_at_view_center);
     connect(fit, &QAction::triggered, view_.get(), &QtNodes::GraphicsView::zoomFitAll);
+    connect(actual_size, &QAction::triggered, view_.get(), &QGraphicsView::resetTransform);
+    connect(layout_action, &QAction::triggered, this, &QtArchitectureView::auto_layout);
+    connect(snap, &QAction::toggled, this, [this](bool enabled) { snap_to_grid_ = enabled; });
     connect(scene_.get(), &QtNodes::BasicGraphicsScene::nodeClicked, this,
             &QtArchitectureView::select_node);
     connect(scene_.get(), &QtNodes::BasicGraphicsScene::nodeSelected, this,
             &QtArchitectureView::select_node);
     connect(scene_.get(), &QGraphicsScene::selectionChanged, this,
             &QtArchitectureView::select_scene_item);
+    connect(scene_.get(), &QtNodes::BasicGraphicsScene::nodeMoved, this,
+            &QtArchitectureView::snap_node_position);
     connect(&bridge_, &QtWorkbenchBridge::presentationChanged, this,
             [this](quint64) { refresh(); });
     connect(&bridge_, &QtWorkbenchBridge::applicationStateChanged, this,
@@ -111,6 +158,10 @@ void QtArchitectureView::refresh() {
     if (!application.has_active_session() || application.presentation_snapshot() == nullptr) {
         model_.rebuild({});
         return;
+    }
+    for (auto& task : application.workspace().architecture.tasks) {
+        const auto snapped = snap_architecture_position({task.position.x, task.position.y});
+        task.position = {static_cast<float>(snapped.x()), static_cast<float>(snapped.y())};
     }
     auto presentation = application.presentation_snapshot()->experiment;
     if (application.editable_system().has_value()) {
@@ -190,17 +241,53 @@ std::optional<TaskId> QtArchitectureView::add_task_at(QPointF scene_position) {
     }
     const auto position = next_available_node_position(scene_position, QSizeF{180.0, 86.0},
                                                        model_.occupied_rectangles());
+    const auto snapped = snap_architecture_position(position);
     set_task_layout_position(application.workspace().architecture, *task_id,
-                             {static_cast<float>(position.x()), static_cast<float>(position.y())});
+                             {static_cast<float>(snapped.x()), static_cast<float>(snapped.y())});
     application.validate_system_draft();
     bridge_.notify_structural_selection_changed();
     refresh();
     return task_id;
 }
 
-void QtArchitectureView::add_task_at_view_center() {
+void QtArchitectureView::place_task_near_view_center(TaskId task_id) {
+    const auto node_id = model_.node_id_for(task_graph_node_id(task_id));
+    if (!node_id.has_value()) {
+        return;
+    }
     const auto center = view_->mapToScene(view_->viewport()->rect().center());
-    static_cast<void>(add_task_at(center));
+    const auto size = model_.nodeData(*node_id, QtNodes::NodeRole::Size).toSizeF();
+    const auto position =
+        next_available_node_position(snap_architecture_position(center), size,
+                                     model_.occupied_rectangles(task_graph_node_id(task_id)));
+    static_cast<void>(model_.setNodeData(*node_id, QtNodes::NodeRole::Position,
+                                         snap_architecture_position(position)));
+    bridge_.workspace_settings_changed();
+}
+
+void QtArchitectureView::snap_node_position(QtNodes::NodeId node_id, QPointF position) {
+    if (!snap_to_grid_) {
+        bridge_.workspace_settings_changed();
+        return;
+    }
+    const auto snapped = snap_architecture_position(position);
+    if (snapped != position) {
+        static_cast<void>(model_.setNodeData(node_id, QtNodes::NodeRole::Position, snapped));
+    }
+    bridge_.workspace_settings_changed();
+}
+
+void QtArchitectureView::auto_layout() {
+    auto ids = model_.allNodeIds();
+    std::vector<QtNodes::NodeId> ordered(ids.begin(), ids.end());
+    std::sort(ordered.begin(), ordered.end());
+    for (std::size_t index = 0; index < ordered.size(); ++index) {
+        const auto position = QPointF{40.0 + static_cast<qreal>(index % 4) * 240.0,
+                                      40.0 + static_cast<qreal>(index / 4) * 140.0};
+        static_cast<void>(model_.setNodeData(ordered[index], QtNodes::NodeRole::Position,
+                                             snap_architecture_position(position)));
+    }
+    bridge_.workspace_settings_changed();
 }
 
 void QtArchitectureView::synchronize_scene_selection() {

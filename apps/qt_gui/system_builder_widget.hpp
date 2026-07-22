@@ -60,6 +60,9 @@ class QtSystemBuilderWidget final : public QWidget {
     bool duplicate_selected();
     bool delete_selected(bool confirmed);
 
+  Q_SIGNALS:
+    void taskCreated(TaskId task_id);
+
   private:
     using DraftMutator = std::function<void(EditableSystemDraft&, std::vector<DraftTaskAssignment>&,
                                             StructuralSelection&)>;

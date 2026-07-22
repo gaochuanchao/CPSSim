@@ -602,6 +602,12 @@ bool QtSystemBuilderWidget::create_component(StructuralSection section) {
     }
     undo_stack_->push(new RestoreDraftCommand{bridge_, std::move(before), std::move(after),
                                               QStringLiteral("Add component")});
+    if (section == StructuralSection::Tasks) {
+        if (const auto task_id = application.structural_selection().task_id();
+            task_id.has_value()) {
+            Q_EMIT taskCreated(*task_id);
+        }
+    }
     return true;
 }
 

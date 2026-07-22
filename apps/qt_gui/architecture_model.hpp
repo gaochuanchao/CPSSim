@@ -23,6 +23,11 @@
 
 namespace cpssim::qt {
 
+inline constexpr qreal architecture_grid_step = 20.0;
+inline constexpr int architecture_major_grid_every = 5;
+
+QPointF snap_architecture_position(QPointF position);
+
 struct QtTaskNodePresentation {
     TaskId task_id;
     std::optional<ResourceId> resource_id;
@@ -53,7 +58,8 @@ class QtNodeIdMap {
 };
 
 QPointF next_available_node_position(QPointF requested, const QSizeF& size,
-                                     const std::vector<QRectF>& occupied, qreal offset = 24.0);
+                                     const std::vector<QRectF>& occupied,
+                                     qreal offset = architecture_grid_step);
 
 class QtArchitectureGraphModel final : public QtNodes::AbstractGraphModel {
   public:
@@ -69,7 +75,8 @@ class QtArchitectureGraphModel final : public QtNodes::AbstractGraphModel {
     std::optional<GuiConnectionId> connection_for(const QtNodes::ConnectionId& connection_id) const;
     std::size_t node_count() const noexcept { return nodes_.size(); }
     std::size_t connection_count() const noexcept { return connections_.size(); }
-    std::vector<QRectF> occupied_rectangles() const;
+    std::vector<QRectF>
+    occupied_rectangles(std::optional<GuiGraphNodeId> excluded = std::nullopt) const;
     const QtTaskNodePresentation* task_presentation(QtNodes::NodeId node_id) const;
 
     QtNodes::NodeId newNodeId() override;

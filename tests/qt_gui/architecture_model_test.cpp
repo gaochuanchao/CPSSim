@@ -4,6 +4,7 @@
 #else
 #include "apps/qt_gui/architecture_model.hpp"
 #include "apps/qt_gui/architecture_view.hpp"
+#include "apps/qt_gui/system_builder_widget.hpp"
 #include "apps/qt_gui/workbench_bridge.hpp"
 
 #include "cpssim/application/bosch_project_factory.hpp"
@@ -11,9 +12,11 @@
 
 #include <QtNodes/BasicGraphicsScene>
 
+#include <QAction>
 #include <QtTest/QTest>
 
 #include <chrono>
+#include <cmath>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -125,6 +128,7 @@ class QtArchitectureModelTest final : public QObject {
     void flat_model_accepts_cycles_and_filters_assignment_structure();
     void occupied_creation_uses_deterministic_offset();
     void draft_creation_selects_and_places_new_task();
+    void explorer_creation_and_node_movement_use_shared_grid();
     void bosch_session_loads_paused_and_renders_six_flat_tasks();
 };
 
@@ -162,6 +166,45 @@ void QtArchitectureModelTest::occupied_creation_uses_deterministic_offset() {
     QCOMPARE(first, second);
     QVERIFY(first != QPointF(100.0, 100.0));
     QCOMPARE(first.x() - 100.0, first.y() - 100.0);
+}
+
+void QtArchitectureModelTest::explorer_creation_and_node_movement_use_shared_grid() {
+    QCOMPARE(architecture_grid_step, 20.0);
+    QCOMPARE(architecture_major_grid_every, 5);
+    QCOMPARE(snap_architecture_position({611.0, 329.0}), QPointF(620.0, 320.0));
+
+    TemporaryDirectory temporary;
+    auto application = std::make_unique<WorkbenchApplication>();
+    application->create_project(make_generic_project_template(temporary.path(), "project"));
+    QtWorkbenchBridge bridge{std::move(application)};
+    QtArchitectureView view{bridge};
+    QtSystemBuilderWidget builder{bridge};
+    QObject::connect(&builder, &QtSystemBuilderWidget::taskCreated, &view,
+                     &QtArchitectureView::place_task_near_view_center);
+
+    QVERIFY(view.findChild<QAction*>("action.architecture.addTask") == nullptr);
+    QVERIFY(builder.create_component(StructuralSection::Tasks));
+    const auto task_id = bridge.application().structural_selection().task_id();
+    QVERIFY(task_id.has_value());
+    const auto* created = find_task_layout(bridge.application().workspace().architecture, *task_id);
+    QVERIFY(created != nullptr);
+    QCOMPARE(std::fmod(created->position.x, static_cast<float>(architecture_grid_step)), 0.0F);
+    QCOMPARE(std::fmod(created->position.y, static_cast<float>(architecture_grid_step)), 0.0F);
+
+    const auto node_id = view.graph_model().node_id_for(task_graph_node_id(*task_id));
+    QVERIFY(node_id.has_value());
+    Q_EMIT view.graphics_scene().nodeMoved(*node_id, {613.0, 329.0});
+    const auto* moved = find_task_layout(bridge.application().workspace().architecture, *task_id);
+    QVERIFY(moved != nullptr);
+    QCOMPARE(moved->position, (GuiLayoutPoint{620.0F, 320.0F}));
+
+    auto* auto_layout = view.findChild<QAction*>("action.architecture.autoLayout");
+    QVERIFY(auto_layout != nullptr);
+    auto_layout->trigger();
+    for (const auto& layout : bridge.application().workspace().architecture.tasks) {
+        QCOMPARE(std::fmod(layout.position.x, static_cast<float>(architecture_grid_step)), 0.0F);
+        QCOMPARE(std::fmod(layout.position.y, static_cast<float>(architecture_grid_step)), 0.0F);
+    }
 }
 
 void QtArchitectureModelTest::draft_creation_selects_and_places_new_task() {
