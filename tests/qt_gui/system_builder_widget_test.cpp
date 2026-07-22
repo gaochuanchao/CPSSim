@@ -9,11 +9,13 @@
 #include "cpssim/application/project/project_template.hpp"
 
 #include <QAction>
+#include <QComboBox>
 #include <QDockWidget>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
 #include <QScrollArea>
+#include <QTableView>
 #include <QUndoStack>
 #include <QtTest/QTest>
 
@@ -58,6 +60,7 @@ class QtSystemBuilderWidgetTest final : public QObject {
     void structured_validation_is_shown_on_selected_page();
     void main_window_reuses_undo_actions();
     void builder_is_a_scrollable_property_editor_without_component_library();
+    void task_page_edits_assignment_and_wcets_with_undo();
 };
 
 void QtSystemBuilderWidgetTest::selection_uses_reusable_editor_pages() {
@@ -139,6 +142,59 @@ void QtSystemBuilderWidgetTest::
     QVERIFY(builder.findChild<QScrollArea*>("systemBuilder.scrollArea") != nullptr);
     QVERIFY(builder.findChild<QListWidget*>("systemBuilder.componentLibrary") == nullptr);
     QVERIFY(builder.findChild<QObject*>("splitter.systemBuilder") == nullptr);
+}
+
+void QtSystemBuilderWidgetTest::task_page_edits_assignment_and_wcets_with_undo() {
+    TemporaryDirectory temporary;
+    auto application = make_application(temporary.path());
+    auto draft = *application->editable_system();
+    const auto task_id = draft.tasks().front().id;
+    const auto resource_id = draft.add_resource();
+    draft.set_resource_name(draft.resources().size() - 1, "Accelerator");
+    StructuralSelection selection;
+    selection.select_task(task_id);
+    application->restore_system_draft(std::move(draft), application->run_assignments(), selection);
+    QtWorkbenchBridge bridge{std::move(application)};
+    QtSystemBuilderWidget builder{bridge};
+
+    auto* assignment = builder.findChild<QComboBox*>("systemBuilder.taskAssignment");
+    auto* status = builder.findChild<QLabel*>("systemBuilder.assignmentStatus");
+    auto* profiles = builder.findChild<QTableView*>("systemBuilder.executionProfiles");
+    QVERIFY(assignment != nullptr);
+    QVERIFY(status != nullptr);
+    QVERIFY(profiles != nullptr);
+    QCOMPARE(assignment->count(),
+             static_cast<int>(bridge.application().editable_system()->resources().size()) + 1);
+
+    assignment->setCurrentIndex(assignment->findData(static_cast<qulonglong>(resource_id.value())));
+    QCOMPARE(bridge.application().run_assignments().front().resource_id,
+             std::optional<ResourceId>{resource_id});
+    QCOMPARE(status->text(), QString{"Missing WCET profile"});
+    QVERIFY(!bridge.application().editable_system()->execution_profile(task_id, resource_id));
+
+    auto* model = dynamic_cast<QtTaskExecutionProfileModel*>(profiles->model());
+    QVERIFY(model != nullptr);
+    int profile_row = -1;
+    for (int row = 0; row < model->rowCount(); ++row) {
+        if (model->row_at(row)->resource_id == resource_id) {
+            profile_row = row;
+            break;
+        }
+    }
+    QVERIFY(profile_row >= 0);
+    QVERIFY(model->setData(model->index(profile_row, QtTaskExecutionProfileModel::ExecutionTime),
+                           QString{"9"}));
+    QCOMPARE(bridge.application().editable_system()->execution_profile(task_id, resource_id),
+             std::optional<Tick>{9});
+    QCOMPARE(status->text(), QString{"Valid"});
+    QVERIFY(!model->setData(model->index(profile_row, QtTaskExecutionProfileModel::ExecutionTime),
+                            QString{}));
+
+    builder.undo_stack().undo();
+    QVERIFY(!bridge.application().editable_system()->execution_profile(task_id, resource_id));
+    builder.undo_stack().undo();
+    QCOMPARE(bridge.application().run_assignments().front().resource_id,
+             std::optional<ResourceId>{ResourceId{1}});
 }
 
 } // namespace cpssim::qt

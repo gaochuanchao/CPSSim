@@ -3,7 +3,6 @@
 
 #include "apps/qt_gui/workbench_style.hpp"
 
-#include <QComboBox>
 #include <QHeaderView>
 #include <QIcon>
 #include <QItemSelectionModel>
@@ -119,27 +118,7 @@ QVariant QtResourceAssignmentModel::headerData(int section, Qt::Orientation orie
 }
 
 Qt::ItemFlags QtResourceAssignmentModel::flags(const QModelIndex& index) const {
-    auto result = QAbstractTableModel::flags(index);
-    if (index.isValid() && index.column() == Resource &&
-        bridge_.application().run_state() != GuiRunState::Running &&
-        bridge_.application().editable_system().has_value()) {
-        result |= Qt::ItemIsEditable;
-    }
-    return result;
-}
-
-bool QtResourceAssignmentModel::setData(const QModelIndex& index, const QVariant& value, int role) {
-    const auto* row = row_at(index.row());
-    if (row == nullptr || index.column() != Resource || role != Qt::EditRole) {
-        return false;
-    }
-    const auto resource =
-        value.isValid() ? std::optional<ResourceId>{ResourceId{value.toULongLong()}} : std::nullopt;
-    if (!bridge_.assign_task(row->task_id, resource)) {
-        return false;
-    }
-    rebuild();
-    return true;
+    return QAbstractTableModel::flags(index) & ~Qt::ItemIsEditable;
 }
 
 void QtResourceAssignmentModel::sort(int column, Qt::SortOrder order) {
@@ -211,46 +190,6 @@ const QtResourceAssignmentRow* QtResourceAssignmentModel::row_at(int row) const 
                                                             : nullptr;
 }
 
-const std::vector<DraftResource>& QtResourceAssignmentModel::resources() const {
-    static const std::vector<DraftResource> empty;
-    const auto& draft = bridge_.application().editable_system();
-    return draft.has_value() ? draft->resources() : empty;
-}
-
-QtResourceAssignmentDelegate::QtResourceAssignmentDelegate(QObject* parent)
-    : QStyledItemDelegate(parent) {}
-
-QWidget* QtResourceAssignmentDelegate::createEditor(QWidget* parent, const QStyleOptionViewItem&,
-                                                    const QModelIndex& index) const {
-    const auto* assignment_model = dynamic_cast<const QtResourceAssignmentModel*>(index.model());
-    if (assignment_model == nullptr || index.column() != QtResourceAssignmentModel::Resource) {
-        return nullptr;
-    }
-    auto* combo = new QComboBox(parent);
-    combo->addItem(QStringLiteral("Unassigned"), QVariant{});
-    for (const auto& resource : assignment_model->resources()) {
-        combo->addItem(QString::fromStdString(resource.name), resource_value(resource.id));
-    }
-    return combo;
-}
-
-void QtResourceAssignmentDelegate::setEditorData(QWidget* editor, const QModelIndex& index) const {
-    auto* combo = qobject_cast<QComboBox*>(editor);
-    if (combo == nullptr) {
-        return;
-    }
-    const auto current = index.data(QtResourceAssignmentModel::ResourceIdRole);
-    combo->setCurrentIndex(current.isValid() ? combo->findData(current) : 0);
-}
-
-void QtResourceAssignmentDelegate::setModelData(QWidget* editor, QAbstractItemModel* model,
-                                                const QModelIndex& index) const {
-    auto* combo = qobject_cast<QComboBox*>(editor);
-    if (combo != nullptr) {
-        static_cast<void>(model->setData(index, combo->currentData(), Qt::EditRole));
-    }
-}
-
 QtResourceAssignmentsWidget::QtResourceAssignmentsWidget(QtWorkbenchBridge& bridge, QWidget* parent)
     : QWidget(parent), bridge_{bridge}, model_{bridge, this} {
     setObjectName("view.resourceAssignments");
@@ -263,8 +202,7 @@ QtResourceAssignmentsWidget::QtResourceAssignmentsWidget(QtWorkbenchBridge& brid
     table_ = new QTableView(this);
     table_->setObjectName("table.resourceAssignments");
     table_->setModel(&model_);
-    table_->setItemDelegateForColumn(QtResourceAssignmentModel::Resource,
-                                     new QtResourceAssignmentDelegate(table_));
+    table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     table_->setSelectionMode(QAbstractItemView::SingleSelection);
     table_->setSortingEnabled(true);
@@ -290,6 +228,11 @@ QtResourceAssignmentsWidget::QtResourceAssignmentsWidget(QtWorkbenchBridge& brid
                     bridge_.notify_structural_selection_changed();
                 }
             });
+    connect(table_, &QTableView::clicked, this, [this](const QModelIndex& index) {
+        if (index.isValid()) {
+            table_->selectRow(index.row());
+        }
+    });
     rebuild_legend();
 }
 

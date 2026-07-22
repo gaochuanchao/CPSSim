@@ -481,9 +481,9 @@ void QtMainWindow::bind_workbench(QtWorkbenchBridge* bridge) {
     connect(undo_action_, &QAction::triggered, &system_builder_->undo_stack(), &QUndoStack::undo);
     connect(redo_action_, &QAction::triggered, &system_builder_->undo_stack(), &QUndoStack::redo);
     connect(&system_builder_->undo_stack(), &QUndoStack::canUndoChanged, undo_action_,
-            &QAction::setEnabled);
+            [this](bool enabled) { undo_action_->setEnabled(enabled && !home_is_active()); });
     connect(&system_builder_->undo_stack(), &QUndoStack::canRedoChanged, redo_action_,
-            &QAction::setEnabled);
+            [this](bool enabled) { redo_action_->setEnabled(enabled && !home_is_active()); });
     connect(run_action_, &QAction::triggered, bridge_, &QtWorkbenchBridge::run);
     connect(pause_action_, &QAction::triggered, bridge_, &QtWorkbenchBridge::pause);
     connect(reset_action_, &QAction::triggered, bridge_, &QtWorkbenchBridge::reset);

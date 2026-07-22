@@ -3,6 +3,7 @@
 
 #include "apps/qt_gui/workbench_bridge.hpp"
 
+#include <QAbstractTableModel>
 #include <QWidget>
 
 #include <filesystem>
@@ -13,9 +14,39 @@ class QComboBox;
 class QLabel;
 class QLineEdit;
 class QStackedWidget;
+class QTableView;
 class QUndoStack;
 
 namespace cpssim::qt {
+
+struct QtTaskExecutionProfileRow {
+    ResourceId resource_id;
+    QString resource_name;
+    std::optional<Tick> execution_time;
+};
+
+class QtTaskExecutionProfileModel final : public QAbstractTableModel {
+  public:
+    enum Column { Resource, ExecutionTime, Accessible, Status, Count };
+    using EditCallback = std::function<bool(ResourceId, std::optional<Tick>)>;
+
+    explicit QtTaskExecutionProfileModel(EditCallback edit_callback, QObject* parent = nullptr);
+    int rowCount(const QModelIndex& parent = {}) const override;
+    int columnCount(const QModelIndex& parent = {}) const override;
+    QVariant data(const QModelIndex& index, int role = Qt::DisplayRole) const override;
+    QVariant headerData(int section, Qt::Orientation orientation,
+                        int role = Qt::DisplayRole) const override;
+    Qt::ItemFlags flags(const QModelIndex& index) const override;
+    bool setData(const QModelIndex& index, const QVariant& value, int role = Qt::EditRole) override;
+    void set_task(std::optional<TaskId> task_id, const EditableSystemDraft* draft,
+                  bool editing_enabled);
+    const QtTaskExecutionProfileRow* row_at(int row) const;
+
+  private:
+    EditCallback edit_callback_;
+    std::vector<QtTaskExecutionProfileRow> rows_;
+    bool editing_enabled_{false};
+};
 
 class QtSystemBuilderWidget final : public QWidget {
     Q_OBJECT
@@ -35,7 +66,7 @@ class QtSystemBuilderWidget final : public QWidget {
 
     void build_pages();
     void connect_editors();
-    void push_mutation(const QString& text, DraftMutator mutator);
+    bool push_mutation(const QString& text, DraftMutator mutator);
     void refresh_system_page();
     void refresh_resource_page(ResourceId resource_id);
     void refresh_task_page(TaskId task_id,
@@ -70,9 +101,10 @@ class QtSystemBuilderWidget final : public QWidget {
     QLineEdit* task_deadline_{nullptr};
     QLineEdit* task_offset_{nullptr};
     QLineEdit* task_priority_{nullptr};
-    QComboBox* profile_resource_{nullptr};
-    QLineEdit* profile_execution_{nullptr};
-    QLabel* profile_label_{nullptr};
+    QComboBox* task_assignment_{nullptr};
+    QLabel* assignment_status_{nullptr};
+    QtTaskExecutionProfileModel* profile_model_{nullptr};
+    QTableView* profile_table_{nullptr};
     QComboBox* connection_source_{nullptr};
     QComboBox* connection_destination_{nullptr};
     QLabel* connection_kind_{nullptr};

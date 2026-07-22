@@ -4,7 +4,6 @@
 #include "apps/qt_gui/workbench_bridge.hpp"
 
 #include <QAbstractTableModel>
-#include <QStyledItemDelegate>
 #include <QTableView>
 #include <QWidget>
 
@@ -39,28 +38,16 @@ class QtResourceAssignmentModel final : public QAbstractTableModel {
     QVariant headerData(int section, Qt::Orientation orientation,
                         int role = Qt::DisplayRole) const override;
     Qt::ItemFlags flags(const QModelIndex& index) const override;
-    bool setData(const QModelIndex& index, const QVariant& value, int role = Qt::EditRole) override;
     void sort(int column, Qt::SortOrder order = Qt::AscendingOrder) override;
 
     void rebuild();
     const QtResourceAssignmentRow* row_at(int row) const;
-    const std::vector<DraftResource>& resources() const;
 
   private:
     QtWorkbenchBridge& bridge_;
     std::vector<QtResourceAssignmentRow> rows_;
     int sort_column_{Task};
     Qt::SortOrder sort_order_{Qt::AscendingOrder};
-};
-
-class QtResourceAssignmentDelegate final : public QStyledItemDelegate {
-  public:
-    explicit QtResourceAssignmentDelegate(QObject* parent = nullptr);
-    QWidget* createEditor(QWidget* parent, const QStyleOptionViewItem& option,
-                          const QModelIndex& index) const override;
-    void setEditorData(QWidget* editor, const QModelIndex& index) const override;
-    void setModelData(QWidget* editor, QAbstractItemModel* model,
-                      const QModelIndex& index) const override;
 };
 
 class QtResourceAssignmentsWidget final : public QWidget {
