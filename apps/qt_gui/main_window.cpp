@@ -887,21 +887,48 @@ void QtMainWindow::apply_theme() {
 
     apply_workbench_theme(global_theme_);
 
-    /*
-     * Keep native dock separators draggable, but do not paint
-     * the separator region. Panel boundaries and title bars
-     * provide the visual separation.
-     */
-    qApp->setStyleSheet(
-        R"(
-        QMainWindow::separator {
-            background: transparent;
-        }
+    const QString boundary_color =
+        global_theme_ == GuiTheme::Dark
+            ? QStringLiteral("#555b64")
+            : QStringLiteral("#aeb4bd");
 
-        QMainWindow::separator:hover {
-            background: transparent;
-        }
-        )");
+    const QString gutter_color =
+        global_theme_ == GuiTheme::Dark
+            ? QStringLiteral("#26292e")
+            : QStringLiteral("#f5f6f8");
+
+    qApp->setStyleSheet(
+        QStringLiteral(
+            R"(
+            /*
+             * Make the unused part of the dock resizing gutter
+             * blend into the normal workbench background.
+             */
+            QMainWindow#cpssimQtMainWindow::separator {
+                background: %2;
+            }
+
+            QMainWindow#cpssimQtMainWindow::separator:hover {
+                background: %2;
+            }
+
+            /*
+             * Give every docked workbench panel a consistent
+             * one-pixel outer boundary.
+             */
+            QDockWidget {
+                border: 1px solid %1;
+            }
+
+            /*
+             * The middle workbench is not a QDockWidget.
+             * Apply the same boundary to its tab pane.
+             */
+            QTabWidget#centralTabs::pane {
+                border: 1px solid %1;
+            }
+            )")
+            .arg(boundary_color, gutter_color));
 
     if (bridge_ != nullptr) {
         Q_EMIT bridge_->appearanceChanged();
