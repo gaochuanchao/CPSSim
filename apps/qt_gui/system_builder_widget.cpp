@@ -3,16 +3,13 @@
 
 #include <QComboBox>
 #include <QFormLayout>
+#include <QFrame>
 #include <QLabel>
 #include <QLineEdit>
-#include <QListWidget>
-#include <QMessageBox>
-#include <QPushButton>
 #include <QRegularExpression>
 #include <QRegularExpressionValidator>
 #include <QScrollArea>
 #include <QSignalBlocker>
-#include <QSplitter>
 #include <QStackedWidget>
 #include <QUndoCommand>
 #include <QUndoStack>
@@ -127,10 +124,11 @@ QtSystemBuilderWidget::QtSystemBuilderWidget(QtWorkbenchBridge& bridge, QWidget*
     setObjectName("view.systemBuilder");
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
-    auto* splitter = new QSplitter(Qt::Vertical, this);
-    splitter->setObjectName("splitter.systemBuilder");
-
-    auto* editor = new QWidget(splitter);
+    auto* scroll = new QScrollArea(this);
+    scroll->setObjectName("systemBuilder.scrollArea");
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    auto* editor = new QWidget(scroll);
     auto* editor_layout = new QVBoxLayout(editor);
     pages_ = new QStackedWidget(editor);
     pages_->setObjectName("systemBuilder.pages");
@@ -140,27 +138,9 @@ QtSystemBuilderWidget::QtSystemBuilderWidget(QtWorkbenchBridge& bridge, QWidget*
     diagnostic_summary_->setObjectName("systemBuilder.diagnostics");
     diagnostic_summary_->setWordWrap(true);
     editor_layout->addWidget(diagnostic_summary_);
-
-    auto* library = new QWidget(splitter);
-    auto* library_layout = new QVBoxLayout(library);
-    library_layout->addWidget(new QLabel("Component Library", library));
-    component_library_ = new QListWidget(library);
-    component_library_->setObjectName("systemBuilder.componentLibrary");
-    component_library_->addItems({"Resource", "Task", "Execution Profile", "Message Route"});
-    component_library_->setCurrentRow(0);
-    library_layout->addWidget(component_library_);
-    add_component_ = new QPushButton("Add Selected Component", library);
-    add_component_->setObjectName("systemBuilder.addComponent");
-    delete_component_ = new QPushButton("Delete Selected Entity...", library);
-    delete_component_->setObjectName("systemBuilder.deleteComponent");
-    library_layout->addWidget(add_component_);
-    library_layout->addWidget(delete_component_);
-
-    splitter->addWidget(editor);
-    splitter->addWidget(library);
-    splitter->setStretchFactor(0, 3);
-    splitter->setStretchFactor(1, 2);
-    layout->addWidget(splitter);
+    editor_layout->addStretch();
+    scroll->setWidget(editor);
+    layout->addWidget(scroll);
 
     connect_editors();
     connect(&bridge_, &QtWorkbenchBridge::structuralSelectionChanged, this,
@@ -168,18 +148,6 @@ QtSystemBuilderWidget::QtSystemBuilderWidget(QtWorkbenchBridge& bridge, QWidget*
     connect(&bridge_, &QtWorkbenchBridge::draftChanged, this, &QtSystemBuilderWidget::refresh);
     connect(&bridge_, &QtWorkbenchBridge::applicationStateChanged, this,
             &QtSystemBuilderWidget::refresh);
-    connect(add_component_, &QPushButton::clicked, this, [this] {
-        const auto section = static_cast<StructuralSection>(component_library_->currentRow());
-        static_cast<void>(create_component(section));
-    });
-    connect(delete_component_, &QPushButton::clicked, this, [this] {
-        const auto response =
-            QMessageBox::question(this, "Delete structural entity",
-                                  "Delete the selected entity and its dependent draft references?");
-        if (response == QMessageBox::Yes) {
-            static_cast<void>(delete_selected(true));
-        }
-    });
     refresh();
 }
 
@@ -585,8 +553,6 @@ void QtSystemBuilderWidget::refresh() {
         undo_project_root_ = active_root;
     }
     setEnabled(application.editable_system().has_value());
-    add_component_->setEnabled(editing_enabled());
-    delete_component_->setEnabled(editing_enabled());
     pages_->setEnabled(editing_enabled());
     if (!application.editable_system().has_value()) {
         pages_->setCurrentWidget(empty_page_);

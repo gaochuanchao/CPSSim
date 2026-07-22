@@ -26,7 +26,7 @@ enum ItemRole {
     SectionRole,
 };
 
-enum class ExplorerItemKind { System, Section, Resource, Task, Profile, Route };
+enum class ExplorerItemKind { System, Section, Resource, Task, Route };
 
 QStandardItem* item(QString text, ExplorerItemKind kind) {
     auto* result = new QStandardItem(std::move(text));
@@ -56,9 +56,6 @@ bool item_matches(const QStandardItem& item_value, const StructuralSelection& se
     case ExplorerItemKind::Task:
         return selection.task_id() == TaskId{first} &&
                selection.kind() == StructuralSelectionKind::Task;
-    case ExplorerItemKind::Profile:
-        return selection.execution_profile() ==
-               std::optional<DraftExecutionProfileKey>{{TaskId{first}, ResourceId{second}}};
     case ExplorerItemKind::Route:
         return selection.message_route() ==
                std::optional<DraftMessageRouteKey>{{TaskId{first}, TaskId{second}}};
@@ -122,16 +119,7 @@ void QtExperimentExplorerWidget::refresh() {
             row->setData(static_cast<qulonglong>(task.id.value()), PrimaryIdRole);
             tasks->appendRow(row);
         }
-        auto* profiles = section_item("Execution Profiles", StructuralSection::ExecutionProfiles);
-        for (const auto& profile : draft.profiles()) {
-            auto* row = item(
-                QString{"T%1 → R%2"}.arg(profile.task_id.value()).arg(profile.resource_id.value()),
-                ExplorerItemKind::Profile);
-            row->setData(static_cast<qulonglong>(profile.task_id.value()), PrimaryIdRole);
-            row->setData(static_cast<qulonglong>(profile.resource_id.value()), SecondaryIdRole);
-            profiles->appendRow(row);
-        }
-        auto* routes = section_item("Message Routes", StructuralSection::MessageRoutes);
+        auto* routes = section_item("Connections", StructuralSection::MessageRoutes);
         for (const auto& route : draft.routes()) {
             auto* row = item(QString{"T%1 → T%2"}
                                  .arg(route.source_task_id.value())
@@ -144,7 +132,6 @@ void QtExperimentExplorerWidget::refresh() {
         }
         root->appendRow(resources);
         root->appendRow(tasks);
-        root->appendRow(profiles);
         root->appendRow(routes);
     }
     tree_->expandToDepth(1);
@@ -175,9 +162,6 @@ void QtExperimentExplorerWidget::apply_current_selection() {
     case ExplorerItemKind::Task:
         selection.select_task(TaskId{first});
         break;
-    case ExplorerItemKind::Profile:
-        selection.select_execution_profile({TaskId{first}, ResourceId{second}});
-        break;
     case ExplorerItemKind::Route:
         selection.select_message_route({TaskId{first}, TaskId{second}});
         break;
@@ -195,11 +179,31 @@ void QtExperimentExplorerWidget::show_context_menu(const QPoint& position) {
     const auto kind = static_cast<ExplorerItemKind>(selected->data(KindRole).toInt());
     QMenu menu(this);
     if (kind == ExplorerItemKind::Section) {
-        auto* add = menu.addAction("Add");
-        connect(add, &QAction::triggered, this, [this, selected] {
-            static_cast<void>(builder_.create_component(
-                static_cast<StructuralSection>(selected->data(SectionRole).toInt())));
-        });
+        const auto section = static_cast<StructuralSection>(selected->data(SectionRole).toInt());
+        QAction* add = nullptr;
+        switch (section) {
+        case StructuralSection::Resources:
+            add = menu.addAction("Add Resource");
+            break;
+        case StructuralSection::Tasks:
+            add = menu.addAction("Add Task");
+            break;
+        case StructuralSection::MessageRoutes:
+            add = menu.addAction("Add Communication Connection");
+            break;
+        default:
+            break;
+        }
+        if (section == StructuralSection::MessageRoutes) {
+            auto* logical = menu.addAction("Add Logical Connection");
+            logical->setEnabled(false);
+            logical->setToolTip("Logical dependencies are adapter-owned and cannot yet be "
+                                "persisted authoritatively.");
+        }
+        if (add != nullptr) {
+            connect(add, &QAction::triggered, this,
+                    [this, section] { static_cast<void>(builder_.create_component(section)); });
+        }
     } else if (kind != ExplorerItemKind::System) {
         auto* duplicate = menu.addAction("Duplicate");
         auto* remove = menu.addAction("Delete...");

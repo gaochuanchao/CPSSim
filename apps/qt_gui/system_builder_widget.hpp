@@ -12,8 +12,6 @@
 class QComboBox;
 class QLabel;
 class QLineEdit;
-class QListWidget;
-class QPushButton;
 class QStackedWidget;
 class QUndoStack;
 
@@ -81,9 +79,6 @@ class QtSystemBuilderWidget final : public QWidget {
     QLabel* connection_latency_{nullptr};
     QLineEdit* route_send_offset_{nullptr};
     QLineEdit* route_delay_{nullptr};
-    QListWidget* component_library_{nullptr};
-    QPushButton* add_component_{nullptr};
-    QPushButton* delete_component_{nullptr};
     std::optional<std::filesystem::path> undo_project_root_;
     bool refreshing_{false};
 };

@@ -12,6 +12,8 @@
 #include <QDockWidget>
 #include <QLabel>
 #include <QLineEdit>
+#include <QListWidget>
+#include <QScrollArea>
 #include <QUndoStack>
 #include <QtTest/QTest>
 
@@ -55,6 +57,7 @@ class QtSystemBuilderWidgetTest final : public QObject {
     void creation_and_deletion_are_domain_undo_commands();
     void structured_validation_is_shown_on_selected_page();
     void main_window_reuses_undo_actions();
+    void builder_is_a_scrollable_property_editor_without_component_library();
 };
 
 void QtSystemBuilderWidgetTest::selection_uses_reusable_editor_pages() {
@@ -126,6 +129,16 @@ void QtSystemBuilderWidgetTest::main_window_reuses_undo_actions() {
     QVERIFY(undo->isEnabled());
     undo->trigger();
     QVERIFY(redo->isEnabled());
+}
+
+void QtSystemBuilderWidgetTest::
+    builder_is_a_scrollable_property_editor_without_component_library() {
+    TemporaryDirectory temporary;
+    QtWorkbenchBridge bridge{make_application(temporary.path())};
+    QtSystemBuilderWidget builder{bridge};
+    QVERIFY(builder.findChild<QScrollArea*>("systemBuilder.scrollArea") != nullptr);
+    QVERIFY(builder.findChild<QListWidget*>("systemBuilder.componentLibrary") == nullptr);
+    QVERIFY(builder.findChild<QObject*>("splitter.systemBuilder") == nullptr);
 }
 
 } // namespace cpssim::qt

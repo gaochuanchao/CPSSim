@@ -73,6 +73,9 @@ void QtRuntimeViewsTest::explorer_updates_only_structural_selection() {
     explorer.tree().setCurrentIndex(first_task);
     QCOMPARE(bridge.application().structural_selection().kind(), StructuralSelectionKind::Task);
     QCOMPARE(bridge.application().runtime_selection().kind(), GuiSelectionKind::Experiment);
+    QCOMPARE(model->rowCount(model->index(0, 0)), 3);
+    QCOMPARE(model->data(model->index(2, 0, model->index(0, 0))).toString(),
+             QString{"Connections"});
 }
 
 void QtRuntimeViewsTest::run_configuration_edits_detached_stop_tick() {
