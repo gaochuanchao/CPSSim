@@ -2,6 +2,7 @@
 #include "apps/qt_gui/workbench_style.hpp"
 
 #include <QApplication>
+#include <QString>
 
 #include <array>
 #include <cstddef>
@@ -78,7 +79,11 @@ void apply_workbench_theme(GuiTheme theme) {
     if (qApp == nullptr) {
         return;
     }
-    qApp->setProperty("cpssimTheme", theme == GuiTheme::Light ? "light" : "dark");
+
+    qApp->setProperty(
+        "cpssimTheme",
+        theme == GuiTheme::Light ? "light" : "dark");
+
     QApplication::setStyle("Fusion");
     QApplication::setPalette(workbench_palette(theme));
 }

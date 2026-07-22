@@ -881,12 +881,40 @@ void QtMainWindow::refresh_home() {
 void QtMainWindow::apply_theme() {
     dark_theme_action_->setChecked(global_theme_ == GuiTheme::Dark);
     light_theme_action_->setChecked(global_theme_ == GuiTheme::Light);
+
     apply_workbench_theme(global_theme_);
+
     qApp->setStyleSheet(
-        "QMainWindow::separator { background: palette(mid); width: 6px; height: 6px; }"
-        "QMainWindow::separator:hover { background: palette(highlight); }"
-        "QSplitter::handle { background: palette(mid); width: 6px; height: 6px; }"
-        "QSplitter::handle:hover { background: palette(highlight); }");
+        R"(
+        /*
+         * QMainWindow dock separators.
+         * Keep them thin, visible, and draggable.
+         */
+        QMainWindow::separator {
+            background: palette(mid);
+            width: 2px;
+            height: 2px;
+        }
+
+        QMainWindow::separator:hover {
+            background: palette(highlight);
+        }
+
+        /*
+         * Ordinary QSplitter handles, in case they are used
+         * inside individual panels.
+         */
+        QSplitter::handle {
+            background: palette(mid);
+            width: 2px;
+            height: 2px;
+        }
+
+        QSplitter::handle:hover {
+            background: palette(highlight);
+        }
+        )");
+
     if (bridge_ != nullptr) {
         Q_EMIT bridge_->appearanceChanged();
     }
