@@ -57,6 +57,7 @@ class QtArchitectureView final : public QWidget {
     void snap_node_position(QtNodes::NodeId node_id, QPointF position);
     void synchronize_scene_selection();
     void trigger_add_task();
+    void refresh_appearance();
     void update_action_state();
     void build_actions();
 

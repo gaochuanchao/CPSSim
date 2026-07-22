@@ -13,12 +13,15 @@
 #include "cpssim/application/project/project_template.hpp"
 
 #include <QtNodes/BasicGraphicsScene>
+#include <QtNodes/GraphicsView>
 
 #include <QAction>
 #include <QApplication>
 #include <QColor>
+#include <QImage>
 #include <QJsonObject>
 #include <QMap>
+#include <QPixmap>
 #include <QUndoStack>
 #include <QtTest/QTest>
 
@@ -173,6 +176,9 @@ class QtArchitectureModelTest final : public QObject {
     void lightThemeStyle_returns_valid_light_background_dark_text();
     void darkThemeStyle_returns_valid_dark_background_light_text();
     void themeToggle_preserves_structure_and_updates_style();
+
+    // Background-cache invalidation regression.
+    void appearanceChangeInvalidatesBackgroundCache();
 };
 
 void QtArchitectureModelTest::strong_ids_are_mapped_without_truncation() {
@@ -1242,6 +1248,79 @@ void QtArchitectureModelTest::themeToggle_preserves_structure_and_updates_style(
         QVERIFY(bg.lightness() < 128);
     }
 
+    apply_workbench_theme(original);
+}
+
+void QtArchitectureModelTest::appearanceChangeInvalidatesBackgroundCache() {
+    const auto original = current_workbench_theme();
+
+    TemporaryDirectory temporary;
+    auto application = std::make_unique<WorkbenchApplication>();
+    application->create_project(make_generic_project_template(temporary.path(), "project"));
+    QtWorkbenchBridge bridge{std::move(application)};
+    QtStructuralEditController edits{bridge};
+    QtArchitectureView view{bridge, edits};
+
+    // Show and size the view so rendering is possible.
+    view.show();
+    view.resize(800, 600);
+    QApplication::processEvents();
+    QApplication::processEvents();
+
+    // Access the internal graphics view for transform queries.
+    auto* gv = view.findChild<QtNodes::GraphicsView*>("architecture.graphicsView");
+    QVERIFY(gv != nullptr);
+    QVERIFY(gv->viewport()->width() > 100);
+
+    // Record invariants in the initial (dark) theme.
+    const auto before_nodes = view.graph_model().node_count();
+    const auto before_connections = view.graph_model().connection_count();
+    const auto before_transform = gv->viewportTransform();
+    const auto before_selection = bridge.application().structural_selection();
+    const auto before_undo_count = edits.undo_stack().count();
+
+    // Switch to light theme through the production appearance path.
+    apply_workbench_theme(GuiTheme::Light);
+    Q_EMIT bridge.appearanceChanged();
+    QApplication::processEvents();
+    QApplication::processEvents();
+
+    // Verify invariants are preserved after the theme change.
+    QCOMPARE(view.graph_model().node_count(), before_nodes);
+    QCOMPARE(view.graph_model().connection_count(), before_connections);
+    QCOMPARE(gv->viewportTransform(), before_transform);
+    QCOMPARE(bridge.application().structural_selection(), before_selection);
+    QCOMPARE(edits.undo_stack().count(), before_undo_count);
+
+    // Background cache verification: grab the viewport in both themes
+    // and compare a central pixel.  The light-theme pixel must be lighter.
+    const QPoint center_px(gv->viewport()->width() / 2,
+                           gv->viewport()->height() / 2);
+
+    // Dark theme grab (switch back momentarily).
+    apply_workbench_theme(GuiTheme::Dark);
+    Q_EMIT bridge.appearanceChanged();
+    QApplication::processEvents();
+    QApplication::processEvents();
+
+    const auto dark_img = gv->viewport()->grab().toImage();
+    QVERIFY(center_px.x() < dark_img.width());
+    QVERIFY(center_px.y() < dark_img.height());
+    const auto dark_luma = dark_img.pixelColor(center_px).lightness();
+
+    // Light theme grab.
+    apply_workbench_theme(GuiTheme::Light);
+    Q_EMIT bridge.appearanceChanged();
+    QApplication::processEvents();
+    QApplication::processEvents();
+
+    const auto light_img = gv->viewport()->grab().toImage();
+    const auto light_luma = light_img.pixelColor(center_px).lightness();
+
+    QVERIFY(light_luma > dark_luma);
+    QVERIFY(light_luma - dark_luma > 20);
+
+    // Restore original theme.
     apply_workbench_theme(original);
 }
 

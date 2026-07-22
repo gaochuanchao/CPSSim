@@ -180,7 +180,8 @@ QtArchitectureView::QtArchitectureView(QtWorkbenchBridge& bridge,
     connect(&bridge_, &QtWorkbenchBridge::resourceHighlightChanged, this,
             &QtArchitectureView::refresh);
     connect(&bridge_, &QtWorkbenchBridge::workspaceChanged, this, &QtArchitectureView::refresh);
-    connect(&bridge_, &QtWorkbenchBridge::appearanceChanged, this, &QtArchitectureView::refresh);
+    connect(&bridge_, &QtWorkbenchBridge::appearanceChanged, this,
+            &QtArchitectureView::refresh_appearance);
     model_.set_position_changed([this](GuiGraphNodeId entity, QPointF position) {
         persist_node_position(entity, position);
     });
@@ -363,6 +364,12 @@ void QtArchitectureView::trigger_add_task() {
         const QPointF scene_center = view_->mapToScene(viewport_center);
         add_task_at(scene_center);
     }
+}
+
+void QtArchitectureView::refresh_appearance() {
+    refresh();
+    view_->resetCachedContent();
+    view_->viewport()->update();
 }
 
 // ---------------------------------------------------------------------------
