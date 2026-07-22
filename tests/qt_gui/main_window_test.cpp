@@ -8,6 +8,8 @@
 #include <QComboBox>
 #include <QDockWidget>
 #include <QLineEdit>
+#include <QPushButton>
+#include <QSettings>
 #include <QTabWidget>
 #include <QTemporaryDir>
 #include <QtTest/QTest>
@@ -22,7 +24,7 @@ class QtMainWindowTest final : public QObject {
     void exposes_required_tabs_and_docks();
     void round_trips_versioned_geometry_and_state();
     void project_workflow_and_recent_history_are_native();
-    void execution_controls_and_theme_update_workspace();
+    void execution_controls_and_global_theme_are_independent();
 };
 
 void QtMainWindowTest::starts_on_home_with_stable_actions() {
@@ -35,6 +37,12 @@ void QtMainWindowTest::starts_on_home_with_stable_actions() {
     QVERIFY(window.findChild<QWidget*>("home.createProject") != nullptr);
     QVERIFY(window.findChild<QWidget*>("home.openProject") != nullptr);
     QVERIFY(window.findChild<QWidget*>("home.boschProject") != nullptr);
+    QVERIFY(window.findChild<QAction*>("action.theme.dark")->isEnabled());
+    QVERIFY(window.findChild<QAction*>("action.theme.light")->isEnabled());
+    QVERIFY(!window.findChild<QAction*>("action.resetLayout")->isEnabled());
+    for (auto* dock : window.findChildren<QDockWidget*>()) {
+        QVERIFY(!dock->toggleViewAction()->isEnabled());
+    }
 }
 
 void QtMainWindowTest::project_workflow_and_recent_history_are_native() {
@@ -54,6 +62,10 @@ void QtMainWindowTest::project_workflow_and_recent_history_are_native() {
     QCOMPARE(bridge->application().active_project().metadata().name, std::string{"native-copy"});
     QVERIFY(std::filesystem::exists(root / "native-copy/project.json"));
     QVERIFY(!bridge->application().recent_projects().entries().empty());
+    auto* recent = window.findChild<QWidget*>("home.recentProjects");
+    QVERIFY(recent != nullptr);
+    QVERIFY(recent->maximumWidth() <= 720);
+    QVERIFY(window.findChild<QPushButton*>("recent.open")->maximumWidth() <= 84);
 
     bridge->close_project();
     QVERIFY(window.home_is_active());
@@ -61,7 +73,7 @@ void QtMainWindowTest::project_workflow_and_recent_history_are_native() {
     QCOMPARE(bridge->application().active_project().metadata().name, std::string{"native-project"});
 }
 
-void QtMainWindowTest::execution_controls_and_theme_update_workspace() {
+void QtMainWindowTest::execution_controls_and_global_theme_are_independent() {
     QtMainWindow window{false};
     auto* bridge = new QtWorkbenchBridge(std::make_unique<WorkbenchApplication>(), &window);
     window.bind_workbench(bridge);
@@ -78,8 +90,11 @@ void QtMainWindowTest::execution_controls_and_theme_update_workspace() {
     QCOMPARE(bridge->application().workspace().run_mode, GuiRunMode::Fast);
     QCOMPARE(bridge->application().workspace().fast_batch_unit, GuiFastBatchUnit::Ticks);
     QCOMPARE(bridge->application().workspace().fast_tick_batch_size, std::uint64_t{37});
+    const auto project_theme = bridge->application().workspace().theme;
     window.findChild<QAction*>("action.theme.light")->trigger();
-    QCOMPARE(bridge->application().workspace().theme, GuiTheme::Light);
+    QCOMPARE(QtAppearancePreferences{}.theme(), GuiTheme::Light);
+    QCOMPARE(bridge->application().workspace().theme, project_theme);
+    QtAppearancePreferences{}.set_theme(GuiTheme::Dark);
 }
 
 void QtMainWindowTest::exposes_required_tabs_and_docks() {

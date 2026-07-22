@@ -61,7 +61,7 @@ QVariant QtResourceAssignmentModel::data(const QModelIndex& index, int role) con
                                             : QVariant{};
     }
     if (role == Qt::DecorationRole && index.column() == Swatch) {
-        const auto theme = bridge_.application().workspace().theme;
+        const auto theme = current_workbench_theme();
         return color_icon(row->resource_id.has_value()
                               ? resource_accent_color(*row->resource_id, theme)
                               : unassigned_accent_color(theme));
@@ -314,7 +314,7 @@ void QtResourceAssignmentsWidget::rebuild_legend() {
             ++unassigned;
         }
     }
-    const auto theme = bridge_.application().workspace().theme;
+    const auto theme = current_workbench_theme();
     for (const auto& [resource_id, entry] : counts) {
         auto* button = new QToolButton(this);
         button->setIcon(color_icon(resource_accent_color(resource_id, theme)));

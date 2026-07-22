@@ -30,6 +30,7 @@
 #include <QMessageBox>
 #include <QPushButton>
 #include <QSettings>
+#include <QSizePolicy>
 #include <QStackedWidget>
 #include <QStatusBar>
 #include <QTabWidget>
@@ -77,10 +78,12 @@ QtMainWindow::QtMainWindow(bool restore_user_layout, QWidget* parent)
     build_menus_and_toolbars();
     arrange_default_docks();
     statusBar()->showMessage("Ready");
-    show_home();
     if (restore_user_layout_) {
         load_user_layout();
     }
+    global_theme_ = appearance_preferences_.theme();
+    apply_theme();
+    show_home();
 }
 
 QAction* QtMainWindow::make_action(const QString& text, const QKeySequence& shortcut) {
@@ -165,8 +168,14 @@ void QtMainWindow::build_central_pages() {
     auto* recent_title = new QLabel("Recent Projects", home_page_);
     recent_title->setAlignment(Qt::AlignHCenter);
     home_layout->addWidget(recent_title);
-    recent_projects_layout_ = new QVBoxLayout;
-    home_layout->addLayout(recent_projects_layout_);
+    auto* recent_container = new QWidget(home_page_);
+    recent_container->setObjectName("home.recentProjects");
+    recent_container->setMinimumWidth(420);
+    recent_container->setMaximumWidth(720);
+    recent_container->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    recent_projects_layout_ = new QVBoxLayout(recent_container);
+    recent_projects_layout_->setSpacing(6);
+    home_layout->addWidget(recent_container, 0, Qt::AlignHCenter);
     connect(create, &QPushButton::clicked, new_project_action_, &QAction::trigger);
     connect(open, &QPushButton::clicked, open_project_action_, &QAction::trigger);
     connect(bosch, &QPushButton::clicked, this, &QtMainWindow::create_bosch_project_dialog);
@@ -287,17 +296,13 @@ void QtMainWindow::build_menus_and_toolbars() {
     }
 
     connect(dark_theme_action_, &QAction::triggered, this, [this] {
-        if (bridge_ != nullptr) {
-            bridge_->application().workspace().theme = GuiTheme::Dark;
-            bridge_->workspace_settings_changed();
-        }
+        global_theme_ = GuiTheme::Dark;
+        appearance_preferences_.set_theme(global_theme_);
         apply_theme();
     });
     connect(light_theme_action_, &QAction::triggered, this, [this] {
-        if (bridge_ != nullptr) {
-            bridge_->application().workspace().theme = GuiTheme::Light;
-            bridge_->workspace_settings_changed();
-        }
+        global_theme_ = GuiTheme::Light;
+        appearance_preferences_.set_theme(global_theme_);
         apply_theme();
     });
     connect(run_mode_combo_, &QComboBox::currentIndexChanged, this, [this](int index) {
@@ -376,6 +381,14 @@ void QtMainWindow::set_workbench_chrome_visible(bool visible) {
     save_project_action_->setEnabled(visible);
     save_project_as_action_->setEnabled(visible);
     close_project_action_->setEnabled(visible);
+    restore_layout_action_->setEnabled(visible);
+    undo_action_->setEnabled(visible && system_builder_ != nullptr &&
+                             system_builder_->undo_stack().canUndo());
+    redo_action_->setEnabled(visible && system_builder_ != nullptr &&
+                             system_builder_->undo_stack().canRedo());
+    for (auto* dock : docks_) {
+        dock->toggleViewAction()->setEnabled(visible);
+    }
 }
 
 void QtMainWindow::bind_workbench(QtWorkbenchBridge* bridge) {
@@ -458,10 +471,8 @@ void QtMainWindow::bind_workbench(QtWorkbenchBridge* bridge) {
             &QtMainWindow::synchronize_workbench_chrome);
     connect(bridge_, &QtWorkbenchBridge::statusChanged, this,
             &QtMainWindow::synchronize_workbench_chrome);
-    connect(bridge_, &QtWorkbenchBridge::workspaceChanged, this, [this] {
-        apply_theme();
-        synchronize_workbench_chrome();
-    });
+    connect(bridge_, &QtWorkbenchBridge::workspaceChanged, this,
+            &QtMainWindow::synchronize_workbench_chrome);
     connect(bridge_, &QtWorkbenchBridge::applicationStateChanged, this,
             &QtMainWindow::refresh_home);
     apply_theme();
@@ -795,13 +806,30 @@ void QtMainWindow::refresh_home() {
     for (const auto& entry : entries) {
         auto* row = new QWidget(home_page_);
         auto* layout = new QHBoxLayout(row);
-        const auto label = QString::fromStdString(entry.project_file.string()) +
-                           (entry.available ? QString{} : QString{" (unavailable)"});
-        auto* open = new QPushButton(label, row);
+        layout->setContentsMargins(4, 2, 4, 2);
+        auto* description = new QWidget(row);
+        auto* description_layout = new QVBoxLayout(description);
+        description_layout->setContentsMargins(0, 0, 0, 0);
+        description_layout->setSpacing(1);
+        const auto project_name =
+            QString::fromStdString(entry.project_file.parent_path().filename().string());
+        auto* name = new QLabel(project_name, description);
+        auto* path_label = new QLabel(description);
+        const auto full_path = QString::fromStdString(entry.project_file.string());
+        path_label->setText(path_label->fontMetrics().elidedText(full_path, Qt::ElideMiddle, 480));
+        path_label->setToolTip(full_path);
+        description_layout->addWidget(name);
+        description_layout->addWidget(path_label);
+        auto* open = new QPushButton("Open", row);
+        open->setObjectName("recent.open");
+        open->setMaximumWidth(84);
         open->setEnabled(entry.available);
-        open->setToolTip(QString::fromStdString(entry.project_file.string()));
+        open->setToolTip(full_path);
         auto* remove = new QPushButton("Remove", row);
-        layout->addWidget(open, 1);
+        remove->setObjectName("recent.remove");
+        remove->setMaximumWidth(84);
+        layout->addWidget(description, 1);
+        layout->addWidget(open);
         layout->addWidget(remove);
         const auto path = entry.project_file;
         connect(open, &QPushButton::clicked, this,
@@ -816,12 +844,9 @@ void QtMainWindow::refresh_home() {
 }
 
 void QtMainWindow::apply_theme() {
-    const auto theme =
-        bridge_ == nullptr ? GuiTheme::Dark : bridge_->application().workspace().theme;
-    dark_theme_action_->setChecked(theme == GuiTheme::Dark);
-    light_theme_action_->setChecked(theme == GuiTheme::Light);
-    QApplication::setStyle("Fusion");
-    QApplication::setPalette(workbench_palette(theme));
+    dark_theme_action_->setChecked(global_theme_ == GuiTheme::Dark);
+    light_theme_action_->setChecked(global_theme_ == GuiTheme::Light);
+    apply_workbench_theme(global_theme_);
 }
 
 void QtMainWindow::show_home() {

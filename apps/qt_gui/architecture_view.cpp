@@ -3,6 +3,7 @@
 
 #include "apps/qt_gui/architecture_node_painter.hpp"
 #include "apps/qt_gui/workbench_bridge.hpp"
+#include "apps/qt_gui/workbench_style.hpp"
 
 #include "cpssim/application/bosch_project_factory.hpp"
 #include "cpssim/application/project/system_edit_policy.hpp"
@@ -121,7 +122,7 @@ void QtArchitectureView::refresh() {
         bosch ? bosch_functional_dependencies() : std::vector<GuiFunctionalDependency>{};
     auto graph = build_architecture_graph(presentation, dependencies, bosch,
                                           &application.workspace().architecture);
-    const auto tasks = build_task_node_presentations(presentation, application.workspace().theme,
+    const auto tasks = build_task_node_presentations(presentation, current_workbench_theme(),
                                                      bridge_.resource_highlight());
     model_.rebuild(flat_graph(std::move(graph), application.workspace().architecture), tasks);
     for (const auto node_id : model_.allNodeIds()) {

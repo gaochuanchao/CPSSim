@@ -1,6 +1,8 @@
 /*** Derive stable, theme-adjusted resource colors from strong identities. ***/
 #include "apps/qt_gui/workbench_style.hpp"
 
+#include <QApplication>
+
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -65,6 +67,20 @@ QPalette workbench_palette(GuiTheme theme) {
     palette.setColor(QPalette::Disabled, QPalette::Text, disabled);
     palette.setColor(QPalette::Disabled, QPalette::ButtonText, disabled);
     return palette;
+}
+
+GuiTheme current_workbench_theme() {
+    return qApp != nullptr && qApp->property("cpssimTheme").toString() == "light" ? GuiTheme::Light
+                                                                                  : GuiTheme::Dark;
+}
+
+void apply_workbench_theme(GuiTheme theme) {
+    if (qApp == nullptr) {
+        return;
+    }
+    qApp->setProperty("cpssimTheme", theme == GuiTheme::Light ? "light" : "dark");
+    QApplication::setStyle("Fusion");
+    QApplication::setPalette(workbench_palette(theme));
 }
 
 } // namespace cpssim::qt

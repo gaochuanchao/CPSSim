@@ -7,6 +7,7 @@
 #include <QMainWindow>
 #include <QString>
 
+#include "apps/qt_gui/appearance_preferences.hpp"
 #include "cpssim/application/bosch_project_factory.hpp"
 
 #include <exception>
@@ -122,6 +123,8 @@ class QtMainWindow final : public QMainWindow {
     QComboBox* batch_unit_combo_{nullptr};
     QLineEdit* batch_size_edit_{nullptr};
     QtFrontendPaths frontend_paths_;
+    QtAppearancePreferences appearance_preferences_;
+    GuiTheme global_theme_{GuiTheme::Dark};
 };
 
 } // namespace cpssim::qt
