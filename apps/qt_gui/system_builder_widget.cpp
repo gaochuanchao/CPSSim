@@ -804,22 +804,26 @@ void QtSystemBuilderWidget::refresh_task_page(TaskId id,
                          "remain editable while paused."
                        : QString{});
     static_cast<void>(profile);
-    task_assignment_->clear();
-    task_assignment_->addItem(QStringLiteral("Unassigned"));
-    for (const auto& resource : draft.resources()) {
-        task_assignment_->addItem(QString::fromStdString(resource.name),
-                                  static_cast<qulonglong>(resource.id.value()));
+    std::optional<ResourceId> assigned;
+    {
+        const QSignalBlocker block(task_assignment_);
+        task_assignment_->clear();
+        task_assignment_->addItem(QStringLiteral("Unassigned"));
+        for (const auto& resource : draft.resources()) {
+            task_assignment_->addItem(QString::fromStdString(resource.name),
+                                      static_cast<qulonglong>(resource.id.value()));
+        }
+        const auto assignment = std::find_if(bridge_.application().run_assignments().begin(),
+                                             bridge_.application().run_assignments().end(),
+                                             [id](const auto& row) { return row.task_id == id; });
+        assigned = assignment != bridge_.application().run_assignments().end()
+                       ? assignment->resource_id
+                       : std::nullopt;
+        task_assignment_->setCurrentIndex(
+            assigned.has_value()
+                ? task_assignment_->findData(static_cast<qulonglong>(assigned->value()))
+                : 0);
     }
-    const auto assignment = std::find_if(bridge_.application().run_assignments().begin(),
-                                         bridge_.application().run_assignments().end(),
-                                         [id](const auto& row) { return row.task_id == id; });
-    const auto assigned = assignment != bridge_.application().run_assignments().end()
-                              ? assignment->resource_id
-                              : std::nullopt;
-    task_assignment_->setCurrentIndex(
-        assigned.has_value()
-            ? task_assignment_->findData(static_cast<qulonglong>(assigned->value()))
-            : 0);
     task_assignment_->setEnabled(editing_enabled());
     const auto wcet = assigned.has_value() ? draft.execution_profile(id, *assigned) : std::nullopt;
     assignment_status_->setText(!assigned.has_value() ? QStringLiteral("Unassigned")

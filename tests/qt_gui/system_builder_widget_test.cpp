@@ -62,6 +62,7 @@ class QtSystemBuilderWidgetTest final : public QObject {
     void main_window_reuses_undo_actions();
     void builder_is_a_scrollable_property_editor_without_component_library();
     void task_page_edits_assignment_and_wcets_with_undo();
+    void executionProfileEditPreservesResourceAssignment();
 };
 
 void QtSystemBuilderWidgetTest::selection_uses_reusable_editor_pages() {
@@ -228,6 +229,79 @@ void QtSystemBuilderWidgetTest::task_page_edits_assignment_and_wcets_with_undo()
     QVERIFY(!bridge.application().editable_system()->execution_profile(task_id, resource_id));
     QCOMPARE(bridge.application().run_assignments().front().resource_id,
              std::optional<ResourceId>{ResourceId{1}});
+}
+
+void QtSystemBuilderWidgetTest::executionProfileEditPreservesResourceAssignment() {
+    TemporaryDirectory temporary;
+    auto application = std::make_unique<WorkbenchApplication>();
+    application->create_project(make_generic_project_template(temporary.path(), "project"));
+    QtWorkbenchBridge bridge{std::move(application)};
+    QtStructuralEditController edits{bridge};
+    QtSystemBuilderWidget builder{bridge, edits};
+
+    const auto task_id = bridge.application().editable_system()->tasks().front().id;
+    const auto& resources = bridge.application().editable_system()->resources();
+    QVERIFY(resources.size() >= 1);
+    const auto resource_id = resources.front().id;
+
+    // Select the task.
+    bridge.application().structural_selection().select_task(task_id);
+    bridge.notify_structural_selection_changed();
+
+    auto* assignment_combo = builder.findChild<QComboBox*>("systemBuilder.taskAssignment");
+    QVERIFY(assignment_combo != nullptr);
+
+    // Assign the task to a resource via the controller directly
+    // (avoids QComboBox signal ordering issues in test harness).
+    QVERIFY(edits.apply(
+        "Change task assignment",
+        [task_id, resource_id](auto&, auto& assignments, auto&) {
+            assignments.push_back({task_id, resource_id});
+        }));
+
+    QCOMPARE(bridge.application().run_assignments().front().resource_id,
+             std::optional<ResourceId>{resource_id});
+
+    // Refresh the builder so the combo reflects the assignment.
+    // The QSignalBlocker inside refresh_task_page must prevent the
+    // combo refresh from creating a phantom undo command.
+    const int undo_before_profile = edits.undo_stack().count();
+    builder.refresh();
+
+    // The combo must show the assigned resource.
+    const auto combo_data = assignment_combo->currentData();
+    QCOMPARE(combo_data, static_cast<qulonglong>(resource_id.value()));
+
+    // Simulate the execution-profile dialog: apply a profile mutation
+    // then refresh the task page (as open_execution_profile_dialog does).
+    QVERIFY(edits.apply(
+        QStringLiteral("Edit task execution profiles"),
+        [task_id, resource_id](auto& system_draft, auto&, auto&) {
+            system_draft.set_execution_profile(task_id, resource_id, Tick{12});
+        }));
+
+    builder.refresh();
+
+    // Verify: assignment is preserved, not reset.
+    QCOMPARE(bridge.application().run_assignments().front().resource_id,
+             std::optional<ResourceId>{resource_id});
+    QCOMPARE(assignment_combo->currentData(), combo_data);
+
+    // Verify: only the profile mutation was added, not a phantom
+    // "Change task assignment" command.
+    QCOMPARE(edits.undo_stack().count(), undo_before_profile + 1);
+
+    // Undo the profile edit — assignment must remain.
+    QVERIFY(edits.undo_stack().canUndo());
+    edits.undo_stack().undo();
+    QCOMPARE(bridge.application().run_assignments().front().resource_id,
+             std::optional<ResourceId>{resource_id});
+
+    // Redo the profile edit — assignment must remain.
+    QVERIFY(edits.undo_stack().canRedo());
+    edits.undo_stack().redo();
+    QCOMPARE(bridge.application().run_assignments().front().resource_id,
+             std::optional<ResourceId>{resource_id});
 }
 
 } // namespace cpssim::qt

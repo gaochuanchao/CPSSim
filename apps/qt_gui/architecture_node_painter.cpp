@@ -7,6 +7,7 @@
 #include <QtNodes/internal/AbstractNodeGeometry.hpp>
 #include <QtNodes/internal/NodeGraphicsObject.hpp>
 
+#include <QApplication>
 #include <QFontMetrics>
 #include <QPainter>
 #include <QPen>
@@ -65,7 +66,14 @@ void QtArchitectureNodePainter::paint(QPainter* painter, QtNodes::NodeGraphicsOb
                             .arg(presentation->period)
                             .arg(presentation->deadline)
                             .arg(execution);
-    painter->setPen(presentation->assignment_valid ? QColor{190, 196, 205} : QColor{226, 110, 100});
+    // Use the workbench text colour through the application palette for
+    // theme-aware readability.
+    const auto timing_color = presentation->assignment_valid
+                                  ? QColor{}  // default (will use palette)
+                                  : QColor{226, 110, 100};
+    painter->setPen(timing_color.isValid()
+                        ? timing_color
+                        : QApplication::palette().color(QPalette::Text));
     painter->drawText(QRectF{14.0, static_cast<qreal>(size.height() - 28),
                              static_cast<qreal>(size.width() - 24), 20.0},
                       Qt::AlignLeft | Qt::AlignVCenter,

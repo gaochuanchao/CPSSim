@@ -6,6 +6,7 @@
 #include <QtNodes/NodeDelegateModel>
 #include <QtNodes/StyleCollection>
 
+#include <QApplication>
 #include <QVariant>
 #include <QWidget>
 
@@ -15,6 +16,46 @@
 #include <stdexcept>
 
 namespace cpssim::qt {
+namespace {
+
+QPalette active_palette_for_theme(GuiTheme theme) {
+    // Use the stored palette rather than qApp->palette() to avoid
+    // depending on when the theme was last applied.
+    return workbench_palette(theme);
+}
+
+QVariantMap build_theme_aware_node_style(GuiTheme theme) {
+    auto style = QtNodes::StyleCollection::nodeStyle();
+    const auto palette = active_palette_for_theme(theme);
+
+    // Background / gradient: use Base as the node surface colour.
+    const auto base = palette.color(QPalette::Base);
+    style.setBackgroundColor(base);
+
+    // Boundary / border
+    style.NormalBoundaryColor = palette.color(QPalette::Mid);
+    style.SelectedBoundaryColor = palette.color(QPalette::Highlight);
+
+    // Text
+    style.FontColor = palette.color(QPalette::Text);
+    style.FontColorFaded = theme == GuiTheme::Dark ? QColor{140, 145, 152}
+                                                   : QColor{100, 106, 115};
+
+    // Connection points
+    style.ConnectionPointColor = palette.color(QPalette::Mid);
+    style.FilledConnectionPointColor = palette.color(QPalette::Highlight);
+
+    // Shadow
+    style.ShadowEnabled = false;
+
+    // Warning and error: keep the pinned defaults, they have sufficient
+    // contrast on both backgrounds.
+    // Opacity: keep the pinned default (1.0).
+
+    return style.toJson().toVariantMap();
+}
+
+} // namespace
 
 QPointF snap_architecture_position(QPointF position) {
     return {std::round(position.x() / architecture_grid_step) * architecture_grid_step,
@@ -295,7 +336,7 @@ QVariant QtArchitectureGraphModel::nodeData(QtNodes::NodeId node_id, QtNodes::No
     case QtNodes::NodeRole::Label:
         return QString{};
     case QtNodes::NodeRole::Style:
-        return QtNodes::StyleCollection::nodeStyle().toJson().toVariantMap();
+        return build_theme_aware_node_style(current_workbench_theme());
     default:
         return {};
     }

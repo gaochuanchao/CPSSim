@@ -7,6 +7,7 @@
 #include "apps/qt_gui/structural_edit_controller.hpp"
 #include "apps/qt_gui/system_builder_widget.hpp"
 #include "apps/qt_gui/workbench_bridge.hpp"
+#include "apps/qt_gui/workbench_style.hpp"
 
 #include "cpssim/application/bosch_project_factory.hpp"
 #include "cpssim/application/project/project_template.hpp"
@@ -15,7 +16,9 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QColor>
 #include <QJsonObject>
+#include <QMap>
 #include <QUndoStack>
 #include <QtTest/QTest>
 
@@ -165,6 +168,11 @@ class QtArchitectureModelTest final : public QObject {
     void everyTaskNodeGraphicsObject_is_visible_with_positive_opacity();
     void addTaskCreatesVisibleSceneNode_with_positive_effective_opacity();
     void undoRemovesGraphicsObject_redoRestoresWithOpacity();
+
+    // Theme-aware style regression tests.
+    void lightThemeStyle_returns_valid_light_background_dark_text();
+    void darkThemeStyle_returns_valid_dark_background_light_text();
+    void themeToggle_preserves_structure_and_updates_style();
 };
 
 void QtArchitectureModelTest::strong_ids_are_mapped_without_truncation() {
@@ -1061,6 +1069,180 @@ void QtArchitectureModelTest::undoRemovesGraphicsObject_redoRestoresWithOpacity(
     auto* restored = view.graphics_scene().nodeGraphicsObject(*new_node_id);
     QVERIFY(restored != nullptr);
     QVERIFY(restored->effectiveOpacity() > 0.0);
+}
+
+void QtArchitectureModelTest::lightThemeStyle_returns_valid_light_background_dark_text() {
+    const auto original = current_workbench_theme();
+    apply_workbench_theme(GuiTheme::Light);
+
+    TemporaryDirectory temporary;
+    auto application = std::make_unique<WorkbenchApplication>();
+    application->create_project(make_generic_project_template(temporary.path(), "project"));
+    QtWorkbenchBridge bridge{std::move(application)};
+    QtStructuralEditController edits{bridge};
+    QtArchitectureView view{bridge, edits};
+
+    QApplication::processEvents();
+
+    const auto node_ids = view.graph_model().allNodeIds();
+    QVERIFY(!node_ids.empty());
+
+    for (const auto node_id : node_ids) {
+        const auto style_value =
+            view.graph_model().nodeData(node_id, QtNodes::NodeRole::Style);
+        QVERIFY(style_value.isValid());
+
+        const auto root = QJsonObject::fromVariantMap(style_value.toMap());
+        QVERIFY(root.contains("NodeStyle"));
+        const auto style = root.value("NodeStyle").toObject();
+
+        QVERIFY(style.contains("Opacity"));
+        QVERIFY(style.value("Opacity").toDouble() > 0.0);
+
+        const auto bg_color = QColor(style.value("GradientColor0").toString());
+        const auto font_color = QColor(style.value("FontColor").toString());
+        const auto faded_color = QColor(style.value("FontColorFaded").toString());
+
+        // In light theme, background is light and font is dark.
+        QVERIFY(bg_color.lightness() > 128);
+        QVERIFY(font_color.lightness() < 128);
+        QVERIFY(faded_color.lightness() < 160);
+
+        // Adequate contrast between background and font.
+        QVERIFY(std::abs(bg_color.lightness() - font_color.lightness()) > 100);
+
+        // Graphics object must be visible.
+        auto* item = view.graphics_scene().nodeGraphicsObject(node_id);
+        QVERIFY(item != nullptr);
+        QVERIFY(item->isVisible());
+        QVERIFY(item->effectiveOpacity() > 0.0);
+    }
+
+    apply_workbench_theme(original);
+}
+
+void QtArchitectureModelTest::darkThemeStyle_returns_valid_dark_background_light_text() {
+    const auto original = current_workbench_theme();
+    apply_workbench_theme(GuiTheme::Dark);
+
+    TemporaryDirectory temporary;
+    auto application = std::make_unique<WorkbenchApplication>();
+    application->create_project(make_generic_project_template(temporary.path(), "project"));
+    QtWorkbenchBridge bridge{std::move(application)};
+    QtStructuralEditController edits{bridge};
+    QtArchitectureView view{bridge, edits};
+
+    QApplication::processEvents();
+
+    const auto node_ids = view.graph_model().allNodeIds();
+    QVERIFY(!node_ids.empty());
+
+    for (const auto node_id : node_ids) {
+        const auto style_value =
+            view.graph_model().nodeData(node_id, QtNodes::NodeRole::Style);
+        QVERIFY(style_value.isValid());
+
+        const auto root = QJsonObject::fromVariantMap(style_value.toMap());
+        QVERIFY(root.contains("NodeStyle"));
+        const auto style = root.value("NodeStyle").toObject();
+
+        QVERIFY(style.contains("Opacity"));
+        QVERIFY(style.value("Opacity").toDouble() > 0.0);
+
+        const auto bg_color = QColor(style.value("GradientColor0").toString());
+        const auto font_color = QColor(style.value("FontColor").toString());
+        const auto faded_color = QColor(style.value("FontColorFaded").toString());
+
+        // In dark theme, background is dark and font is light.
+        QVERIFY(bg_color.lightness() < 128);
+        QVERIFY(font_color.lightness() > 128);
+        QVERIFY(faded_color.lightness() > 128);
+
+        // Adequate contrast between background and font.
+        QVERIFY(std::abs(bg_color.lightness() - font_color.lightness()) > 100);
+
+        // Graphics object must be visible.
+        auto* item = view.graphics_scene().nodeGraphicsObject(node_id);
+        QVERIFY(item != nullptr);
+        QVERIFY(item->isVisible());
+        QVERIFY(item->effectiveOpacity() > 0.0);
+    }
+
+    apply_workbench_theme(original);
+}
+
+void QtArchitectureModelTest::themeToggle_preserves_structure_and_updates_style() {
+    const auto original = current_workbench_theme();
+    apply_workbench_theme(GuiTheme::Dark);
+
+    TemporaryDirectory temporary;
+    auto application = std::make_unique<WorkbenchApplication>();
+    application->create_project(make_generic_project_template(temporary.path(), "project"));
+    QtWorkbenchBridge bridge{std::move(application)};
+    QtStructuralEditController edits{bridge};
+    QtArchitectureView view{bridge, edits};
+
+    QApplication::processEvents();
+
+    // Record structural invariants in dark theme.
+    const auto node_ids_dark = view.graph_model().allNodeIds();
+    QVERIFY(!node_ids_dark.empty());
+
+    // Read dark styles.
+    QMap<QtNodes::NodeId, QColor> dark_bg, dark_font;
+    for (const auto nid : node_ids_dark) {
+        const auto sv = view.graph_model().nodeData(nid, QtNodes::NodeRole::Style);
+        const auto root = QJsonObject::fromVariantMap(sv.toMap());
+        const auto style = root.value("NodeStyle").toObject();
+        dark_bg[nid] = QColor(style.value("GradientColor0").toString());
+        dark_font[nid] = QColor(style.value("FontColor").toString());
+    }
+
+    // Switch to light theme.
+    apply_workbench_theme(GuiTheme::Light);
+    view.refresh();
+    QApplication::processEvents();
+
+    // Verify structure is unchanged.
+    const auto node_ids_light = view.graph_model().allNodeIds();
+    QCOMPARE(static_cast<int>(node_ids_light.size()), static_cast<int>(node_ids_dark.size()));
+
+    // Verify style colors changed.
+    for (const auto nid : node_ids_dark) {
+        const auto sv = view.graph_model().nodeData(nid, QtNodes::NodeRole::Style);
+        const auto root = QJsonObject::fromVariantMap(sv.toMap());
+        const auto style = root.value("NodeStyle").toObject();
+
+        const auto bg = QColor(style.value("GradientColor0").toString());
+        const auto fg = QColor(style.value("FontColor").toString());
+
+        // Background flipped from dark to light.
+        QVERIFY(bg.lightness() > dark_bg[nid].lightness());
+        // Font flipped from light to dark.
+        QVERIFY(fg.lightness() < dark_font[nid].lightness());
+
+        // Selected boundary uses Highlight palette colour.
+        const auto sel = QColor(style.value("SelectedBoundaryColor").toString());
+        const auto highlight = workbench_palette(GuiTheme::Light).color(QPalette::Highlight);
+        // The hues should match (tolerance of about 10 lightness).
+        QVERIFY(std::abs(sel.lightness() - highlight.lightness()) < 30);
+    }
+
+    // Switch back to dark and verify style changes again.
+    apply_workbench_theme(GuiTheme::Dark);
+    view.refresh();
+    QApplication::processEvents();
+
+    for (const auto nid : node_ids_dark) {
+        const auto sv = view.graph_model().nodeData(nid, QtNodes::NodeRole::Style);
+        const auto root = QJsonObject::fromVariantMap(sv.toMap());
+        const auto style = root.value("NodeStyle").toObject();
+        const auto bg = QColor(style.value("GradientColor0").toString());
+
+        QVERIFY(bg.lightness() < 128);
+    }
+
+    apply_workbench_theme(original);
 }
 
 } // namespace cpssim::qt
