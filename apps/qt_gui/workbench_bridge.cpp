@@ -165,6 +165,8 @@ void QtWorkbenchBridge::notify_structural_selection_changed() {
     Q_EMIT structuralSelectionChanged();
 }
 
+void QtWorkbenchBridge::notify_runtime_selection_changed() { Q_EMIT runtimeSelectionChanged(); }
+
 bool QtWorkbenchBridge::assign_task(TaskId task_id, std::optional<ResourceId> resource_id) {
     if (!application_->set_task_assignment(task_id, resource_id)) {
         Q_EMIT statusChanged();
@@ -174,6 +176,61 @@ bool QtWorkbenchBridge::assign_task(TaskId task_id, std::optional<ResourceId> re
     Q_EMIT structuralSelectionChanged();
     Q_EMIT statusChanged();
     return true;
+}
+
+bool QtWorkbenchBridge::set_stop_tick(Tick stop_tick) {
+    if (!application_->has_active_session() ||
+        !application_->active_session().set_draft_stop_tick(stop_tick)) {
+        application_->set_status("Pause the simulation before editing the stop tick.", true);
+        Q_EMIT statusChanged();
+        return false;
+    }
+    Q_EMIT runConfigurationChanged();
+    return true;
+}
+
+bool QtWorkbenchBridge::validate_changes() {
+    if (!application_->has_active_session()) {
+        return false;
+    }
+    if (application_->has_active_project() && application_->editable_system().has_value()) {
+        application_->validate_system_draft();
+    } else {
+        const auto& validation = application_->active_session().validate_draft();
+        application_->set_status(validation.valid() ? "Run configuration is valid."
+                                                    : validation.diagnostics.front().message,
+                                 !validation.valid());
+    }
+    Q_EMIT statusChanged();
+    Q_EMIT draftChanged();
+    return !application_->status_is_error();
+}
+
+bool QtWorkbenchBridge::apply_and_restart() {
+    if (!application_->has_active_session()) {
+        return false;
+    }
+    auto applied = false;
+    if (application_->has_active_project() && application_->editable_system().has_value()) {
+        applied = application_->apply_system_draft();
+    } else {
+        applied = application_->active_session().apply_draft();
+        if (applied) {
+            application_->active_runtime_replaced();
+            application_->set_status("Run configuration applied and restarted.");
+        } else {
+            application_->set_status("Run configuration could not be applied.", true);
+        }
+    }
+    Q_EMIT applicationStateChanged();
+    Q_EMIT presentationChanged(application_->presentation_generation());
+    Q_EMIT progressChanged();
+    Q_EMIT runConfigurationChanged();
+    Q_EMIT draftChanged();
+    Q_EMIT structuralSelectionChanged();
+    Q_EMIT runtimeSelectionChanged();
+    Q_EMIT statusChanged();
+    return applied;
 }
 
 void QtWorkbenchBridge::restore_draft(EditableSystemDraft draft,

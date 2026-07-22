@@ -89,12 +89,12 @@ TEST_CASE("event cache keys rows by presentation generation and debounces text",
 TEST_CASE("large event projection retains canonical order", "[gui][events][large]") {
     auto snapshot = event_snapshot();
     snapshot.event_log.clear();
-    for (std::uint64_t sequence = 1; sequence <= 10'000; ++sequence) {
+    for (std::uint64_t sequence = 1; sequence <= 100'000; ++sequence) {
         snapshot.event_log.emplace_back(static_cast<Tick>(sequence), EventPhase::JobRelease,
                                         EventSequence{sequence}, EventType::JobRelease);
     }
     const auto rows = build_event_table_rows(snapshot);
     const auto projected = filter_event_table_rows(rows, {});
-    REQUIRE(projected.size() == 10'000);
-    REQUIRE(rows[projected.back()].sequence == EventSequence{10'000});
+    REQUIRE(projected.size() == 100'000);
+    REQUIRE(rows[projected.back()].sequence == EventSequence{100'000});
 }

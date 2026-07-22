@@ -2,7 +2,10 @@
 #include "apps/qt_gui/main_window.hpp"
 
 #include "apps/qt_gui/architecture_view.hpp"
+#include "apps/qt_gui/event_table_widget.hpp"
+#include "apps/qt_gui/explorer_widget.hpp"
 #include "apps/qt_gui/resource_assignment_model.hpp"
+#include "apps/qt_gui/runtime_widgets.hpp"
 #include "apps/qt_gui/system_builder_widget.hpp"
 #include "apps/qt_gui/workbench_bridge.hpp"
 
@@ -281,6 +284,27 @@ void QtMainWindow::bind_workbench(QtWorkbenchBridge* bridge) {
     system_builder_ = new QtSystemBuilderWidget{*bridge_, builder_dock};
     builder_dock->setWidget(system_builder_);
     builder_placeholder->deleteLater();
+    auto* explorer_dock = findChild<QDockWidget*>("dock.explorer");
+    auto* explorer_placeholder = explorer_dock->widget();
+    explorer_dock->setWidget(
+        new QtExperimentExplorerWidget{*bridge_, *system_builder_, explorer_dock});
+    explorer_placeholder->deleteLater();
+    const auto replace_dock = [this](const char* name, QWidget* replacement) {
+        auto* dock = findChild<QDockWidget*>(name);
+        auto* old = dock->widget();
+        dock->setWidget(replacement);
+        old->deleteLater();
+    };
+    auto* run_dock = findChild<QDockWidget*>("dock.runConfiguration");
+    replace_dock("dock.runConfiguration", new QtRunConfigurationWidget{*bridge_, run_dock});
+    auto* inspector_dock = findChild<QDockWidget*>("dock.runtimeInspector");
+    replace_dock("dock.runtimeInspector", new QtRuntimeInspectorWidget{*bridge_, inspector_dock});
+    auto* resources_dock = findChild<QDockWidget*>("dock.resources");
+    replace_dock("dock.resources", new QtResourcesWidget{*bridge_, resources_dock});
+    auto* events_dock = findChild<QDockWidget*>("dock.canonicalEvents");
+    replace_dock("dock.canonicalEvents", new QtCanonicalEventsWidget{*bridge_, events_dock});
+    auto* diagnostics_dock = findChild<QDockWidget*>("dock.diagnostics");
+    replace_dock("dock.diagnostics", new QtDiagnosticsWidget{*bridge_, diagnostics_dock});
     connect(undo_action_, &QAction::triggered, &system_builder_->undo_stack(), &QUndoStack::undo);
     connect(redo_action_, &QAction::triggered, &system_builder_->undo_stack(), &QUndoStack::redo);
     connect(&system_builder_->undo_stack(), &QUndoStack::canUndoChanged, undo_action_,

@@ -43,7 +43,11 @@ class QtWorkbenchBridge final : public QObject {
     void close_project();
     void shutdown();
     void notify_structural_selection_changed();
+    void notify_runtime_selection_changed();
     bool assign_task(TaskId task_id, std::optional<ResourceId> resource_id);
+    bool set_stop_tick(Tick stop_tick);
+    bool validate_changes();
+    bool apply_and_restart();
     void restore_draft(EditableSystemDraft draft, std::vector<DraftTaskAssignment> assignments,
                        StructuralSelection selection);
     void set_resource_highlight(std::optional<ResourceId> resource_id);
@@ -64,7 +68,9 @@ class QtWorkbenchBridge final : public QObject {
     void completedResultChanged();
     void statusChanged();
     void structuralSelectionChanged();
+    void runtimeSelectionChanged();
     void draftChanged();
+    void runConfigurationChanged();
     void resourceHighlightChanged();
 
   private:

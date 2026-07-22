@@ -31,7 +31,7 @@ change simulation semantics or project formats.
       and canvas selection, and has no resource containers or assignment edges.
 - [x] System Builder/component library mutate the CPSSim draft through commands
       and `QUndoStack`, never through scene-only state.
-- [ ] Explorer, run configuration, runtime inspector, resources, events, and
+- [x] Explorer, run configuration, runtime inspector, resources, events, and
       diagnostics retain their Goal 6 ownership and selection behavior.
 - [ ] Results, timeline, signals, and the integrated native plot use immutable
       shared completed/presentation data; a permanent plotting dependency is

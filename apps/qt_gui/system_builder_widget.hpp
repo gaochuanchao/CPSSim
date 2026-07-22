@@ -28,6 +28,7 @@ class QtSystemBuilderWidget final : public QWidget {
     QUndoStack& undo_stack() noexcept { return *undo_stack_; }
     void refresh();
     bool create_component(StructuralSection section);
+    bool duplicate_selected();
     bool delete_selected(bool confirmed);
 
   private:

@@ -112,6 +112,15 @@ legacy frontend. Form edits and confirmed deletion are undoable from the shared
 Edit → Undo/Redo actions; changing projects clears that history. Validation
 appears beside the selected editor and never changes the applied simulation.
 
+Qt runtime panels use model/view adapters rather than item-per-record tables.
+Canonical Events keeps canonical sequence order, supports type/task/resource/
+vehicle/text filters and persistent column visibility, and remains virtualized
+for large traces. Clicking a row updates runtime event/tick selection; clicking
+its Cause cell follows the predecessor. Resources selects either a resource or
+its running job, and Runtime Inspector generates raw event JSON only for the
+selected event. The Diagnostics dock combines application, system-draft, and
+run-plan diagnostics.
+
 Window and table placement use a separate optional `imgui.ini` in the project
 root. The tracked [`apps/gui/imgui.ini`](imgui.ini) is the fixed default and is
 never a Dear ImGui output target. Layout changes are staged in a temporary file;

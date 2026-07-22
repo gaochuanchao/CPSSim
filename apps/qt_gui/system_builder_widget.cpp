@@ -474,8 +474,9 @@ bool QtSystemBuilderWidget::create_component(StructuralSection section) {
     auto& application = bridge_.application();
     if (!editing_enabled() || !application.editable_system().has_value())
         return false;
-    if (section == StructuralSection::Tasks && edit_policy() != ProjectSystemEditPolicy::Generic) {
-        application.set_status("Adapter-owned task identities are protected.", true);
+    if ((section == StructuralSection::Tasks || section == StructuralSection::MessageRoutes) &&
+        edit_policy() != ProjectSystemEditPolicy::Generic) {
+        application.set_status("Adapter-owned tasks and route structure are protected.", true);
         Q_EMIT bridge_.statusChanged();
         return false;
     }
@@ -523,6 +524,41 @@ bool QtSystemBuilderWidget::delete_selected(bool confirmed) {
         return false;
     undo_stack_->push(new RestoreDraftCommand{bridge_, std::move(before), std::move(after),
                                               QStringLiteral("Delete component")});
+    return true;
+}
+
+bool QtSystemBuilderWidget::duplicate_selected() {
+    auto& application = bridge_.application();
+    if (!editing_enabled() || !application.editable_system().has_value()) {
+        return false;
+    }
+    const auto selected = application.structural_selection();
+    if ((selected.kind() == StructuralSelectionKind::Task ||
+         selected.kind() == StructuralSelectionKind::MessageRoute ||
+         selected.kind() == StructuralSelectionKind::Connection) &&
+        edit_policy() != ProjectSystemEditPolicy::Generic) {
+        application.set_status("Adapter-owned tasks and route structure are protected.", true);
+        Q_EMIT bridge_.statusChanged();
+        return false;
+    }
+    DraftState before{*application.editable_system(), application.run_assignments(), selected};
+    auto after = before;
+    SystemExplorerInteraction interaction;
+    const auto result = interaction.duplicate(selected, after.draft, after.selection);
+    if (!result.changed) {
+        application.set_status(result.diagnostic, true);
+        Q_EMIT bridge_.statusChanged();
+        return false;
+    }
+    for (const auto& task : after.draft.tasks()) {
+        const auto exists = std::any_of(after.assignments.begin(), after.assignments.end(),
+                                        [&](const auto& row) { return row.task_id == task.id; });
+        if (!exists) {
+            after.assignments.push_back({task.id, std::nullopt});
+        }
+    }
+    undo_stack_->push(new RestoreDraftCommand{bridge_, std::move(before), std::move(after),
+                                              QStringLiteral("Duplicate component")});
     return true;
 }
 

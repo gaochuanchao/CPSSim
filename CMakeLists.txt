@@ -439,8 +439,11 @@ if(CPSSIM_BUILD_QT_GUI)
         apps/qt_gui/architecture_model.cpp
         apps/qt_gui/architecture_node_painter.cpp
         apps/qt_gui/architecture_view.cpp
+        apps/qt_gui/event_table_widget.cpp
+        apps/qt_gui/explorer_widget.cpp
         apps/qt_gui/main_window.cpp
         apps/qt_gui/resource_assignment_model.cpp
+        apps/qt_gui/runtime_widgets.cpp
         apps/qt_gui/system_builder_widget.cpp
         apps/qt_gui/workbench_bridge.cpp
         apps/qt_gui/workbench_style.cpp
@@ -651,6 +654,28 @@ if(BUILD_TESTING)
         add_test(NAME cpssim_qt_system_builder_tests COMMAND cpssim_qt_system_builder_tests)
         set_tests_properties(
             cpssim_qt_system_builder_tests
+            PROPERTIES
+                ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                LABELS gui
+        )
+
+        add_executable(
+            cpssim_qt_runtime_views_tests
+            tests/qt_gui/runtime_views_test.cpp
+        )
+        target_link_libraries(
+            cpssim_qt_runtime_views_tests
+            PRIVATE cpssim_qt_gui_support Qt6::Test
+        )
+        set_target_properties(
+            cpssim_qt_runtime_views_tests
+            PROPERTIES AUTOMOC ON CXX_CLANG_TIDY ""
+        )
+        cpssim_set_project_warnings(cpssim_qt_runtime_views_tests)
+        cpssim_enable_sanitizers(cpssim_qt_runtime_views_tests)
+        add_test(NAME cpssim_qt_runtime_views_tests COMMAND cpssim_qt_runtime_views_tests)
+        set_tests_properties(
+            cpssim_qt_runtime_views_tests
             PROPERTIES
                 ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                 LABELS gui

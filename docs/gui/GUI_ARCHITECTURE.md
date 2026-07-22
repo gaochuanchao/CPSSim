@@ -402,6 +402,14 @@ such as after Reset.
 Stable IDs—not labels, vector positions, canvas coordinates, or colors—connect
 views. `EventSequence` is event identity and never a substitute for time.
 
+The Qt adapters preserve this split. Experiment Explorer stores typed identity
+fields in a small tree model, while Resources and Canonical Events are lazy
+table models over immutable snapshot/cached rows. Canonical Events never sorts
+the source trace: filters project cached row indices, text input is debounced,
+and raw JSON is generated only when Runtime Inspector displays the selected
+event. Run Configuration invokes application commands through
+`QtWorkbenchBridge`; no widget calls the engine.
+
 ## 9. Derived models and caches
 
 ### Architecture graph

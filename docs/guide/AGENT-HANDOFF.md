@@ -310,8 +310,18 @@ validation is shown on the selected page and in the section summary. The stack
 is cleared when project ownership changes, so an old command cannot mutate a
 replacement project. Bosch task identities and route structure remain
 protected, and the applied session remains unchanged until the existing atomic
-Apply and restart workflow succeeds. Runtime inspection migration is the next
-phase.
+Apply and restart workflow succeeds.
+
+The Qt runtime-inspection phase is also complete. Experiment Explorer uses a
+small tree model of stable structural IDs and shares `StructuralSelection` with
+the Architecture and Builder. Run Configuration delegates stop-tick,
+validation, and atomic restart commands through `QtWorkbenchBridge`. Resources
+uses one lazy table over the immutable presentation snapshot. Canonical Events
+uses `GuiEventTableCache` through `QAbstractTableModel`, retains canonical
+ordering, debounces text search, lazily creates selected-event JSON, and has
+automated 100,000-row coverage. Runtime Inspector and Diagnostics project only
+detached runtime/application diagnostics; they do not duplicate structural
+edit fields. Results/timeline/signals/native-plot migration is the next phase.
 
 Goal 6 validation completed on 2026-07-21:
 
