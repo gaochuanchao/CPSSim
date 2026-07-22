@@ -35,11 +35,13 @@
 #include <QStatusBar>
 #include <QTabWidget>
 #include <QToolBar>
+#include <QToolButton>
 #include <QUndoStack>
 #include <QVBoxLayout>
 #include <QWizard>
 #include <QWizardPage>
 
+#include <algorithm>
 #include <limits>
 #include <utility>
 
@@ -79,6 +81,12 @@ QtMainWindow::QtMainWindow(bool restore_user_layout, QWidget* parent)
     arrange_default_docks();
     workbench_dock_state_ = save_workbench_state();
     statusBar()->showMessage("Ready");
+    auto* bottom_toggle = new QToolButton(statusBar());
+    bottom_toggle->setObjectName("bottomAnalysis.toggle");
+    bottom_toggle->setText("⌄");
+    bottom_toggle->setToolTip("Collapse or restore bottom analysis area (Ctrl+J)");
+    statusBar()->addPermanentWidget(bottom_toggle);
+    connect(bottom_toggle, &QToolButton::clicked, collapse_bottom_action_, &QAction::trigger);
     if (restore_user_layout_) {
         load_user_layout();
     }
@@ -117,6 +125,8 @@ void QtMainWindow::build_actions() {
     step_action_->setObjectName("action.step");
     restore_layout_action_ = make_action("Reset Workbench Layout");
     restore_layout_action_->setObjectName("action.resetLayout");
+    collapse_bottom_action_ = make_action("Collapse Bottom Analysis Area", QKeySequence{"Ctrl+J"});
+    collapse_bottom_action_->setObjectName("action.collapseBottom");
     undo_action_ = make_action("Undo", QKeySequence::Undo);
     undo_action_->setObjectName("action.undo");
     undo_action_->setEnabled(false);
@@ -136,6 +146,8 @@ void QtMainWindow::build_actions() {
 
     connect(restore_layout_action_, &QAction::triggered, this,
             &QtMainWindow::restore_default_layout);
+    connect(collapse_bottom_action_, &QAction::triggered, this,
+            &QtMainWindow::toggle_bottom_analysis);
 }
 
 void QtMainWindow::build_central_pages() {
@@ -205,6 +217,9 @@ QDockWidget* QtMainWindow::make_dock(const QString& title, const QString& object
     dock->setWidget(placeholder(title + "\nQt migration panel", dock));
     dock->setFeatures(QDockWidget::DockWidgetClosable | QDockWidget::DockWidgetMovable |
                       QDockWidget::DockWidgetFloatable);
+    dock->setMinimumSize(120, 80);
+    dock->widget()->setMinimumSize(0, 0);
+    dock->widget()->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     addDockWidget(area, dock);
     docks_.push_back(dock);
     return dock;
@@ -226,6 +241,20 @@ void QtMainWindow::build_docks() {
     auto* events = make_dock("Canonical Events", "dock.canonicalEvents", Qt::BottomDockWidgetArea);
     auto* results = make_dock("Results", "dock.results", Qt::BottomDockWidgetArea);
     auto* diagnostics = make_dock("Diagnostics", "dock.diagnostics", Qt::BottomDockWidgetArea);
+    bottom_docks_ = {assignments, resources, events, results, diagnostics};
+    for (auto* dock : bottom_docks_) {
+        dock->setAllowedAreas(Qt::AllDockWidgetAreas);
+        auto* redock = new QAction("Dock in Bottom Analysis Group", dock);
+        redock->setObjectName("action.dockBottom." + dock->objectName());
+        dock->addAction(redock);
+        dock->setContextMenuPolicy(Qt::ActionsContextMenu);
+        connect(redock, &QAction::triggered, this, [this, dock] { dock_in_bottom_analysis(dock); });
+        connect(dock, &QDockWidget::visibilityChanged, this, [this, dock](bool visible) {
+            if (visible && !bottom_collapsed_ && dockWidgetArea(dock) == Qt::BottomDockWidgetArea) {
+                bottom_selected_ = dock;
+            }
+        });
+    }
     for (auto* dock : {resources, events, results, diagnostics}) {
         tabifyDockWidget(assignments, dock);
     }
@@ -256,6 +285,12 @@ void QtMainWindow::build_menus_and_toolbars() {
     view_menu->setObjectName("menu.view");
     for (auto* dock : docks_) {
         view_menu->addAction(dock->toggleViewAction());
+    }
+    view_menu->addSeparator();
+    view_menu->addAction(collapse_bottom_action_);
+    auto* dock_bottom_menu = view_menu->addMenu("Dock in Bottom Analysis Group");
+    for (auto* dock : bottom_docks_) {
+        dock_bottom_menu->addAction(dock->actions().front());
     }
     view_menu->addSeparator();
     auto* theme_menu = view_menu->addMenu("Theme");
@@ -384,6 +419,7 @@ void QtMainWindow::set_workbench_chrome_visible(bool visible) {
     for (auto* dock : docks_) {
         dock->toggleViewAction()->setEnabled(visible);
     }
+    collapse_bottom_action_->setEnabled(visible);
 }
 
 void QtMainWindow::bind_workbench(QtWorkbenchBridge* bridge) {
@@ -844,9 +880,68 @@ void QtMainWindow::apply_theme() {
     dark_theme_action_->setChecked(global_theme_ == GuiTheme::Dark);
     light_theme_action_->setChecked(global_theme_ == GuiTheme::Light);
     apply_workbench_theme(global_theme_);
+    qApp->setStyleSheet(
+        "QMainWindow::separator { background: palette(mid); width: 6px; height: 6px; }"
+        "QMainWindow::separator:hover { background: palette(highlight); }"
+        "QSplitter::handle { background: palette(mid); width: 6px; height: 6px; }"
+        "QSplitter::handle:hover { background: palette(highlight); }");
     if (bridge_ != nullptr) {
         Q_EMIT bridge_->appearanceChanged();
     }
+}
+
+void QtMainWindow::toggle_bottom_analysis() {
+    if (home_is_active()) {
+        return;
+    }
+    if (!bottom_collapsed_) {
+        bottom_visible_before_collapse_.clear();
+        for (auto* dock : bottom_docks_) {
+            if (dock->isVisible()) {
+                bottom_visible_before_collapse_.insert(dock->objectName());
+                bottom_height_ = std::max(bottom_height_, dock->height());
+            }
+            dock->hide();
+        }
+        bottom_collapsed_ = true;
+    } else {
+        auto* anchor = bottom_docks_.front();
+        for (auto* dock : bottom_docks_) {
+            if (bottom_visible_before_collapse_.contains(dock->objectName())) {
+                addDockWidget(Qt::BottomDockWidgetArea, dock);
+                if (dock != anchor) {
+                    tabifyDockWidget(anchor, dock);
+                }
+                dock->show();
+            }
+        }
+        if (bottom_selected_ != nullptr && bottom_selected_->isVisible()) {
+            bottom_selected_->raise();
+        }
+        resizeDocks({anchor}, {bottom_height_}, Qt::Vertical);
+        bottom_collapsed_ = false;
+    }
+    update_bottom_action();
+}
+
+void QtMainWindow::dock_in_bottom_analysis(QDockWidget* dock) {
+    if (dock == nullptr || !bottom_docks_.contains(dock)) {
+        return;
+    }
+    auto* anchor = bottom_docks_.front();
+    dock->setFloating(false);
+    addDockWidget(Qt::BottomDockWidgetArea, dock);
+    if (dock != anchor) {
+        tabifyDockWidget(anchor, dock);
+    }
+    dock->show();
+    dock->raise();
+    bottom_selected_ = dock;
+}
+
+void QtMainWindow::update_bottom_action() {
+    collapse_bottom_action_->setText(bottom_collapsed_ ? "Restore Bottom Analysis Area"
+                                                       : "Collapse Bottom Analysis Area");
 }
 
 void QtMainWindow::show_home() {

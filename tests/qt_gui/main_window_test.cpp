@@ -29,6 +29,7 @@ class QtMainWindowTest final : public QObject {
     void execution_controls_and_global_theme_are_independent();
     void ordinary_updates_never_reopen_closed_results();
     void home_transition_restores_workbench_visibility_once();
+    void bottom_analysis_collapses_restores_and_redocks();
 };
 
 void QtMainWindowTest::starts_on_home_with_stable_actions() {
@@ -172,6 +173,27 @@ void QtMainWindowTest::home_transition_restores_workbench_visibility_once() {
     QVERIFY(!results->isVisible());
     QVERIFY(window.findChild<QToolBar*>("toolbar.docks") == nullptr);
     QCOMPARE(window.dockWidgetArea(results), Qt::BottomDockWidgetArea);
+}
+
+void QtMainWindowTest::bottom_analysis_collapses_restores_and_redocks() {
+    QtMainWindow window{false};
+    window.show_workbench();
+    window.show();
+    QCoreApplication::processEvents();
+    auto* assignments = window.findChild<QDockWidget*>("dock.resourceAssignments");
+    QVERIFY(assignments != nullptr);
+    QVERIFY(assignments->isVisible());
+    window.findChild<QAction*>("action.collapseBottom")->trigger();
+    QVERIFY(!assignments->isVisible());
+    window.findChild<QAction*>("action.collapseBottom")->trigger();
+    QVERIFY(assignments->isVisible());
+    assignments->setFloating(true);
+    QVERIFY(assignments->isFloating());
+    window.dock_in_bottom_analysis(assignments);
+    QVERIFY(!assignments->isFloating());
+    QCOMPARE(window.dockWidgetArea(assignments), Qt::BottomDockWidgetArea);
+    QVERIFY(qApp->styleSheet().contains("QMainWindow::separator"));
+    QVERIFY(qApp->styleSheet().contains("QSplitter::handle"));
 }
 
 } // namespace cpssim::qt

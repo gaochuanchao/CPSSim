@@ -5,6 +5,7 @@
 #include <QKeySequence>
 #include <QList>
 #include <QMainWindow>
+#include <QSet>
 #include <QString>
 
 #include "apps/qt_gui/appearance_preferences.hpp"
@@ -67,6 +68,8 @@ class QtMainWindow final : public QMainWindow {
     void show_home();
     void show_workbench();
     void restore_default_layout();
+    void toggle_bottom_analysis();
+    void dock_in_bottom_analysis(QDockWidget* dock);
 
   protected:
     void closeEvent(QCloseEvent* event) override;
@@ -92,6 +95,7 @@ class QtMainWindow final : public QMainWindow {
     void create_bosch_project_dialog();
     void close_project_requested();
     void apply_theme();
+    void update_bottom_action();
     void report_exception(const QString& action, const std::exception& error);
 
     bool restore_user_layout_{true};
@@ -102,6 +106,7 @@ class QtMainWindow final : public QMainWindow {
     QTabWidget* central_tabs_{nullptr};
     QToolBar* simulation_toolbar_{nullptr};
     QList<QDockWidget*> docks_;
+    QList<QDockWidget*> bottom_docks_;
     QAction* new_project_action_{nullptr};
     QAction* open_project_action_{nullptr};
     QAction* save_project_action_{nullptr};
@@ -112,6 +117,7 @@ class QtMainWindow final : public QMainWindow {
     QAction* reset_action_{nullptr};
     QAction* step_action_{nullptr};
     QAction* restore_layout_action_{nullptr};
+    QAction* collapse_bottom_action_{nullptr};
     QAction* dark_theme_action_{nullptr};
     QAction* light_theme_action_{nullptr};
     QAction* undo_action_{nullptr};
@@ -125,6 +131,10 @@ class QtMainWindow final : public QMainWindow {
     QtAppearancePreferences appearance_preferences_;
     GuiTheme global_theme_{GuiTheme::Dark};
     QByteArray workbench_dock_state_;
+    QSet<QString> bottom_visible_before_collapse_;
+    QDockWidget* bottom_selected_{nullptr};
+    int bottom_height_{220};
+    bool bottom_collapsed_{false};
 };
 
 } // namespace cpssim::qt
