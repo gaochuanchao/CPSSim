@@ -21,7 +21,7 @@ change simulation semantics or project formats.
       results, edits, selection, workspace, exports, and diagnostics.
 - [x] Qt shell launches with stable central tabs, docks, actions, object names,
       and versioned geometry/state restoration.
-- [ ] Qt bridge provides bounded Live/Fast progression, no idle timer, queued
+- [x] Qt bridge provides bounded Live/Fast progression, no idle timer, queued
       finalizer publication, and clean cancellation/shutdown.
 - [ ] Flat QtNodes prototype renders tasks and semantic connections, accepts
       cycles, synchronizes structural selection, adds at center with stable

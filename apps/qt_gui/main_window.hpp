@@ -18,6 +18,8 @@ namespace cpssim::qt {
 
 inline constexpr int qt_main_window_state_version = 1;
 
+class QtWorkbenchBridge;
+
 class QtMainWindow final : public QMainWindow {
     Q_OBJECT
 
@@ -34,6 +36,7 @@ class QtMainWindow final : public QMainWindow {
     QByteArray save_workbench_geometry() const;
     QByteArray save_workbench_state() const;
     bool restore_workbench_layout(const QByteArray& geometry, const QByteArray& state);
+    void bind_workbench(QtWorkbenchBridge* bridge);
 
   public Q_SLOTS:
     void show_home();
@@ -55,6 +58,7 @@ class QtMainWindow final : public QMainWindow {
     void set_workbench_chrome_visible(bool visible);
     void load_user_layout();
     void save_user_layout() const;
+    void synchronize_workbench_chrome();
 
     bool restore_user_layout_{true};
     QStackedWidget* pages_{nullptr};
@@ -74,6 +78,7 @@ class QtMainWindow final : public QMainWindow {
     QAction* reset_action_{nullptr};
     QAction* step_action_{nullptr};
     QAction* restore_layout_action_{nullptr};
+    QtWorkbenchBridge* bridge_{nullptr};
 };
 
 } // namespace cpssim::qt

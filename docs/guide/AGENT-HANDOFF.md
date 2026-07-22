@@ -281,6 +281,13 @@ prototype/assignment/parity gates are tracked in the
 [Qt migration checklist](../gui/QT_MIGRATION_CHECKLIST.md). Do not make Qt the
 default or remove Dear ImGui until the parity gate passes.
 
+The native shell and lifecycle bridge are present but Qt is not yet the
+default. `QtWorkbenchBridge` translates shared QActions into queued
+`GuiCommand` values, bounds Live callbacks to roughly 16 ms, cooperatively
+continues Fast batches with zero-delay events, publishes worker results through
+the Qt GUI thread, and owns no simulation state itself. The flat QtNodes
+prototype is the next migration gate.
+
 Goal 6 validation completed on 2026-07-21:
 
 - `cmake --build --preset gui -j2` passed;

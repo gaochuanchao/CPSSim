@@ -309,6 +309,11 @@ modal buffers, layout text, and pointer redraw tracking. The renderer receives
 important guardrail: a widget cannot reach through the snapshot and mutate the
 engine.
 
+The Qt frontend drives this same owner through `QtWorkbenchBridge`. Widgets
+emit commands only; they never call the engine. Live progression is bounded by
+a 16 ms precise timer, Fast progression uses cooperative queued continuations,
+and there is no timer while the simulation is paused, finished, or absent.
+
 ## 5. Where to make a change
 
 Use the smallest layer that owns the behavior:

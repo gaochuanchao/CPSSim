@@ -1,6 +1,8 @@
 /*** Implement the native Qt Widgets workbench shell. ***/
 #include "apps/qt_gui/main_window.hpp"
 
+#include "apps/qt_gui/workbench_bridge.hpp"
+
 #include <QAction>
 #include <QCloseEvent>
 #include <QDockWidget>
@@ -89,7 +91,6 @@ void QtMainWindow::build_actions() {
     restore_layout_action_ = make_action("Reset Workbench Layout");
     restore_layout_action_->setObjectName("action.resetLayout");
 
-    connect(close_project_action_, &QAction::triggered, this, &QtMainWindow::show_home);
     connect(restore_layout_action_, &QAction::triggered, this,
             &QtMainWindow::restore_default_layout);
 }
@@ -236,12 +237,58 @@ bool QtMainWindow::home_is_active() const noexcept {
 
 void QtMainWindow::set_workbench_chrome_visible(bool visible) {
     simulation_toolbar_->setVisible(visible);
+    dock_toolbar_->setVisible(visible);
     for (auto* dock : docks_) {
         dock->setVisible(visible);
     }
     save_project_action_->setEnabled(visible);
     save_project_as_action_->setEnabled(visible);
     close_project_action_->setEnabled(visible);
+}
+
+void QtMainWindow::bind_workbench(QtWorkbenchBridge* bridge) {
+    if (bridge_ != nullptr || bridge == nullptr) {
+        return;
+    }
+    bridge_ = bridge;
+    connect(run_action_, &QAction::triggered, bridge_, &QtWorkbenchBridge::run);
+    connect(pause_action_, &QAction::triggered, bridge_, &QtWorkbenchBridge::pause);
+    connect(reset_action_, &QAction::triggered, bridge_, &QtWorkbenchBridge::reset);
+    connect(step_action_, &QAction::triggered, bridge_, &QtWorkbenchBridge::step);
+    connect(close_project_action_, &QAction::triggered, bridge_, &QtWorkbenchBridge::close_project);
+    connect(bridge_, &QtWorkbenchBridge::applicationStateChanged, this,
+            &QtMainWindow::synchronize_workbench_chrome);
+    connect(bridge_, &QtWorkbenchBridge::progressChanged, this,
+            &QtMainWindow::synchronize_workbench_chrome);
+    connect(bridge_, &QtWorkbenchBridge::statusChanged, this,
+            &QtMainWindow::synchronize_workbench_chrome);
+    synchronize_workbench_chrome();
+}
+
+void QtMainWindow::synchronize_workbench_chrome() {
+    if (bridge_ == nullptr) {
+        return;
+    }
+    const auto& application = bridge_->application();
+    if (application.screen() == GuiApplicationScreen::Home) {
+        show_home();
+    } else {
+        show_workbench();
+    }
+    const auto state = application.run_state();
+    run_action_->setEnabled(state == GuiRunState::Paused);
+    pause_action_->setEnabled(state == GuiRunState::Running);
+    reset_action_->setEnabled(state != GuiRunState::NotConfigured);
+    step_action_->setEnabled(state == GuiRunState::Paused);
+    if (!application.status().empty()) {
+        statusBar()->showMessage(QString::fromStdString(application.status()));
+    } else if (application.has_active_session()) {
+        const auto progress = application.progress();
+        statusBar()->showMessage(QString{"Tick %1 / %2 · %3 events"}
+                                     .arg(progress.current_tick)
+                                     .arg(progress.stop_tick)
+                                     .arg(progress.event_count));
+    }
 }
 
 void QtMainWindow::show_home() {

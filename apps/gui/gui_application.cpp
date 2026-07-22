@@ -24,6 +24,7 @@
 
 #include "cpssim/application/bosch_project_factory.hpp"
 #include "cpssim/application/bosch_result_analysis.hpp"
+#include "cpssim/application/bosch_workbench_services.hpp"
 #include "cpssim/application/project/project_template.hpp"
 #include "cpssim/application/project/project_workflow.hpp"
 #include "cpssim/application/project/system_builder_workflow.hpp"
@@ -106,30 +107,7 @@ WorkbenchApplicationPaths workbench_paths(const GuiApplicationPaths& paths) {
 }
 
 WorkbenchApplicationServices workbench_services(const GuiApplicationPaths& paths) {
-    const auto reference_root = paths.bosch_reference_directory;
-    const auto shared_library = paths.bosch_fmu_library;
-    return {.project_runtime_resolver =
-                [reference_root, shared_library](const auto& root, const auto& metadata) {
-                    return resolve_bosch_project_runtime(root, metadata, reference_root,
-                                                         shared_library);
-                },
-            .completed_result_builder =
-                [](const CompletedRunFinalizationRequest& request, std::stop_token stop) {
-                    const auto started = std::chrono::steady_clock::now();
-                    if (stop.stop_requested()) {
-                        return CompletedRunResult{};
-                    }
-                    auto result = std::make_shared<const RunResult>(
-                        build_run_result(request.data, request.scenario_kind));
-                    std::shared_ptr<const BoschResultAnalysis> bosch_analysis;
-                    if (!stop.stop_requested() && request.scenario_kind == "bosch") {
-                        bosch_analysis = std::make_shared<const BoschResultAnalysis>(
-                            derive_bosch_result_analysis(*result));
-                    }
-                    return CompletedRunResult{request.data->runtime_generation, std::move(result),
-                                              std::move(bosch_analysis), request.performance,
-                                              std::chrono::steady_clock::now() - started};
-                }};
+    return make_bosch_workbench_services(paths.bosch_reference_directory, paths.bosch_fmu_library);
 }
 
 GuiApplicationPaths default_application_paths() {

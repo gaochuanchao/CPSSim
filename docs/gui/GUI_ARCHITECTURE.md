@@ -26,6 +26,12 @@ cpssim_core <- cpssim_gui_support <- WorkbenchApplication
 - `cpssim_qt_gui_support` and `cpssim_qt_gui` own Qt bridge/models and the Qt
   Widgets shell. QtNodes is a flat Architecture adapter, never project truth.
 
+`QtWorkbenchBridge` is the sole Qt event-loop adapter. Live execution uses a
+precise 16 ms GUI-thread timer; Fast execution posts bounded zero-delay
+continuations. Paused, Finished, and NotConfigured states retain no simulation
+timer. Completed-result worker notification is queued onto the GUI thread, and
+bridge shutdown clears the callback before cancelling and joining finalization.
+
 The arrows are one-way dependencies. Core code never includes or links GUI
 headers. GUI support may use public core interfaces but does not depend on Dear
 ImGui, GLFW, or OpenGL.
