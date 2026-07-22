@@ -16,40 +16,40 @@ see [Simulation semantics](../guide/SIMULATION-SEMANTICS.md).
 
 ## 1. Build and launch
 
-Launch the tracked example with the default inclusive stop tick of 300:
+Launch the Qt Widgets workbench on its session-free Home screen:
 
 ```bash
 make run-gui
 ```
 
-The executable also accepts an experiment configuration and stop tick:
+The executable also accepts an existing CPSSim `project.json`:
 
 ```bash
-./build/make-dev/cpssim_gui config/examples/basic.json 500
+./build/make-dev/cpssim_gui projects/example-project/project.json
 ```
 
-To learn the signal plot without preparing an FMU, attach the deterministic
-mock functional model:
+The former Dear ImGui frontend remains available as the legacy compatibility
+target while Qt parity settles:
 
 ```bash
-./build/make-dev/cpssim_gui \
-  config/examples/basic.json 500 --mock-functional
+cmake --preset gui-both
+cmake --build --preset gui-both --target cpssim_imgui_gui
 ```
 
-On Ubuntu, GLFW and OpenGL development packages are required:
+On Ubuntu 24.04, install Qt 6 Widgets/OpenGL development packages. The
+`qt6-base-dev` package supplies the supported Qt 6.4 baseline:
 
 ```bash
-sudo apt install libglfw3-dev libgl1-mesa-dev
+sudo apt install qt6-base-dev libgl1-mesa-dev
 ```
 
-The first application configuration may download the pinned Dear ImGui source.
+The first GUI configuration may download the pinned QtNodes source.
 More build variants and dependency details are in the
 [command handbook](../COMMANDS.md#gui-build-and-launch).
 
-GLFW scales the initial native content area for the monitor where the window is
-placed. Once the window exists, CPSSim reads the scale of the monitor containing
-it and follows that scale as the window moves. Native size, text, and layout
-spacing therefore adapt without a restart.
+Qt supplies native per-screen device-pixel-ratio handling. CPSSim stores
+geometry/dock state as versioned presentation preferences; project semantics
+remain independent of monitor scale.
 
 ## 2. Your first project and run
 

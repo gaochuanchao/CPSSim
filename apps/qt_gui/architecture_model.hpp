@@ -66,6 +66,7 @@ class QtArchitectureGraphModel final : public QtNodes::AbstractGraphModel {
     void set_position_changed(PositionChanged callback) { position_changed_ = std::move(callback); }
     std::optional<QtNodes::NodeId> node_id_for(GuiGraphNodeId entity) const;
     std::optional<GuiGraphNodeId> entity_for(QtNodes::NodeId node_id) const;
+    std::optional<GuiConnectionId> connection_for(const QtNodes::ConnectionId& connection_id) const;
     std::size_t node_count() const noexcept { return nodes_.size(); }
     std::size_t connection_count() const noexcept { return connections_.size(); }
     std::vector<QRectF> occupied_rectangles() const;
@@ -107,6 +108,7 @@ class QtArchitectureGraphModel final : public QtNodes::AbstractGraphModel {
     QtNodeIdMap ids_;
     std::map<QtNodes::NodeId, NodeRecord> nodes_;
     std::vector<QtNodes::ConnectionId> connections_;
+    std::vector<std::pair<QtNodes::ConnectionId, GuiConnectionId>> connection_ids_;
     PositionChanged position_changed_;
 };
 

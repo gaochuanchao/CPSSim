@@ -11,8 +11,8 @@ semantics.
 
 ```text
 cpssim_core <- cpssim_gui_support <- WorkbenchApplication
-                                           |-- cpssim_gui (Dear ImGui)
-                                           `-- cpssim_qt_gui_support <- cpssim_qt_gui
+                                           |-- cpssim_imgui_gui (legacy)
+                                           `-- cpssim_qt_gui_support <- cpssim_gui (default Qt)
 ```
 
 - `cpssim_core` owns validated specifications and runtime behavior.
@@ -21,9 +21,9 @@ cpssim_core <- cpssim_gui_support <- WorkbenchApplication
 - `WorkbenchApplication` owns frontend-independent project/session lifecycle,
   publications, completed results, drafts, selections, workspace, exports,
   and diagnostics.
-- `cpssim_gui` owns GLFW/OpenGL startup, Dear ImGui widgets, drawing, and
+- `cpssim_imgui_gui` owns legacy GLFW/OpenGL startup, Dear ImGui widgets, drawing, and
   transient ImGui presentation preferences.
-- `cpssim_qt_gui_support` and `cpssim_qt_gui` own Qt bridge/models and the Qt
+- `cpssim_qt_gui_support` and `cpssim_gui` own Qt bridge/models and the Qt
   Widgets shell. QtNodes is a flat Architecture adapter, never project truth.
 
 `QtWorkbenchBridge` is the sole Qt event-loop adapter. Live execution uses a
@@ -51,6 +51,15 @@ so unrelated resource insertion cannot recolor existing assignments.
 swatch, task, resource, profile/WCET, priority, accessibility, and status
 columns. Its combo delegate mutates only the shared draft, and table/canvas
 selection both update `StructuralSelection`.
+
+Qt file actions call the same atomic project APIs as the legacy frontend.
+Native dialogs select explicit paths; a five-page Bosch wizard constructs the
+complete project before bridge replacement; failed or cancelled operations do
+not replace the active project. Recent history remains a bounded user
+preference, while project workspace state owns themes, execution presentation
+settings, signal selection, and architecture positions. The Qt toolbar exposes
+Live/Fast and separate Events/Ticks batch values without adding run-plan
+semantics.
 
 The arrows are one-way dependencies. Core code never includes or links GUI
 headers. GUI support may use public core interfaces but does not depend on Dear
@@ -542,12 +551,14 @@ scaling.
 ## 11. Dependencies, threading, and persistence
 
 Dear ImGui, ImPlot, and the header-only portable-file-dialog adapter are pinned
-and built only when `CPSSIM_BUILD_GUI=ON`. Platform APIs remain behind the
+and built only when `CPSSIM_BUILD_IMGUI_GUI=ON`. Platform APIs remain behind the
 project-owned `FileDialog` interface. ImPlot is pinned to v1.0 commit
 `524f9fcd48d76c13fdf94c5ffbba8787a1ff7e39`; its MIT-licensed context is owned
 beside the Dear ImGui context, and its demo sources are not built. A new graph
 or plotting dependency needs separate evidence, a reviewed version/hash, a
 GUI-only CMake boundary, and an ADR when it materially changes architecture.
+The default Qt target uses system Qt 6.4 and the pinned BSD-3-Clause QtNodes
+commit recorded by ADR-0026.
 
 Simulation, the controller, and all FMI calls remain on the GUI thread. Only
 post-Finish derivation uses a worker, across the immutable boundary described

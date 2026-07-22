@@ -10,6 +10,7 @@
 
 #include <QtNodes/BasicGraphicsScene>
 #include <QtNodes/GraphicsView>
+#include <QtNodes/internal/ConnectionGraphicsObject.hpp>
 #include <QtNodes/internal/NodeGraphicsObject.hpp>
 
 #include <QHBoxLayout>
@@ -68,6 +69,8 @@ QtArchitectureView::QtArchitectureView(QtWorkbenchBridge& bridge, QWidget* paren
             &QtArchitectureView::select_node);
     connect(scene_.get(), &QtNodes::BasicGraphicsScene::nodeSelected, this,
             &QtArchitectureView::select_node);
+    connect(scene_.get(), &QGraphicsScene::selectionChanged, this,
+            &QtArchitectureView::select_scene_item);
     connect(&bridge_, &QtWorkbenchBridge::presentationChanged, this,
             [this](quint64) { refresh(); });
     connect(&bridge_, &QtWorkbenchBridge::applicationStateChanged, this,
@@ -77,10 +80,26 @@ QtArchitectureView::QtArchitectureView(QtWorkbenchBridge& bridge, QWidget* paren
     connect(&bridge_, &QtWorkbenchBridge::draftChanged, this, &QtArchitectureView::refresh);
     connect(&bridge_, &QtWorkbenchBridge::resourceHighlightChanged, this,
             &QtArchitectureView::refresh);
+    connect(&bridge_, &QtWorkbenchBridge::workspaceChanged, this, &QtArchitectureView::refresh);
     model_.set_position_changed([this](GuiGraphNodeId entity, QPointF position) {
         persist_node_position(entity, position);
     });
     refresh();
+}
+
+void QtArchitectureView::select_scene_item() {
+    for (auto* item : scene_->selectedItems()) {
+        if (item->type() != QtNodes::ConnectionGraphicsObject::Type) {
+            continue;
+        }
+        const auto* connection = static_cast<QtNodes::ConnectionGraphicsObject*>(item);
+        const auto id = model_.connection_for(connection->connectionId());
+        if (id.has_value()) {
+            bridge_.application().structural_selection().select_connection(*id);
+            bridge_.notify_structural_selection_changed();
+        }
+        return;
+    }
 }
 
 QtArchitectureView::~QtArchitectureView() = default;

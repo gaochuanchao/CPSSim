@@ -34,7 +34,7 @@ int main(int argc, char** argv) {
     try {
         for (int index = 1; index < argc; ++index) {
             if (std::string_view{argv[index]} == "--help") {
-                std::cout << "Usage: cpssim_qt_gui [project.json]\n";
+                std::cout << "Usage: cpssim_gui [project.json]\n";
                 return 0;
             }
         }
@@ -45,8 +45,14 @@ int main(int argc, char** argv) {
         QCoreApplication::setOrganizationName("CPSSim");
         QCoreApplication::setApplicationName("CPSSim Qt GUI");
         cpssim::qt::QtMainWindow window;
-        auto workbench =
-            make_workbench(std::filesystem::absolute(argv[0]), std::filesystem::current_path());
+        const auto executable = std::filesystem::absolute(argv[0]);
+        const auto repository_root = std::filesystem::current_path();
+        window.set_frontend_paths(
+            {.projects_directory = repository_root / "projects",
+             .examples_directory = repository_root / "examples",
+             .bosch_reference_directory = repository_root / "experiments/bosch_v10_reference",
+             .bosch_fmu_library = cpssim::resolve_bundled_bosch_fmu(executable)});
+        auto workbench = make_workbench(executable, repository_root);
         if (argc == 2) {
             workbench->open_project(std::filesystem::path{argv[1]});
         }
@@ -55,7 +61,7 @@ int main(int argc, char** argv) {
         window.show();
         return application.exec();
     } catch (const std::exception& error) {
-        std::cerr << "cpssim_qt_gui: " << error.what() << '\n';
+        std::cerr << "cpssim_gui: " << error.what() << '\n';
         return 1;
     }
 }

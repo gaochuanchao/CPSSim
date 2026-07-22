@@ -1,6 +1,8 @@
 /*** Drive CPSSim cooperatively from the Qt GUI thread. ***/
 #include "apps/qt_gui/workbench_bridge.hpp"
 
+#include "cpssim/config/json_run_plan.hpp"
+
 #include <QMetaObject>
 #include <QPointer>
 
@@ -141,24 +143,67 @@ void QtWorkbenchBridge::replace_session(std::unique_ptr<GuiSimulationSession> se
     Q_EMIT completedResultChanged();
 }
 
-void QtWorkbenchBridge::open_project(const std::filesystem::path& project_file) {
-    live_timer_.stop();
-    fast_continuation_pending_ = false;
-    application_->open_project(project_file);
+void QtWorkbenchBridge::emit_project_replaced() {
     Q_EMIT applicationStateChanged();
     Q_EMIT progressChanged();
     Q_EMIT presentationChanged(application_->presentation_generation());
     Q_EMIT completedResultChanged();
+    Q_EMIT structuralSelectionChanged();
+    Q_EMIT runtimeSelectionChanged();
+    Q_EMIT draftChanged();
+    Q_EMIT runConfigurationChanged();
+    Q_EMIT workspaceChanged();
+    Q_EMIT statusChanged();
+}
+
+void QtWorkbenchBridge::replace_project(std::unique_ptr<ProjectContext> project) {
+    live_timer_.stop();
+    fast_continuation_pending_ = false;
+    application_->replace_project(std::move(project));
+    application_->record_active_project();
+    emit_project_replaced();
+}
+
+void QtWorkbenchBridge::create_project(ProjectCreationRequest request,
+                                       ProjectRuntimeInputs runtime_inputs) {
+    live_timer_.stop();
+    fast_continuation_pending_ = false;
+    application_->create_project(std::move(request), std::move(runtime_inputs));
+    emit_project_replaced();
+}
+
+void QtWorkbenchBridge::open_project(const std::filesystem::path& project_file) {
+    live_timer_.stop();
+    fast_continuation_pending_ = false;
+    application_->open_project(project_file);
+    emit_project_replaced();
+}
+
+void QtWorkbenchBridge::save_project() {
+    application_->save_project();
+    application_->set_status("Project saved.");
+    Q_EMIT statusChanged();
+}
+
+void QtWorkbenchBridge::save_project_as(const std::filesystem::path& parent_directory,
+                                        std::string new_name) {
+    live_timer_.stop();
+    fast_continuation_pending_ = false;
+    application_->save_project_as(parent_directory, std::move(new_name));
+    emit_project_replaced();
 }
 
 void QtWorkbenchBridge::close_project() {
     live_timer_.stop();
     fast_continuation_pending_ = false;
     application_->close_project();
-    Q_EMIT applicationStateChanged();
-    Q_EMIT progressChanged();
-    Q_EMIT presentationChanged(application_->presentation_generation());
-    Q_EMIT completedResultChanged();
+    emit_project_replaced();
+}
+
+void QtWorkbenchBridge::workspace_settings_changed() {
+    normalize_workspace_state(application_->workspace());
+    Q_EMIT workspaceChanged();
+    schedule_for_run_state();
 }
 
 void QtWorkbenchBridge::notify_structural_selection_changed() {
@@ -186,6 +231,38 @@ bool QtWorkbenchBridge::set_stop_tick(Tick stop_tick) {
         return false;
     }
     Q_EMIT runConfigurationChanged();
+    return true;
+}
+
+bool QtWorkbenchBridge::load_run_plan(const std::filesystem::path& path) {
+    if (!application_->has_active_session()) {
+        return false;
+    }
+    const auto plan = cpssim::load_run_plan(path, application_->active_session().config());
+    if (!application_->active_session().replace_draft(plan)) {
+        application_->set_status("Pause the simulation before loading a run plan.", true);
+        Q_EMIT statusChanged();
+        return false;
+    }
+    application_->set_status("Run plan loaded into the unapplied draft.");
+    Q_EMIT runConfigurationChanged();
+    Q_EMIT statusChanged();
+    return true;
+}
+
+bool QtWorkbenchBridge::save_run_plan(const std::filesystem::path& path) {
+    if (!application_->has_active_session()) {
+        return false;
+    }
+    const auto& validation = application_->active_session().validate_draft();
+    if (!validation.plan.has_value() || !validation.diagnostics.empty()) {
+        application_->set_status("Pending run plan is invalid.", true);
+        Q_EMIT statusChanged();
+        return false;
+    }
+    cpssim::save_run_plan(path, application_->active_session().config(), *validation.plan);
+    application_->set_status("Run plan saved.");
+    Q_EMIT statusChanged();
     return true;
 }
 

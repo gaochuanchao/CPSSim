@@ -30,6 +30,7 @@ class QtArchitectureView final : public QWidget {
 
   private:
     void select_node(QtNodes::NodeId node_id);
+    void select_scene_item();
     void persist_node_position(GuiGraphNodeId entity, QPointF position);
     void add_task_at_view_center();
     void synchronize_scene_selection();

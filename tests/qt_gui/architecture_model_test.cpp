@@ -43,7 +43,7 @@ GuiArchitectureGraph cyclic_graph() {
     const auto first = task_graph_node_id(TaskId{1});
     const auto second = task_graph_node_id(TaskId{2});
     const auto resource = resource_graph_node_id(ResourceId{1});
-    return {
+    auto graph = GuiArchitectureGraph{
         .nodes =
             {{first, GuiGraphNodeKind::Task, TaskId{1}, "First", {40.0F, 40.0F}, {120.0F, 60.0F}},
              {second,
@@ -83,6 +83,19 @@ GuiArchitectureGraph cyclic_graph() {
                    std::nullopt,
                    std::nullopt}},
         .logical_size = {500.0F, 200.0F}};
+    graph.edges[0].connection =
+        GuiConnectionPresentation{.id = {GuiConnectionKind::Logical, TaskId{1}, TaskId{2}},
+                                  .label = "Logical dependency",
+                                  .displayed_latency = 0,
+                                  .creates_network_events = false,
+                                  .protected_semantics = true};
+    graph.edges[1].connection =
+        GuiConnectionPresentation{.id = {GuiConnectionKind::Communication, TaskId{2}, TaskId{1}},
+                                  .label = "Communication channel",
+                                  .displayed_latency = 80,
+                                  .creates_network_events = true,
+                                  .protected_semantics = true};
+    return graph;
 }
 
 std::filesystem::path make_trajectory(const std::filesystem::path& parent) {
@@ -133,6 +146,10 @@ void QtArchitectureModelTest::flat_model_accepts_cycles_and_filters_assignment_s
     QCOMPARE(model.node_count(), std::size_t{2});
     QCOMPARE(model.connection_count(), std::size_t{2});
     QVERIFY(model.loopsEnabled());
+    const auto first_connections =
+        model.allConnectionIds(*model.node_id_for(task_graph_node_id(TaskId{1})));
+    QVERIFY(!first_connections.empty());
+    QVERIFY(model.connection_for(*first_connections.begin()).has_value());
     const auto first_before = model.node_id_for(task_graph_node_id(TaskId{1}));
     model.rebuild(graph);
     QCOMPARE(model.node_id_for(task_graph_node_id(TaskId{1})), first_before);

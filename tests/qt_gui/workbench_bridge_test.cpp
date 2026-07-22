@@ -2,6 +2,7 @@
 #include "apps/qt_gui/workbench_bridge.hpp"
 
 #include <QSignalSpy>
+#include <QTemporaryDir>
 #include <QtTest/QTest>
 
 #include <chrono>
@@ -40,6 +41,7 @@ class QtWorkbenchBridgeTest final : public QObject {
     void live_timer_exists_only_while_running();
     void fast_mode_uses_cooperative_continuations();
     void finished_run_publishes_finalized_result();
+    void run_plan_files_round_trip_through_bridge();
 };
 
 void QtWorkbenchBridgeTest::live_timer_exists_only_while_running() {
@@ -82,6 +84,20 @@ void QtWorkbenchBridgeTest::finished_run_publishes_finalized_result() {
     QVERIFY(!bridge.live_timer_active());
     QTRY_VERIFY_WITH_TIMEOUT(bridge.application().completed_result() != nullptr, 2'000);
     QVERIFY(completed.count() >= 1);
+}
+
+void QtWorkbenchBridgeTest::run_plan_files_round_trip_through_bridge() {
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    QtWorkbenchBridge bridge{make_application(100)};
+    QVERIFY(bridge.set_stop_tick(20));
+    const std::filesystem::path path =
+        std::filesystem::path{temporary.path().toStdString()} / "plan.json";
+    QVERIFY(bridge.save_run_plan(path));
+    QVERIFY(bridge.set_stop_tick(30));
+    QCOMPARE(bridge.application().active_session().draft().stop_tick(), Tick{30});
+    QVERIFY(bridge.load_run_plan(path));
+    QCOMPARE(bridge.application().active_session().draft().stop_tick(), Tick{20});
 }
 
 } // namespace cpssim::qt

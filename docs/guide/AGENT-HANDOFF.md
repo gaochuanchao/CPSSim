@@ -18,7 +18,12 @@ editor with atomic Apply/Reset behavior and strict versioned JSON Load/Save.
 The GUI also includes a deterministic pan/zoom architecture graph for tasks,
 resources, causal message routes, applied assignments, shared selection, and
 pending-draft task reassignment.
-The GUI also includes a cached live scheduling timeline with Ready/Running
+The default GUI is now the Qt 6.4 Widgets workbench; the Dear ImGui frontend is
+retained as the buildable `cpssim_imgui_gui` legacy target. The Qt shell uses
+native dock widgets, a flat QtNodes task graph, model/view assignment and event
+tables, native project dialogs, recent projects, a Bosch wizard, Live/Fast
+controls, themes, and shared graphics-independent `WorkbenchApplication`
+ownership. The GUI also includes a cached live scheduling timeline with Ready/Running
 resource lanes, all canonical markers, exact malformed-trace locations,
 pan/zoom/fit, current-tick cursor, entity/time filtering, and shared
 cross-view selection. Incremental append results are checked against complete

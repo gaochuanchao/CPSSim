@@ -4,7 +4,9 @@
 #include "cpssim/gui/event_table_model.hpp"
 #include "cpssim/gui/resource_presentation.hpp"
 
+#include <QFileDialog>
 #include <QFormLayout>
+#include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLabel>
 #include <QLineEdit>
@@ -22,6 +24,7 @@
 
 #include <algorithm>
 #include <array>
+#include <exception>
 #include <optional>
 
 namespace cpssim::qt {
@@ -110,6 +113,14 @@ QtRunConfigurationWidget::QtRunConfigurationWidget(QtWorkbenchBridge& bridge, QW
     apply_->setObjectName("runConfiguration.apply");
     layout->addWidget(validate_);
     layout->addWidget(apply_);
+    auto* file_actions = new QHBoxLayout;
+    load_ = new QPushButton("Load run plan...", this);
+    load_->setObjectName("runConfiguration.load");
+    save_ = new QPushButton("Save run plan...", this);
+    save_->setObjectName("runConfiguration.save");
+    file_actions->addWidget(load_);
+    file_actions->addWidget(save_);
+    layout->addLayout(file_actions);
     diagnostics_ = new QLabel(this);
     diagnostics_->setObjectName("runConfiguration.diagnostics");
     diagnostics_->setWordWrap(true);
@@ -129,6 +140,32 @@ QtRunConfigurationWidget::QtRunConfigurationWidget(QtWorkbenchBridge& bridge, QW
     });
     connect(validate_, &QPushButton::clicked, &bridge_, &QtWorkbenchBridge::validate_changes);
     connect(apply_, &QPushButton::clicked, &bridge_, &QtWorkbenchBridge::apply_and_restart);
+    connect(load_, &QPushButton::clicked, this, [this] {
+        const auto selected = QFileDialog::getOpenFileName(
+            this, "Load Run Plan", {}, "CPSSim run plans (*.json);;JSON files (*.json)");
+        if (selected.isEmpty()) {
+            return;
+        }
+        try {
+            static_cast<void>(bridge_.load_run_plan(selected.toStdString()));
+        } catch (const std::exception& error) {
+            bridge_.application().set_status(error.what(), true);
+            Q_EMIT bridge_.statusChanged();
+        }
+    });
+    connect(save_, &QPushButton::clicked, this, [this] {
+        const auto selected = QFileDialog::getSaveFileName(this, "Save Run Plan", "default.json",
+                                                           "CPSSim run plans (*.json)");
+        if (selected.isEmpty()) {
+            return;
+        }
+        try {
+            static_cast<void>(bridge_.save_run_plan(selected.toStdString()));
+        } catch (const std::exception& error) {
+            bridge_.application().set_status(error.what(), true);
+            Q_EMIT bridge_.statusChanged();
+        }
+    });
     connect(&bridge_, &QtWorkbenchBridge::applicationStateChanged, this,
             &QtRunConfigurationWidget::refresh);
     connect(&bridge_, &QtWorkbenchBridge::runConfigurationChanged, this,
@@ -152,6 +189,8 @@ void QtRunConfigurationWidget::refresh() {
         stop_tick_->setEnabled(editable);
         validate_->setEnabled(editable);
         apply_->setEnabled(editable);
+        load_->setEnabled(editable);
+        save_->setEnabled(editable);
         diagnostics_->setText(application.system_changes_dirty()
                                   ? "Run Configuration — Unapplied changes"
                                   : QString::fromStdString(application.status()));

@@ -78,8 +78,9 @@ and architecture-position state.  Stable `objectName` values identify docks.
 - Resource assignment remains readable without relying on color.
 - Qt and QtNodes become optional GUI dependencies; Ubuntu packages provide Qt,
   while QtNodes is pinned by commit.
-- Two frontends must be kept compatible until the explicit parity gate makes
-  Qt the default and schedules Dear ImGui removal in a later goal.
+- After the Goal 7 parity suite, Qt is the default `cpssim_gui` frontend and
+  Dear ImGui remains the independently buildable `cpssim_imgui_gui` legacy
+  target. Removal remains a later-goal decision.
 
 ## Alternatives considered
 

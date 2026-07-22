@@ -112,6 +112,7 @@ void QtArchitectureGraphModel::rebuild(
     const std::vector<QtTaskNodePresentation>& task_presentations) {
     nodes_.clear();
     connections_.clear();
+    connection_ids_.clear();
     std::size_t flat_index = 0;
     for (const auto& node : graph.nodes) {
         if (node.kind != GuiGraphNodeKind::Task) {
@@ -151,11 +152,23 @@ void QtArchitectureGraphModel::rebuild(
         }
         const auto output_port = next_output[*source]++;
         const auto input_port = next_input[*destination]++;
-        connections_.push_back({*source, output_port, *destination, input_port});
+        const QtNodes::ConnectionId connection{*source, output_port, *destination, input_port};
+        connections_.push_back(connection);
+        if (edge.connection.has_value()) {
+            connection_ids_.emplace_back(connection, edge.connection->id);
+        }
         nodes_.at(*source).output_count = next_output[*source];
         nodes_.at(*destination).input_count = next_input[*destination];
     }
     Q_EMIT modelReset();
+}
+
+std::optional<GuiConnectionId>
+QtArchitectureGraphModel::connection_for(const QtNodes::ConnectionId& connection_id) const {
+    const auto found =
+        std::find_if(connection_ids_.begin(), connection_ids_.end(),
+                     [&](const auto& value) { return value.first == connection_id; });
+    return found == connection_ids_.end() ? std::nullopt : std::optional{found->second};
 }
 
 std::optional<QtNodes::NodeId> QtArchitectureGraphModel::node_id_for(GuiGraphNodeId entity) const {

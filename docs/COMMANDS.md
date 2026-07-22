@@ -9,7 +9,7 @@ root Makefile intentionally exposes only the six normal user commands below.
 |---|---|
 | `make` | Configure the normal development application build and compile the core, CLI, GUI, Bosch adapters, and supplied Linux FMU runtime without launching or testing |
 | `make run-cli` | Build the CLI and required Bosch runtime, then open the persistent terminal interface |
-| `make run-gui` | Build and launch the Dear ImGui workbench |
+| `make run-gui` | Build and launch the Qt Widgets workbench |
 | `make test` | Open the verification menu on a terminal; run quick verification when input is non-interactive |
 | `make clean` | Remove only the documented generated build directories below |
 | `make help` | List only this public interface |
@@ -169,13 +169,12 @@ implementation. No Makefile edit is needed.
 
 ## GUI build and launch
 
-During the Goal 7 parity period the existing `gui` preset builds Dear ImGui,
-while `qt-gui` builds the native Qt 6 Widgets shell and `gui-both` verifies
-both frontends:
+The `gui` and `qt-gui` presets build the default Qt 6 Widgets shell.
+`gui-both` additionally builds the legacy Dear ImGui frontend:
 
 ```bash
 cmake --preset qt-gui
-cmake --build --preset qt-gui --target cpssim_qt_gui
+cmake --build --preset qt-gui --target cpssim_gui
 QT_QPA_PLATFORM=offscreen ctest --test-dir build/qt-gui -R cpssim_qt_gui_tests
 ```
 
@@ -183,16 +182,16 @@ Qt 6.4 or newer Core, Gui, Widgets, Test, and OpenGLWidgets development
 components are required. QtNodes is fetched only for the Qt frontend at the
 immutable commit recorded in ADR-0026.
 
-Launch the tracked example with its default inclusive horizon:
+Launch the session-free Home screen:
 
 ```bash
 make run-gui
 ```
 
-The executable retains its direct arguments:
+An existing project can be opened directly:
 
 ```bash
-./build/make-dev/cpssim_gui config/examples/basic.json 500
+./build/make-dev/cpssim_gui projects/example-project/project.json
 ./build/make-dev/cpssim_gui \
   config/examples/basic.json 500 --mock-functional
 ```

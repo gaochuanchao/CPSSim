@@ -1,8 +1,15 @@
 /*** Qt Test coverage for the native workbench shell and layout identity. ***/
 #include "apps/qt_gui/main_window.hpp"
+#include "apps/qt_gui/workbench_bridge.hpp"
 
+#include "cpssim/application/workbench_application.hpp"
+
+#include <QAction>
+#include <QComboBox>
 #include <QDockWidget>
+#include <QLineEdit>
 #include <QTabWidget>
+#include <QTemporaryDir>
 #include <QtTest/QTest>
 
 namespace cpssim::qt {
@@ -14,6 +21,8 @@ class QtMainWindowTest final : public QObject {
     void starts_on_home_with_stable_actions();
     void exposes_required_tabs_and_docks();
     void round_trips_versioned_geometry_and_state();
+    void project_workflow_and_recent_history_are_native();
+    void execution_controls_and_theme_update_workspace();
 };
 
 void QtMainWindowTest::starts_on_home_with_stable_actions() {
@@ -26,6 +35,51 @@ void QtMainWindowTest::starts_on_home_with_stable_actions() {
     QVERIFY(window.findChild<QWidget*>("home.createProject") != nullptr);
     QVERIFY(window.findChild<QWidget*>("home.openProject") != nullptr);
     QVERIFY(window.findChild<QWidget*>("home.boschProject") != nullptr);
+}
+
+void QtMainWindowTest::project_workflow_and_recent_history_are_native() {
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    const std::filesystem::path root{temporary.path().toStdString()};
+    QtMainWindow window{false};
+    auto application = std::make_unique<WorkbenchApplication>(WorkbenchApplicationPaths{
+        .projects_directory = root, .preferences_file = root / "preferences.json"});
+    auto* bridge = new QtWorkbenchBridge(std::move(application), &window);
+    window.bind_workbench(bridge);
+
+    QVERIFY(window.create_generic_project_at(root, "native-project"));
+    QVERIFY(!window.home_is_active());
+    QVERIFY(std::filesystem::exists(root / "native-project/project.json"));
+    QVERIFY(window.save_project_as_to(root, "native-copy"));
+    QCOMPARE(bridge->application().active_project().metadata().name, std::string{"native-copy"});
+    QVERIFY(std::filesystem::exists(root / "native-copy/project.json"));
+    QVERIFY(!bridge->application().recent_projects().entries().empty());
+
+    bridge->close_project();
+    QVERIFY(window.home_is_active());
+    QVERIFY(window.open_project_path(root / "native-project/project.json"));
+    QCOMPARE(bridge->application().active_project().metadata().name, std::string{"native-project"});
+}
+
+void QtMainWindowTest::execution_controls_and_theme_update_workspace() {
+    QtMainWindow window{false};
+    auto* bridge = new QtWorkbenchBridge(std::make_unique<WorkbenchApplication>(), &window);
+    window.bind_workbench(bridge);
+    auto* mode = window.findChild<QComboBox*>("runMode");
+    auto* unit = window.findChild<QComboBox*>("fastBatchUnit");
+    auto* size = window.findChild<QLineEdit*>("fastBatchSize");
+    QVERIFY(mode != nullptr);
+    QVERIFY(unit != nullptr);
+    QVERIFY(size != nullptr);
+    mode->setCurrentIndex(1);
+    unit->setCurrentIndex(1);
+    size->setText("37");
+    Q_EMIT size->editingFinished();
+    QCOMPARE(bridge->application().workspace().run_mode, GuiRunMode::Fast);
+    QCOMPARE(bridge->application().workspace().fast_batch_unit, GuiFastBatchUnit::Ticks);
+    QCOMPARE(bridge->application().workspace().fast_tick_batch_size, std::uint64_t{37});
+    window.findChild<QAction*>("action.theme.light")->trigger();
+    QCOMPARE(bridge->application().workspace().theme, GuiTheme::Light);
 }
 
 void QtMainWindowTest::exposes_required_tabs_and_docks() {

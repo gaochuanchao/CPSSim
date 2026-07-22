@@ -62,7 +62,7 @@
     },
     {
       "name": "gui",
-      "displayName": "GCC development with Dear ImGui",
+      "displayName": "GCC development with Qt Widgets",
       "inherits": "dev",
       "cacheVariables": {
         "CPSSIM_BUILD_GUI": "ON"
@@ -81,6 +81,7 @@
       "displayName": "GCC development with both GUI frontends",
       "inherits": "dev",
       "cacheVariables": {
+        "CPSSIM_BUILD_GUI": "OFF",
         "CPSSIM_BUILD_IMGUI_GUI": "ON",
         "CPSSIM_BUILD_QT_GUI": "ON"
       }

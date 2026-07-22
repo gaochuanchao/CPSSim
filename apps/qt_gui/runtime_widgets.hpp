@@ -27,6 +27,8 @@ class QtRunConfigurationWidget final : public QWidget {
     QLineEdit* stop_tick_{nullptr};
     QPushButton* validate_{nullptr};
     QPushButton* apply_{nullptr};
+    QPushButton* load_{nullptr};
+    QPushButton* save_{nullptr};
     QLabel* diagnostics_{nullptr};
     bool refreshing_{false};
 };

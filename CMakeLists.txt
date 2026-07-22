@@ -10,7 +10,7 @@ project(
 option(CPSSIM_WARNINGS_AS_ERRORS "Treat project warnings as errors" ON)
 option(CPSSIM_ENABLE_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
 option(CPSSIM_ENABLE_CLANG_TIDY "Run clang-tidy while compiling project targets" OFF)
-option(CPSSIM_BUILD_GUI "Compatibility switch for the Dear ImGui GUI" OFF)
+option(CPSSIM_BUILD_GUI "Build the default Qt Widgets GUI" OFF)
 option(CPSSIM_BUILD_IMGUI_GUI "Build the legacy Dear ImGui frontend" OFF)
 option(CPSSIM_BUILD_QT_GUI "Build the Qt 6 Widgets frontend" OFF)
 
@@ -308,7 +308,7 @@ target_link_libraries(cpssim_bosch_gui_application PRIVATE nlohmann_json::nlohma
 cpssim_set_project_warnings(cpssim_bosch_gui_application)
 cpssim_enable_sanitizers(cpssim_bosch_gui_application)
 
-if(CPSSIM_BUILD_GUI OR CPSSIM_BUILD_IMGUI_GUI)
+if(CPSSIM_BUILD_IMGUI_GUI)
     find_package(OpenGL REQUIRED)
     find_package(glfw3 3.3 CONFIG REQUIRED)
 
@@ -368,7 +368,7 @@ if(CPSSIM_BUILD_GUI OR CPSSIM_BUILD_IMGUI_GUI)
     target_link_libraries(cpssim_implot PUBLIC cpssim_imgui)
 
     add_executable(
-        cpssim_gui
+        cpssim_imgui_gui
         apps/gui/gui_application.cpp
         apps/gui/main.cpp
         apps/gui/native_file_dialog.cpp
@@ -385,9 +385,9 @@ if(CPSSIM_BUILD_GUI OR CPSSIM_BUILD_IMGUI_GUI)
         apps/gui/views/timeline_view.cpp
         apps/gui/views/toolbar_view.cpp
     )
-    target_include_directories(cpssim_gui SYSTEM PRIVATE "${portable_file_dialogs_SOURCE_DIR}")
+    target_include_directories(cpssim_imgui_gui SYSTEM PRIVATE "${portable_file_dialogs_SOURCE_DIR}")
     target_link_libraries(
-        cpssim_gui
+        cpssim_imgui_gui
         PRIVATE cpssim_gui_support cpssim_bosch_gui_application cpssim_imgui cpssim_implot
     )
     configure_file(
@@ -396,11 +396,11 @@ if(CPSSIM_BUILD_GUI OR CPSSIM_BUILD_IMGUI_GUI)
         COPYONLY
     )
 
-    cpssim_set_project_warnings(cpssim_gui)
-    cpssim_enable_sanitizers(cpssim_gui)
+    cpssim_set_project_warnings(cpssim_imgui_gui)
+    cpssim_enable_sanitizers(cpssim_imgui_gui)
 endif()
 
-if(CPSSIM_BUILD_QT_GUI)
+if(CPSSIM_BUILD_GUI OR CPSSIM_BUILD_QT_GUI)
     find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Widgets Test OpenGLWidgets)
 
     include(FetchContent)
@@ -474,11 +474,11 @@ if(CPSSIM_BUILD_QT_GUI)
     cpssim_set_project_warnings(cpssim_qt_gui_support)
     cpssim_enable_sanitizers(cpssim_qt_gui_support)
 
-    add_executable(cpssim_qt_gui apps/qt_gui/main.cpp)
-    target_link_libraries(cpssim_qt_gui PRIVATE cpssim_qt_gui_support)
-    set_target_properties(cpssim_qt_gui PROPERTIES AUTOMOC ON)
-    cpssim_set_project_warnings(cpssim_qt_gui)
-    cpssim_enable_sanitizers(cpssim_qt_gui)
+    add_executable(cpssim_gui apps/qt_gui/main.cpp)
+    target_link_libraries(cpssim_gui PRIVATE cpssim_qt_gui_support)
+    set_target_properties(cpssim_gui PROPERTIES AUTOMOC ON)
+    cpssim_set_project_warnings(cpssim_gui)
+    cpssim_enable_sanitizers(cpssim_gui)
 endif()
 
 add_executable(cpssim_bosch_conformance apps/conformance/main.cpp)
@@ -553,7 +553,7 @@ if(BUILD_TESTING)
         LABEL core
     )
 
-    if(CPSSIM_BUILD_QT_GUI)
+    if(CPSSIM_BUILD_GUI OR CPSSIM_BUILD_QT_GUI)
         add_executable(
             cpssim_qt_gui_tests
             tests/qt_gui/main_window_test.cpp

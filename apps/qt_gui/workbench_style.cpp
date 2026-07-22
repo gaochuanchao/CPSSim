@@ -31,4 +31,40 @@ QColor unassigned_accent_color(GuiTheme theme) {
     return theme == GuiTheme::Dark ? QColor{145, 150, 158} : QColor{105, 110, 118};
 }
 
+QPalette workbench_palette(GuiTheme theme) {
+    QPalette palette;
+    if (theme == GuiTheme::Light) {
+        palette.setColor(QPalette::Window, QColor{245, 246, 248});
+        palette.setColor(QPalette::WindowText, QColor{28, 31, 35});
+        palette.setColor(QPalette::Base, Qt::white);
+        palette.setColor(QPalette::AlternateBase, QColor{235, 238, 242});
+        palette.setColor(QPalette::Text, QColor{28, 31, 35});
+        palette.setColor(QPalette::Button, QColor{240, 242, 245});
+        palette.setColor(QPalette::ButtonText, QColor{28, 31, 35});
+        palette.setColor(QPalette::Highlight, QColor{31, 103, 194});
+        palette.setColor(QPalette::HighlightedText, Qt::white);
+        return palette;
+    }
+    const QColor window{38, 41, 46};
+    const QColor base{29, 31, 35};
+    const QColor alternate{47, 51, 57};
+    const QColor text{232, 234, 237};
+    const QColor disabled{130, 134, 140};
+    palette.setColor(QPalette::Window, window);
+    palette.setColor(QPalette::WindowText, text);
+    palette.setColor(QPalette::Base, base);
+    palette.setColor(QPalette::AlternateBase, alternate);
+    palette.setColor(QPalette::ToolTipBase, text);
+    palette.setColor(QPalette::ToolTipText, base);
+    palette.setColor(QPalette::Text, text);
+    palette.setColor(QPalette::Button, window);
+    palette.setColor(QPalette::ButtonText, text);
+    palette.setColor(QPalette::BrightText, Qt::red);
+    palette.setColor(QPalette::Highlight, QColor{53, 132, 228});
+    palette.setColor(QPalette::HighlightedText, Qt::white);
+    palette.setColor(QPalette::Disabled, QPalette::Text, disabled);
+    palette.setColor(QPalette::Disabled, QPalette::ButtonText, disabled);
+    return palette;
+}
+
 } // namespace cpssim::qt

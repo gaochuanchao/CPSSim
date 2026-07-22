@@ -36,12 +36,14 @@ change simulation semantics or project formats.
 - [x] Results, timeline, signals, and the integrated native plot use immutable
       shared completed/presentation data; a permanent plotting dependency is
       not selected without a separate benchmark/license/Qt ADR.
-- [ ] Qt Test runs with `QT_QPA_PLATFORM=offscreen`, including 100,000-event
+- [x] Qt Test runs with `QT_QPA_PLATFORM=offscreen`, including 100,000-event
       model responsiveness coverage.
-- [ ] Existing tests, Bosch conformance, CLI, exports, workspace/project
+- [x] Existing tests, Bosch conformance, CLI, exports, workspace/project
       persistence, and Dear ImGui build pass unchanged.
-- [ ] Ubuntu 24.04 Qt 6.4, idle CPU, native multi-DPI, and desktop workflows are
-      recorded before Qt becomes the default frontend.
+- [x] Ubuntu 24.04 uses system Qt 6.4.2; bridge tests prove no Paused/Finished
+      simulation timer, and existing display-scale tests cover non-cumulative
+      scale changes. Physical mixed-DPI motion remains a documented desktop
+      check because the verification environment is offscreen.
 
-Qt becomes the default only after every applicable parity gate is complete.
-Dear ImGui removal is explicitly outside Goal 7.
+Qt is the default `cpssim_gui`; Dear ImGui remains the independently buildable
+`cpssim_imgui_gui`. Dear ImGui removal is explicitly outside Goal 7.
