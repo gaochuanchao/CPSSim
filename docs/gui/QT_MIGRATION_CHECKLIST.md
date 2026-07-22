@@ -33,7 +33,7 @@ change simulation semantics or project formats.
       and `QUndoStack`, never through scene-only state.
 - [x] Explorer, run configuration, runtime inspector, resources, events, and
       diagnostics retain their Goal 6 ownership and selection behavior.
-- [ ] Results, timeline, signals, and the integrated native plot use immutable
+- [x] Results, timeline, signals, and the integrated native plot use immutable
       shared completed/presentation data; a permanent plotting dependency is
       not selected without a separate benchmark/license/Qt ADR.
 - [ ] Qt Test runs with `QT_QPA_PLATFORM=offscreen`, including 100,000-event

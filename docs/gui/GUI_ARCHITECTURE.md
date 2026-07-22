@@ -426,6 +426,16 @@ handoff is never exposed. Solid lines represent logical dependencies and
 dashed lines represent communication. Assignment lines are intentionally
 absent.
 
+### Qt analysis adapters
+
+Qt Timeline and Signals consume only generation-keyed presentation snapshots.
+Results and Integrated Plot are completed-run-only and retain shared ownership
+of `CompletedRunData`; neither rebuilds `RunResult` in paint code. The native
+plot prototype uses `GuiPlotDataCache` for bounded drawing projections while
+export remains based on full-resolution series. No permanent plotting
+dependency has been selected; the benchmark and decision boundary are recorded
+in [Qt Native Plot Prototype Evaluation](QT_NATIVE_PLOT_EVALUATION.md).
+
 Select mode updates persistent structural selection for tasks, resources, and
 connections. Arrange mode persists task positions and independent resource
 position/size overrides. Assign mode changes only draft task/resource

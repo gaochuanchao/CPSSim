@@ -1,6 +1,7 @@
 /*** Implement the native Qt Widgets workbench shell. ***/
 #include "apps/qt_gui/main_window.hpp"
 
+#include "apps/qt_gui/analysis_widgets.hpp"
 #include "apps/qt_gui/architecture_view.hpp"
 #include "apps/qt_gui/event_table_widget.hpp"
 #include "apps/qt_gui/explorer_widget.hpp"
@@ -275,6 +276,16 @@ void QtMainWindow::bind_workbench(QtWorkbenchBridge* bridge) {
     central_tabs_->insertTab(0, architecture, "Architecture");
     central_tabs_->setCurrentIndex(0);
     placeholder_page->deleteLater();
+    const auto replace_tab = [this](int index, QWidget* replacement, const QString& title) {
+        auto* old = central_tabs_->widget(index);
+        central_tabs_->removeTab(index);
+        central_tabs_->insertTab(index, replacement, title);
+        old->deleteLater();
+    };
+    replace_tab(1, new QtTimelineCanvas{*bridge_, central_tabs_}, "Timeline");
+    replace_tab(2, new QtSignalsWidget{*bridge_, central_tabs_}, "Signals");
+    auto* integrated_plot = new QtIntegratedPlotWidget{*bridge_, central_tabs_};
+    replace_tab(3, integrated_plot, "Integrated Plot");
     auto* assignments_dock = findChild<QDockWidget*>("dock.resourceAssignments");
     auto* assignments_placeholder = assignments_dock->widget();
     assignments_dock->setWidget(new QtResourceAssignmentsWidget{*bridge_, assignments_dock});
@@ -305,6 +316,11 @@ void QtMainWindow::bind_workbench(QtWorkbenchBridge* bridge) {
     replace_dock("dock.canonicalEvents", new QtCanonicalEventsWidget{*bridge_, events_dock});
     auto* diagnostics_dock = findChild<QDockWidget*>("dock.diagnostics");
     replace_dock("dock.diagnostics", new QtDiagnosticsWidget{*bridge_, diagnostics_dock});
+    auto* results_dock = findChild<QDockWidget*>("dock.results");
+    auto* results = new QtResultsWidget{*bridge_, results_dock};
+    replace_dock("dock.results", results);
+    connect(results, &QtResultsWidget::openIntegratedPlotRequested, this,
+            [this] { central_tabs_->setCurrentIndex(3); });
     connect(undo_action_, &QAction::triggered, &system_builder_->undo_stack(), &QUndoStack::undo);
     connect(redo_action_, &QAction::triggered, &system_builder_->undo_stack(), &QUndoStack::redo);
     connect(&system_builder_->undo_stack(), &QUndoStack::canUndoChanged, undo_action_,

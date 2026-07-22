@@ -121,6 +121,14 @@ its running job, and Runtime Inspector generates raw event JSON only for the
 selected event. The Diagnostics dock combines application, system-draft, and
 run-plan diagnostics.
 
+Timeline and Signals remain live presentation views. Results and Integrated
+Plot remain unavailable until the shared completed-result finalizer publishes
+one immutable generation. Integrated Plot groups selected signals into
+unit-aware lanes, supports tick/second and full/selected/custom ranges, follows
+shared tick selection, and draws Bosch overlays from completed analysis. The
+prototype uses Qt painting rather than adopting a permanent plotting library;
+see [the native plot evaluation](QT_NATIVE_PLOT_EVALUATION.md).
+
 Window and table placement use a separate optional `imgui.ini` in the project
 root. The tracked [`apps/gui/imgui.ini`](imgui.ini) is the fixed default and is
 never a Dear ImGui output target. Layout changes are staged in a temporary file;

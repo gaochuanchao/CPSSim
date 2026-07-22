@@ -436,6 +436,7 @@ if(CPSSIM_BUILD_QT_GUI)
 
     add_library(
         cpssim_qt_gui_support STATIC
+        apps/qt_gui/analysis_widgets.cpp
         apps/qt_gui/architecture_model.cpp
         apps/qt_gui/architecture_node_painter.cpp
         apps/qt_gui/architecture_view.cpp
@@ -676,6 +677,28 @@ if(BUILD_TESTING)
         add_test(NAME cpssim_qt_runtime_views_tests COMMAND cpssim_qt_runtime_views_tests)
         set_tests_properties(
             cpssim_qt_runtime_views_tests
+            PROPERTIES
+                ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                LABELS gui
+        )
+
+        add_executable(
+            cpssim_qt_analysis_views_tests
+            tests/qt_gui/analysis_views_test.cpp
+        )
+        target_link_libraries(
+            cpssim_qt_analysis_views_tests
+            PRIVATE cpssim_qt_gui_support Qt6::Test
+        )
+        set_target_properties(
+            cpssim_qt_analysis_views_tests
+            PROPERTIES AUTOMOC ON CXX_CLANG_TIDY ""
+        )
+        cpssim_set_project_warnings(cpssim_qt_analysis_views_tests)
+        cpssim_enable_sanitizers(cpssim_qt_analysis_views_tests)
+        add_test(NAME cpssim_qt_analysis_views_tests COMMAND cpssim_qt_analysis_views_tests)
+        set_tests_properties(
+            cpssim_qt_analysis_views_tests
             PROPERTIES
                 ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                 LABELS gui

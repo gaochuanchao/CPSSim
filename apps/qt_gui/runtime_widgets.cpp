@@ -36,7 +36,8 @@ template <typename Identifier> QString optional_id(const std::optional<Identifie
 }
 
 void clear_layout(QLayout* layout) {
-    while (auto* item = layout->takeAt(0)) {
+    while (layout->count() > 0) {
+        auto* item = layout->takeAt(0);
         if (item->widget() != nullptr) {
             item->widget()->deleteLater();
         }

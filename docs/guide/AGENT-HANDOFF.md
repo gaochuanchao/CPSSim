@@ -321,7 +321,17 @@ uses `GuiEventTableCache` through `QAbstractTableModel`, retains canonical
 ordering, debounces text search, lazily creates selected-event JSON, and has
 automated 100,000-row coverage. Runtime Inspector and Diagnostics project only
 detached runtime/application diagnostics; they do not duplicate structural
-edit fields. Results/timeline/signals/native-plot migration is the next phase.
+edit fields.
+
+Qt analysis migration is complete. Timeline and Signals update from immutable
+generation-keyed snapshots; Results reads the shared finish-only
+`CompletedRunResult`; and Integrated Plot uses the existing lanes, selected
+signals, ranges, downsampling, Bosch analysis, and shared tick selection. The
+native prototype is implemented with `QPainter`, so Goal 7 adds no permanent
+plot dependency. A 100,000-sample Debug projection produced 3,840 drawing
+points in 7.979 ms without modifying source data. See the
+[Qt native plot evaluation](../gui/QT_NATIVE_PLOT_EVALUATION.md). Frontend
+parity, default selection, and final platform verification are the next phase.
 
 Goal 6 validation completed on 2026-07-21:
 
