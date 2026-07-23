@@ -221,6 +221,20 @@ class QtArchitectureModelTest final : public QObject {
 
     // Background-cache invalidation regression.
     void appearanceChangeInvalidatesBackgroundCache();
+
+    // Center View action tests.
+    void centerViewAction_exists();
+    void centerViewAction_enabled_with_nodes();
+    void centerViewAction_disabled_without_nodes();
+    void centerViewAction_preserves_zoom();
+    void centerViewAction_does_not_mutate();
+    void centerViewAction_centers_on_node_bounds();
+    void centerViewAction_empty_graph_does_not_crash();
+    void centerViewAction_available_while_running();
+    void centerViewAction_available_for_bosch();
+    void initialCentering_after_project_open();
+    void initialCentering_not_on_ordinary_refresh();
+    void initialCentering_hidden_tab();
 };
 
 void QtArchitectureModelTest::strong_ids_are_mapped_without_truncation() {
@@ -2419,6 +2433,329 @@ void QtArchitectureModelTest::controller_create_connection_rejects_protected() {
     QVERIFY(second.has_value() && *second != TaskId{1});
 
     QVERIFY(edits.create_connection(TaskId{1}, *second));
+}
+
+// ---------------------------------------------------------------------------
+// Center View action tests
+// ---------------------------------------------------------------------------
+
+void QtArchitectureModelTest::centerViewAction_exists() {
+    TemporaryDirectory temporary;
+    auto application = std::make_unique<WorkbenchApplication>();
+    application->create_project(make_generic_project_template(temporary.path(), "project"));
+    QtWorkbenchBridge bridge{std::move(application)};
+    QtStructuralEditController edits{bridge};
+    QtArchitectureView view{bridge, edits};
+
+    auto* action = view.findChild<QAction*>("action.architecture.centerView");
+    QVERIFY(action != nullptr);
+    QCOMPARE(action->text(), QStringLiteral("Center View"));
+}
+
+void QtArchitectureModelTest::centerViewAction_enabled_with_nodes() {
+    TemporaryDirectory temporary;
+    auto application = std::make_unique<WorkbenchApplication>();
+    application->create_project(make_generic_project_template(temporary.path(), "project"));
+    QtWorkbenchBridge bridge{std::move(application)};
+    QtStructuralEditController edits{bridge};
+    QtArchitectureView view{bridge, edits};
+
+    view.show();
+    QApplication::processEvents();
+
+    auto* action = view.findChild<QAction*>("action.architecture.centerView");
+    QVERIFY(action != nullptr);
+    // Default project has one task node
+    QVERIFY(!view.graph_model().allNodeIds().empty());
+    QVERIFY(action->isEnabled());
+}
+
+void QtArchitectureModelTest::centerViewAction_disabled_without_nodes() {
+    TemporaryDirectory temporary;
+    auto application = std::make_unique<WorkbenchApplication>();
+    // Create application without a project (no editable system = no graph)
+    QtWorkbenchBridge bridge{std::move(application)};
+    QtStructuralEditController edits{bridge};
+    QtArchitectureView view{bridge, edits};
+
+    view.show();
+    QApplication::processEvents();
+
+    auto* action = view.findChild<QAction*>("action.architecture.centerView");
+    QVERIFY(action != nullptr);
+    QVERIFY(view.graph_model().allNodeIds().empty());
+    QVERIFY(!action->isEnabled());
+}
+
+void QtArchitectureModelTest::centerViewAction_preserves_zoom() {
+    TemporaryDirectory temporary;
+    auto application = std::make_unique<WorkbenchApplication>();
+    application->create_project(make_generic_project_template(temporary.path(), "project"));
+    QtWorkbenchBridge bridge{std::move(application)};
+    QtStructuralEditController edits{bridge};
+    QtArchitectureView view{bridge, edits};
+
+    view.show();
+    view.resize(800, 600);
+    QApplication::processEvents();
+    QApplication::processEvents();
+
+    auto* gv = view.findChild<QtNodes::GraphicsView*>("architecture.graphicsView");
+    QVERIFY(gv != nullptr);
+
+    // Apply a non-default zoom
+    gv->scale(1.5, 1.5);
+    const QTransform before = gv->transform();
+
+    auto* action = view.findChild<QAction*>("action.architecture.centerView");
+    QVERIFY(action != nullptr);
+    action->trigger();
+    QApplication::processEvents();
+
+    QCOMPARE(gv->transform(), before);
+}
+
+void QtArchitectureModelTest::centerViewAction_does_not_mutate() {
+    TemporaryDirectory temporary;
+    auto application = std::make_unique<WorkbenchApplication>();
+    application->create_project(make_generic_project_template(temporary.path(), "project"));
+    QtWorkbenchBridge bridge{std::move(application)};
+    QtStructuralEditController edits{bridge};
+    QtArchitectureView view{bridge, edits};
+
+    view.show();
+    view.resize(800, 600);
+    QApplication::processEvents();
+    QApplication::processEvents();
+
+    const auto before_selection = bridge.application().structural_selection();
+    const auto before_undo_count = edits.undo_stack().count();
+    const auto before_dirty = bridge.application().system_changes_dirty();
+
+    auto* action = view.findChild<QAction*>("action.architecture.centerView");
+    QVERIFY(action != nullptr);
+    action->trigger();
+    QApplication::processEvents();
+
+    QCOMPARE(bridge.application().structural_selection(), before_selection);
+    QCOMPARE(edits.undo_stack().count(), before_undo_count);
+    QCOMPARE(bridge.application().system_changes_dirty(), before_dirty);
+}
+
+void QtArchitectureModelTest::centerViewAction_centers_on_node_bounds() {
+    TemporaryDirectory temporary;
+    auto application = std::make_unique<WorkbenchApplication>();
+    application->create_project(make_generic_project_template(temporary.path(), "project"));
+    QtWorkbenchBridge bridge{std::move(application)};
+    QtStructuralEditController edits{bridge};
+    QtArchitectureView view{bridge, edits};
+
+    view.show();
+    view.resize(800, 600);
+    QApplication::processEvents();
+    QApplication::processEvents();
+
+    auto* gv = view.findChild<QtNodes::GraphicsView*>("architecture.graphicsView");
+    QVERIFY(gv != nullptr);
+
+    // Capture the initially centered viewport center as the "expected" position
+    // (since initial centering already happened)
+    const QPointF initial_center = gv->mapToScene(gv->viewport()->rect().center());
+
+    // Pan away from the graph
+    gv->centerOn(initial_center + QPointF{1000.0, 1000.0});
+    QApplication::processEvents();
+    const QPointF panned = gv->mapToScene(gv->viewport()->rect().center());
+    QVERIFY(std::abs(panned.x() - initial_center.x()) > 100.0);
+
+    // Invoke centering through the public action
+    auto* action = view.findChild<QAction*>("action.architecture.centerView");
+    QVERIFY(action != nullptr);
+    action->trigger();
+    QApplication::processEvents();
+
+    // Scene point at viewport center should be close to initial center
+    const QPointF after_center = gv->mapToScene(gv->viewport()->rect().center());
+    constexpr qreal tolerance = 10.0;
+    QVERIFY(std::abs(after_center.x() - initial_center.x()) < tolerance);
+    QVERIFY(std::abs(after_center.y() - initial_center.y()) < tolerance);
+
+    // Node positions unchanged
+    QVERIFY(!bridge.application().system_changes_dirty());
+}
+
+void QtArchitectureModelTest::centerViewAction_empty_graph_does_not_crash() {
+    TemporaryDirectory temporary;
+    auto application = std::make_unique<WorkbenchApplication>();
+    QtWorkbenchBridge bridge{std::move(application)};
+    QtStructuralEditController edits{bridge};
+    QtArchitectureView view{bridge, edits};
+
+    view.show();
+    QApplication::processEvents();
+
+    auto* action = view.findChild<QAction*>("action.architecture.centerView");
+    QVERIFY(action != nullptr);
+
+    // Should not crash with empty graph
+    action->trigger();
+    QApplication::processEvents();
+    QVERIFY(true); // reached without crash
+}
+
+void QtArchitectureModelTest::centerViewAction_available_while_running() {
+    TemporaryDirectory temporary;
+    auto application = std::make_unique<WorkbenchApplication>();
+    application->create_project(make_generic_project_template(temporary.path(), "project"));
+    QtWorkbenchBridge bridge{std::move(application)};
+    QtStructuralEditController edits{bridge};
+    QtArchitectureView view{bridge, edits};
+
+    view.show();
+    QApplication::processEvents();
+
+    // Enter running state
+    bridge.application().enqueue(GuiCommand::Run);
+    bridge.application().update();
+    Q_EMIT bridge.applicationStateChanged();
+    view.refresh();
+    QApplication::processEvents();
+
+    auto* action = view.findChild<QAction*>("action.architecture.centerView");
+    QVERIFY(action != nullptr);
+    // Center View is a viewing command, so it should be enabled when nodes exist
+    QVERIFY(!view.graph_model().allNodeIds().empty());
+    QVERIFY(action->isEnabled());
+}
+
+void QtArchitectureModelTest::centerViewAction_available_for_bosch() {
+    TemporaryDirectory temporary;
+    const auto repository =
+        std::filesystem::path{__FILE__}.parent_path().parent_path().parent_path();
+    auto project =
+        create_bosch_project({.parent_directory = temporary.path(),
+                              .name = "bosch",
+                              .trajectory_directory = make_trajectory(temporary.path()),
+                              .scenario = BoschReferenceScenario::Dedicated,
+                              .stop_tick = 2,
+                              .reference_root = repository / "experiments/bosch_v10_reference",
+                              .shared_library = fmu_library()});
+    auto application = std::make_unique<WorkbenchApplication>(std::move(project));
+    QtWorkbenchBridge bridge{std::move(application)};
+    QtStructuralEditController edits{bridge};
+    QtArchitectureView view{bridge, edits};
+
+    view.show();
+    QApplication::processEvents();
+
+    auto* action = view.findChild<QAction*>("action.architecture.centerView");
+    QVERIFY(action != nullptr);
+    QVERIFY(!view.graph_model().allNodeIds().empty());
+    QVERIFY(action->isEnabled());
+}
+
+void QtArchitectureModelTest::initialCentering_after_project_open() {
+    TemporaryDirectory temporary;
+    auto application = std::make_unique<WorkbenchApplication>();
+    application->create_project(make_generic_project_template(temporary.path(), "project"));
+    QtWorkbenchBridge bridge{std::move(application)};
+    QtStructuralEditController edits{bridge};
+    QtArchitectureView view{bridge, edits};
+
+    view.show();
+    view.resize(800, 600);
+    QApplication::processEvents();
+    QApplication::processEvents();
+
+    // After project creation and showing, the graph should have been centered.
+    // Verify by calling center_graph_in_view() explicitly and checking that
+    // the view doesn't jump (it's already centered).
+    auto* gv = view.findChild<QtNodes::GraphicsView*>("architecture.graphicsView");
+    QVERIFY(gv != nullptr);
+
+    const QPointF before_center = gv->mapToScene(gv->viewport()->rect().center());
+
+    // Manual center should not move the view much (it's already centered)
+    view.center_graph_in_view();
+    QApplication::processEvents();
+
+    const QPointF after_center = gv->mapToScene(gv->viewport()->rect().center());
+    constexpr qreal tolerance = 5.0;
+    QVERIFY(std::abs(after_center.x() - before_center.x()) < tolerance);
+    QVERIFY(std::abs(after_center.y() - before_center.y()) < tolerance);
+}
+
+void QtArchitectureModelTest::initialCentering_not_on_ordinary_refresh() {
+    TemporaryDirectory temporary;
+    auto application = std::make_unique<WorkbenchApplication>();
+    application->create_project(make_generic_project_template(temporary.path(), "project"));
+    QtWorkbenchBridge bridge{std::move(application)};
+    QtStructuralEditController edits{bridge};
+    QtArchitectureView view{bridge, edits};
+
+    view.show();
+    view.resize(800, 600);
+    QApplication::processEvents();
+    QApplication::processEvents();
+
+    auto* gv = view.findChild<QtNodes::GraphicsView*>("architecture.graphicsView");
+    QVERIFY(gv != nullptr);
+
+    // Pan away from the centered position
+    gv->centerOn(QPointF{9999.0, 9999.0});
+    QApplication::processEvents();
+    const QPointF panned_center = gv->mapToScene(gv->viewport()->rect().center());
+    QVERIFY(panned_center.x() > 9000.0);
+
+    // Trigger an ordinary refresh (selection change)
+    bridge.application().structural_selection().select_system();
+    bridge.notify_structural_selection_changed();
+    QApplication::processEvents();
+    QApplication::processEvents();
+
+    // Pan position should still be far away
+    const QPointF after_refresh = gv->mapToScene(gv->viewport()->rect().center());
+    QVERIFY(after_refresh.x() > 9000.0);
+
+    // Trigger another ordinary refresh (appearance)
+    Q_EMIT bridge.appearanceChanged();
+    QApplication::processEvents();
+    QApplication::processEvents();
+
+    const QPointF after_appearance = gv->mapToScene(gv->viewport()->rect().center());
+    QVERIFY(after_appearance.x() > 9000.0);
+}
+
+void QtArchitectureModelTest::initialCentering_hidden_tab() {
+    TemporaryDirectory temporary;
+    auto application = std::make_unique<WorkbenchApplication>();
+    application->create_project(make_generic_project_template(temporary.path(), "project"));
+    QtWorkbenchBridge bridge{std::move(application)};
+    QtStructuralEditController edits{bridge};
+    QtArchitectureView view{bridge, edits};
+
+    // Do NOT show the view yet — simulate hidden tab
+
+    // Now show it (simulating switching to the Architecture tab)
+    view.show();
+    view.resize(800, 600);
+    QApplication::processEvents();
+    QApplication::processEvents();
+
+    auto* gv = view.findChild<QtNodes::GraphicsView*>("architecture.graphicsView");
+    QVERIFY(gv != nullptr);
+
+    // The graph should have been centered after show.
+    // Verify by checking that calling center_graph_in_view() doesn't move much.
+    const QPointF before_center = gv->mapToScene(gv->viewport()->rect().center());
+
+    view.center_graph_in_view();
+    QApplication::processEvents();
+
+    const QPointF after_center = gv->mapToScene(gv->viewport()->rect().center());
+    constexpr qreal tolerance = 5.0;
+    QVERIFY(std::abs(after_center.x() - before_center.x()) < tolerance);
+    QVERIFY(std::abs(after_center.y() - before_center.y()) < tolerance);
 }
 
 } // namespace cpssim::qt

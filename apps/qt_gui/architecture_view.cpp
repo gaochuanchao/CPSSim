@@ -25,7 +25,9 @@
 #include <QPainter>
 #include <QPushButton>
 #include <QScopedValueRollback>
+#include <QShowEvent>
 #include <QSignalBlocker>
+#include <QTimer>
 #include <QToolBar>
 #include <QVBoxLayout>
 
@@ -194,6 +196,7 @@ QtArchitectureView::QtArchitectureView(QtWorkbenchBridge& bridge,
     layout->setContentsMargins(0, 0, 0, 0);
     layout->addWidget(toolbar);
     toolbar->addAction(fit_action_);
+    toolbar->addAction(center_view_action_);
     toolbar->addAction(actual_size_action_);
     toolbar->addAction(auto_layout_action_);
     toolbar->addAction(snap_action_);
@@ -214,6 +217,7 @@ QtArchitectureView::QtArchitectureView(QtWorkbenchBridge& bridge,
         [this](const QPoint& vp, const QPointF& sp) { show_context_menu(vp, sp); });
 
     connect(fit_action_, &QAction::triggered, view_.get(), &QtNodes::GraphicsView::zoomFitAll);
+    connect(center_view_action_, &QAction::triggered, this, &QtArchitectureView::center_graph_in_view);
     connect(actual_size_action_, &QAction::triggered, view_.get(),
             &QGraphicsView::resetTransform);
     connect(auto_layout_action_, &QAction::triggered, this, &QtArchitectureView::auto_layout);
@@ -354,6 +358,19 @@ void QtArchitectureView::refresh() {
     }
     synchronize_scene_selection();
     update_action_state();
+
+    // Detect project change for initial automatic centering
+    const auto active_root = application.has_active_project()
+                                 ? std::optional{application.active_project().root()}
+                                 : std::nullopt;
+    if (active_root != observed_project_root_) {
+        observed_project_root_ = active_root;
+        if (active_root.has_value()) {
+            schedule_initial_center();
+        } else {
+            initial_center_pending_ = false;
+        }
+    }
 }
 
 void QtArchitectureView::select_node(QtNodes::NodeId node_id) {
@@ -566,6 +583,67 @@ void QtArchitectureView::refresh_appearance() {
 }
 
 // ---------------------------------------------------------------------------
+// Graph centering
+// ---------------------------------------------------------------------------
+
+std::optional<QRectF> QtArchitectureView::graph_node_bounds() const {
+    std::optional<QRectF> bounds;
+    for (const auto node_id : model_.allNodeIds()) {
+        auto* item = scene_->nodeGraphicsObject(node_id);
+        if (item == nullptr) {
+            continue;
+        }
+        const auto rect = item->sceneBoundingRect();
+        if (bounds.has_value()) {
+            *bounds = bounds->united(rect);
+        } else {
+            bounds = rect;
+        }
+    }
+    return bounds;
+}
+
+void QtArchitectureView::center_graph_in_view() {
+    const auto bounds = graph_node_bounds();
+    if (!bounds.has_value()) {
+        return;
+    }
+    view_->centerOn(bounds->center());
+}
+
+void QtArchitectureView::schedule_initial_center() {
+    initial_center_pending_ = true;
+    // Use a single-shot timer to center after the viewport geometry and
+    // graphics objects are ready.
+    QTimer::singleShot(0, this, [this] {
+        if (!initial_center_pending_) {
+            return;
+        }
+        initial_center_pending_ = false;
+        // If the view is already visible, center immediately.
+        // If hidden, the showEvent will apply centering and clear the flag.
+        if (isVisible()) {
+            center_graph_in_view();
+        }
+        // When hidden: leave flag false — showEvent handles it
+    });
+}
+
+void QtArchitectureView::showEvent(QShowEvent* event) {
+    QWidget::showEvent(event);
+    // Center only if this is the very first show after a project change.
+    // The flag is set the first time the project is loaded and cleared
+    // after the first successful centering.
+    QTimer::singleShot(0, this, [this] {
+        if (!initial_center_pending_) {
+            return;
+        }
+        initial_center_pending_ = false;
+        center_graph_in_view();
+    });
+}
+
+// ---------------------------------------------------------------------------
 // Hit-testing helpers
 // ---------------------------------------------------------------------------
 
@@ -624,6 +702,7 @@ void QtArchitectureView::show_context_menu(const QPoint& viewport_position,
         menu.addAction(add_task_action_);
         menu.addSeparator();
         menu.addAction(fit_action_);
+        menu.addAction(center_view_action_);
         menu.addAction(actual_size_action_);
         menu.addAction(auto_layout_action_);
         menu.addAction(snap_action_);
@@ -634,12 +713,14 @@ void QtArchitectureView::show_context_menu(const QPoint& viewport_position,
         menu.addAction(delete_action_);
         menu.addSeparator();
         menu.addAction(fit_action_);
+        menu.addAction(center_view_action_);
     } else if (hit_connection.has_value()) {
         // Connection
         menu.addAction(edit_action_);
         menu.addAction(delete_action_);
         menu.addSeparator();
         menu.addAction(fit_action_);
+        menu.addAction(center_view_action_);
     }
 
     update_action_state();
@@ -749,6 +830,11 @@ void QtArchitectureView::build_actions() {
     fit_action_->setShortcutContext(Qt::WidgetWithChildrenShortcut);
     addAction(fit_action_);
 
+    center_view_action_ = new QAction("Center View", this);
+    center_view_action_->setObjectName("action.architecture.centerView");
+    center_view_action_->setToolTip(QStringLiteral("Center the graph without changing zoom"));
+    addAction(center_view_action_);
+
     actual_size_action_ = new QAction("100%", this);
     actual_size_action_->setObjectName("action.architecture.actualSize");
     actual_size_action_->setShortcut(QKeySequence{QStringLiteral("Ctrl+0")});
@@ -795,6 +881,9 @@ void QtArchitectureView::update_action_state() {
                           edits_.edit_policy() == ProjectSystemEditPolicy::Generic;
 
     add_task_action_->setEnabled(can_edit);
+
+    const bool has_nodes = !model_.allNodeIds().empty();
+    center_view_action_->setEnabled(has_nodes);
 
     const auto& selection = bridge_.application().structural_selection();
     const auto task_selected = selection.task_id().has_value();

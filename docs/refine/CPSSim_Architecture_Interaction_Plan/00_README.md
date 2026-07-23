@@ -16,6 +16,8 @@ The useful interaction work has now been implemented:
 
 The remaining work is a final consolidation, regression, acceptance, and documentation pass. It is not another GUI feature-development phase.
 
+Step 6 (Center View and initial graph centering) has been completed separately.
+
 The instructions remain intentionally strict because they are intended for GitHub Copilot, Codex, or another coding agent that may otherwise introduce duplicate state, bypass Undo, or repair only one GUI path.
 
 ## Repository baseline
@@ -199,8 +201,9 @@ Steps 1–5 are complete. Do not modify them merely to make the documentation lo
 | 3 | `03_ARCHITECTURE_ACTIONS_AND_CONTEXT_MENUS.md` | Complete | Add, duplicate, delete, edit, fit, and scoped keyboard commands |
 | 4 | `04_NODE_PORT_MODEL_REDESIGN.md` | Complete | Every task has one stable input and one stable output port |
 | 5 | `05_INTERACTIVE_CONNECTIONS.md` | Complete | Domain-backed Communication and Logical creation/deletion |
-| 6 | `06_FINAL_CONSOLIDATION_AND_ACCEPTANCE.md` | Remaining | Cross-layer audit, regression, manual acceptance, and documentation |
-| 7 | `07_COPILOT_PROMPTS.md` | Supporting | Copy/paste prompts for the remaining work |
+| 6 | `06_CENTER_VIEW_AND_INITIAL_CENTERING.md` | Complete | Center View action and automatic project-open centering |
+| 7 | `07_FINAL_CONSOLIDATION_AND_ACCEPTANCE.md` | Remaining | Cross-layer audit, regression, manual acceptance, and documentation |
+| 8 | `08_COPILOT_PROMPTS.md` | Supporting | Copy/paste prompts for the remaining work |
 
 Step 6 must be completed before beginning a new simulator or experiment feature.
 

@@ -3,6 +3,7 @@
 
 #ifndef Q_MOC_RUN
 #include "apps/qt_gui/architecture_model.hpp"
+#include <filesystem>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -10,6 +11,7 @@
 
 #include <QComboBox>
 #include <QPointF>
+#include <QRectF>
 #include <QWidget>
 
 class QAction;
@@ -44,6 +46,7 @@ class QtArchitectureView final : public QWidget {
     std::optional<TaskId> add_task_at(QPointF scene_position);
     void place_task_near_view_center(TaskId task_id);
     GuiConnectionKind current_link_type() const;
+    void center_graph_in_view();
 
   Q_SIGNALS:
     void editSelectionRequested();
@@ -52,6 +55,8 @@ class QtArchitectureView final : public QWidget {
     using ContextMenuHandler =
         std::function<void(const QPoint& viewport_position, const QPointF& scene_position)>;
 
+    std::optional<QRectF> graph_node_bounds() const;
+    void schedule_initial_center();
     void select_node(QtNodes::NodeId node_id);
     void select_scene_item();
     void persist_node_position(GuiGraphNodeId entity, QPointF position);
@@ -74,6 +79,7 @@ class QtArchitectureView final : public QWidget {
     void duplicate_selected();
     void delete_selected_with_confirmation();
     void request_edit_selected();
+    void showEvent(QShowEvent* event) override;
 
     QtWorkbenchBridge& bridge_;
     QtStructuralEditController& edits_;
@@ -90,12 +96,17 @@ class QtArchitectureView final : public QWidget {
     QAction* duplicate_action_{nullptr};
     QAction* delete_action_{nullptr};
     QAction* fit_action_{nullptr};
+    QAction* center_view_action_{nullptr};
     QAction* actual_size_action_{nullptr};
     QAction* auto_layout_action_{nullptr};
     QAction* snap_action_{nullptr};
     QComboBox* link_type_selector_{nullptr};
 
     std::optional<QPointF> context_add_position_;
+
+    // Project-change tracking for initial automatic centering
+    std::optional<std::filesystem::path> observed_project_root_;
+    bool initial_center_pending_{false};
 };
 
 } // namespace cpssim::qt
