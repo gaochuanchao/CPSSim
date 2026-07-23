@@ -510,7 +510,7 @@ void QtArchitectureView::synchronize_scene_selection() {
         return;
     }
 
-    // --- MessageRoute selections (find matching communication connection) ---
+    // --- MessageRoute selections (find matching communication/link connection) ---
     if (selection.kind() == StructuralSelectionKind::MessageRoute) {
         const auto mr = selection.message_route();
         if (mr.has_value()) {

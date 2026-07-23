@@ -172,8 +172,18 @@ SystemExplorerActionResult SystemExplorerInteraction::create(StructuralSection s
         if (!route.has_value()) {
             return failed_action("No unused message-route endpoint pair is available.");
         }
+        // Derive the actual kind from the created draft route.
+        GuiConnectionKind created_kind = GuiConnectionKind::Communication;
+        const auto found = std::find_if(draft.routes().begin(), draft.routes().end(),
+            [&route](const auto& r) {
+                return r.source_task_id == route->source_task_id &&
+                       r.destination_task_id == route->destination_task_id;
+            });
+        if (found != draft.routes().end()) {
+            created_kind = found->kind;
+        }
         selection.select_connection(
-            GuiConnectionId{GuiConnectionKind::Communication, route->source_task_id,
+            GuiConnectionId{created_kind, route->source_task_id,
                            route->destination_task_id});
         return select_created(section, selection, SystemBuilderFocusTarget::RouteSource);
     }
@@ -233,8 +243,18 @@ SystemExplorerActionResult SystemExplorerInteraction::duplicate(const Structural
             return failed_action(
                 create_availability(StructuralSection::MessageRoutes, draft).explanation);
         }
+        // Derive the actual kind from the duplicated draft route.
+        GuiConnectionKind dup_kind = GuiConnectionKind::Communication;
+        const auto dup_found = std::find_if(draft.routes().begin(), draft.routes().end(),
+            [&duplicated](const auto& r) {
+                return r.source_task_id == duplicated->source_task_id &&
+                       r.destination_task_id == duplicated->destination_task_id;
+            });
+        if (dup_found != draft.routes().end()) {
+            dup_kind = dup_found->kind;
+        }
         selection.select_connection(
-            GuiConnectionId{GuiConnectionKind::Communication, duplicated->source_task_id,
+            GuiConnectionId{dup_kind, duplicated->source_task_id,
                            duplicated->destination_task_id});
         return select_created(StructuralSection::MessageRoutes, selection,
                               SystemBuilderFocusTarget::RouteSource);
