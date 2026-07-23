@@ -63,9 +63,10 @@ class QtStructuralEditController final : public QObject {
     bool duplicate_selected();
     bool delete_selected();
 
-    // Create one communication/message route between explicit task endpoints.
+    // Create one task link between explicit task endpoints with the given kind.
     // Returns false and sets the application diagnostic on failure.
-    bool create_connection(TaskId source, TaskId destination);
+    // kind: 0=Communication, 1=Logical (int avoids GUI header in MOC)
+    bool create_connection(TaskId source, TaskId destination, int kind = 0);
 
     // Delete the communication route identified by the given connection id.
     // Returns false and sets the application diagnostic on failure.

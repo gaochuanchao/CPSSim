@@ -65,6 +65,10 @@ FixedDelayNetwork::FixedDelayNetwork(const std::vector<MessageRouteSpec>& routes
               });
 
     for (std::size_t index = 0; index < routes_.size(); ++index) {
+        // Skip Logical routes (kind==1) — they produce no network events.
+        if (routes_[index].kind == 1) {
+            continue;
+        }
         if (routes_[index].send_offset != message_route_send_offset_ticks) {
             throw std::invalid_argument{
                 "message route send offset must equal the fixed one-tick causal offset"};

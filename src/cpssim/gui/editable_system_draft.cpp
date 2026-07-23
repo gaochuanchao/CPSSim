@@ -90,6 +90,8 @@ EditableSystemDraft::EditableSystemDraft(const ExperimentConfig& config)
     for (const auto& route : config.message_routes()) {
         routes_.push_back({.source_task_id = route.source_task_id,
                            .destination_task_id = route.destination_task_id,
+                           .kind = route.kind == 1 ? GuiConnectionKind::Logical
+                                                   : GuiConnectionKind::Communication,
                            .send_offset = route.send_offset,
                            .delay = route.delay});
     }
@@ -404,11 +406,14 @@ void EditableSystemDraft::append_execution_profile(DraftExecutionProfile profile
 }
 
 std::size_t EditableSystemDraft::add_message_route(TaskId source_task_id,
-                                                   TaskId destination_task_id) {
+                                                   TaskId destination_task_id,
+                                                   GuiConnectionKind kind) {
+    const auto delay = kind == GuiConnectionKind::Logical ? Tick{0} : Tick{1};
     routes_.push_back({.source_task_id = source_task_id,
                        .destination_task_id = destination_task_id,
+                       .kind = kind,
                        .send_offset = message_route_send_offset_ticks,
-                       .delay = 1});
+                       .delay = delay});
     return routes_.size() - 1;
 }
 
@@ -447,6 +452,7 @@ EditableSystemDraft::duplicate_message_route(DraftMessageRouteKey route) {
     }
     routes_.push_back({.source_task_id = key->source_task_id,
                        .destination_task_id = key->destination_task_id,
+                       .kind = found->kind,
                        .send_offset = found->send_offset,
                        .delay = found->delay});
     return key;
@@ -699,8 +705,14 @@ SystemDraftBuildResult EditableSystemDraft::build() const {
         std::vector<MessageRouteSpec> routes;
         routes.reserve(routes_.size());
         for (const auto& route : routes_) {
+            // Only Communication routes are passed to the simulator.
+            // Logical routes are structural-only and produce no network events.
+            if (route.kind != GuiConnectionKind::Communication) {
+                continue;
+            }
             routes.push_back({.source_task_id = route.source_task_id,
                               .destination_task_id = route.destination_task_id,
+                              .kind = 0, // Communication
                               .send_offset = route.send_offset,
                               .delay = route.delay});
         }

@@ -59,9 +59,12 @@ struct GuiRouteIdentity {
     auto operator<=>(const GuiRouteIdentity&) const = default;
 };
 
-/*** Copies one completion-triggered fixed-delay message route. ***/
+/*** Copies one completion-triggered fixed-delay message route.
+ *  kind: 0 = Communication, 1 = Logical (int avoids circular dependency).
+ ***/
 struct GuiMessageRoutePresentation {
     GuiRouteIdentity identity;
+    int kind{0}; // 0=Communication, 1=Logical
     Tick send_offset;
     Tick delay;
 

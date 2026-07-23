@@ -116,8 +116,10 @@ ExperimentPresentationSnapshot build_experiment_presentation(const ExperimentCon
 
     result.routes.reserve(config.message_routes().size());
     for (const auto& route : config.message_routes()) {
+        const auto kind = route.kind; // 0=Communication, 1=Logical
         result.routes.push_back({.identity = {.source_task_id = route.source_task_id,
                                               .destination_task_id = route.destination_task_id},
+                                 .kind = kind,
                                  .send_offset = route.send_offset,
                                  .delay = route.delay});
     }
@@ -153,8 +155,9 @@ build_draft_experiment_presentation(const EditableSystemDraft& draft,
         result.profiles.push_back({profile.task_id, profile.resource_id, profile.execution_time});
     }
     for (const auto& route : draft.routes()) {
+        const int kind_int = route.kind == GuiConnectionKind::Logical ? 1 : 0;
         result.routes.push_back(
-            {{route.source_task_id, route.destination_task_id}, route.send_offset, route.delay});
+            {{route.source_task_id, route.destination_task_id}, kind_int, route.send_offset, route.delay});
     }
     for (const auto& assignment : assignments) {
         if (!assignment.resource_id.has_value()) {

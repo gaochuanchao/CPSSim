@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "cpssim/gui/connection_model.hpp"
 #include "cpssim/model/experiment_config.hpp"
 
 #include <cstddef>
@@ -99,6 +100,7 @@ struct DraftExecutionProfile {
 struct DraftMessageRoute {
     TaskId source_task_id;
     TaskId destination_task_id;
+    GuiConnectionKind kind{GuiConnectionKind::Communication};
     Tick send_offset;
     Tick delay;
 
@@ -190,7 +192,8 @@ class EditableSystemDraft {
                                std::optional<Tick> execution_time);
     void append_execution_profile(DraftExecutionProfile profile);
 
-    std::size_t add_message_route(TaskId source_task_id, TaskId destination_task_id);
+    std::size_t add_message_route(TaskId source_task_id, TaskId destination_task_id,
+                                  GuiConnectionKind kind = GuiConnectionKind::Communication);
     std::optional<DraftMessageRouteKey> next_message_route() const;
     std::optional<DraftMessageRouteKey> add_message_route();
     std::optional<DraftMessageRouteKey> duplicate_message_route(DraftMessageRouteKey route);

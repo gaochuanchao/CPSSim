@@ -1,7 +1,8 @@
 /*** GUI-only logical and communication connection presentation identities. ***/
 #pragma once
 
-#include "cpssim/gui/presentation_model.hpp"
+#include "cpssim/model/identifiers.hpp"
+#include "cpssim/model/time.hpp"
 
 #include <compare>
 #include <string>

@@ -74,7 +74,8 @@ void clear_resource_assignments(std::vector<DraftTaskAssignment>& assignments,
 
 SystemBuilderInteractionResult create_message_route(TaskId source, TaskId destination,
                                                     EditableSystemDraft& draft,
-                                                    StructuralSelection& selection) {
+                                                    StructuralSelection& selection,
+                                                    GuiConnectionKind kind) {
     // Validate source exists
     const auto source_found = std::find_if(draft.tasks().begin(), draft.tasks().end(),
                                            [source](const auto& task) { return task.id == source; });
@@ -106,14 +107,11 @@ SystemBuilderInteractionResult create_message_route(TaskId source, TaskId destin
     // Self-loops are currently valid per domain policy — no explicit rejection.
     // If policy changes, add the check here.
 
-    // Create the route using existing domain defaults (send_offset=1, delay=1)
-    static_cast<void>(draft.add_message_route(source, destination));
+    // Create the route with the requested kind (send_offset=1, delay depends on kind)
+    static_cast<void>(draft.add_message_route(source, destination, kind));
 
-    // Select the canonical Communication GuiConnectionId.
-    // This ensures the route is immediately editable and deletable through the
-    // Architecture view without requiring a second click.
-    selection.select_connection(
-        GuiConnectionId{GuiConnectionKind::Communication, source, destination});
+    // Select the canonical GuiConnectionId.
+    selection.select_connection(GuiConnectionId{kind, source, destination});
 
     return {.changed = true, .diagnostic = {}};
 }

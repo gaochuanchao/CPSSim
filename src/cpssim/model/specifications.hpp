@@ -51,10 +51,14 @@ struct SchedulingSpec {
  ***/
 inline constexpr Tick message_route_send_offset_ticks = Tick{1};
 
-/*** Defines one completion-triggered task route with fixed integer timing. ***/
+/*** Defines one completion-triggered task route with fixed integer timing.
+ *  Communication routes generate network events in the simulator;
+ *  Logical routes are structural-only and produce no network traffic.
+ ***/
 struct MessageRouteSpec {
     TaskId source_task_id;
     TaskId destination_task_id;
+    int kind{0}; // 0=Communication, 1=Logical (int avoids GUI header dependency)
     Tick send_offset;
     Tick delay;
 };

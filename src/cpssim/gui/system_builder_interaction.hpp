@@ -56,7 +56,8 @@ struct SystemBuilderInteractionResult {
  ***/
 SystemBuilderInteractionResult
 create_message_route(TaskId source, TaskId destination, EditableSystemDraft& draft,
-                     StructuralSelection& selection);
+                     StructuralSelection& selection,
+                     GuiConnectionKind kind = GuiConnectionKind::Communication);
 
 /*** Owns pending confirmation while all mutations remain in caller-owned drafts. ***/
 class SystemExplorerInteraction {

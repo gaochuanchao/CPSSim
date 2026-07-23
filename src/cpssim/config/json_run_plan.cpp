@@ -148,6 +148,7 @@ Json build_experiment_signature(const ExperimentConfig& config) {
     for (const auto& route : routes) {
         route_values.push_back(Json{{"delay_ticks", route.delay},
                                     {"destination_task_id", route.destination_task_id.value()},
+                                    {"kind", route.kind},
                                     {"send_offset_ticks", route.send_offset},
                                     {"source_task_id", route.source_task_id.value()}});
     }

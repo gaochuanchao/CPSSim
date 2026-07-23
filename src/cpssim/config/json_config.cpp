@@ -229,8 +229,23 @@ TaskResourceProfile parse_task_resource_profile(const Json& value) {
 /*** Parses one schema-v4 completion-triggered fixed-delay message route. ***/
 MessageRouteSpec parse_message_route(const Json& value) {
     require_only_fields(
-        value, {"source_task_id", "destination_task_id", "send_offset_ticks", "delay_ticks"},
+        value, {"source_task_id", "destination_task_id", "send_offset_ticks", "delay_ticks",
+                "kind"},
         "message_route");
+
+    // 'kind' is optional — defaults to 0 (Communication) for backward compat.
+    int kind = 0;
+    if (value.contains("kind")) {
+        const auto& kind_val = value["kind"];
+        if (kind_val.is_string()) {
+            const auto s = kind_val.get<std::string>();
+            if (s == "logical" || s == "Logical") {
+                kind = 1;
+            }
+        } else if (kind_val.is_number_integer()) {
+            kind = kind_val.get<int>();
+        }
+    }
 
     return MessageRouteSpec{
         .source_task_id =
@@ -239,6 +254,7 @@ MessageRouteSpec parse_message_route(const Json& value) {
         .destination_task_id =
             TaskId{read_unsigned(require_field(value, "destination_task_id", "message_route"),
                                  "message_route.destination_task_id")},
+        .kind = kind,
         .send_offset = read_tick(require_field(value, "send_offset_ticks", "message_route"),
                                  "message_route.send_offset_ticks"),
         .delay = read_tick(require_field(value, "delay_ticks", "message_route"),
@@ -509,10 +525,12 @@ std::string serialize_experiment_config_json(const ExperimentConfig& config) {
 
     Json routes = Json::array();
     for (const auto& route : config.message_routes()) {
-        routes.push_back(Json{{"delay_ticks", route.delay},
-                              {"destination_task_id", route.destination_task_id.value()},
-                              {"send_offset_ticks", route.send_offset},
-                              {"source_task_id", route.source_task_id.value()}});
+        auto entry = Json{{"delay_ticks", route.delay},
+                          {"destination_task_id", route.destination_task_id.value()},
+                          {"kind", route.kind},
+                          {"send_offset_ticks", route.send_offset},
+                          {"source_task_id", route.source_task_id.value()}};
+        routes.push_back(std::move(entry));
     }
 
     const Json document{{"message_routes", std::move(routes)},

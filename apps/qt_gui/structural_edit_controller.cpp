@@ -233,7 +233,8 @@ bool QtStructuralEditController::duplicate_selected() {
     return true;
 }
 
-bool QtStructuralEditController::create_connection(TaskId source, TaskId destination) {
+bool QtStructuralEditController::create_connection(TaskId source, TaskId destination,
+                                                    int kind) {
     auto& application = bridge_.application();
     if (!editing_enabled() || !application.editable_system().has_value()) {
         application.set_status("Editing is not available in the current state.", true);
@@ -251,7 +252,8 @@ bool QtStructuralEditController::create_connection(TaskId source, TaskId destina
                       application.structural_selection()};
     auto after = before;
 
-    const auto result = create_message_route(source, destination, after.draft, after.selection);
+    const auto link_kind = kind == 1 ? GuiConnectionKind::Logical : GuiConnectionKind::Communication;
+    const auto result = create_message_route(source, destination, after.draft, after.selection, link_kind);
     if (!result.changed) {
         application.set_status(result.diagnostic, true);
         Q_EMIT bridge_.statusChanged();

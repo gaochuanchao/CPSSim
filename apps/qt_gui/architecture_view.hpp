@@ -8,6 +8,7 @@
 #include <optional>
 #endif
 
+#include <QComboBox>
 #include <QPointF>
 #include <QWidget>
 
@@ -42,6 +43,7 @@ class QtArchitectureView final : public QWidget {
     void refresh();
     std::optional<TaskId> add_task_at(QPointF scene_position);
     void place_task_near_view_center(TaskId task_id);
+    GuiConnectionKind current_link_type() const;
 
   Q_SIGNALS:
     void editSelectionRequested();
@@ -91,6 +93,7 @@ class QtArchitectureView final : public QWidget {
     QAction* actual_size_action_{nullptr};
     QAction* auto_layout_action_{nullptr};
     QAction* snap_action_{nullptr};
+    QComboBox* link_type_selector_{nullptr};
 
     std::optional<QPointF> context_add_position_;
 };

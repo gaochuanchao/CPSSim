@@ -148,6 +148,11 @@ void validate_message_routes(const std::vector<MessageRouteSpec>& routes,
             !contains_task(tasks, current->destination_task_id)) {
             throw std::invalid_argument{"message route refers to an unknown task"};
         }
+        // kind: 0=Communication, 1=Logical (int avoids GUI header dependency)
+        if (current->kind != 0 && current->kind != 1) {
+            throw std::invalid_argument{
+                "message route kind must be Communication (0) or Logical (1)"};
+        }
         if (current->send_offset != message_route_send_offset_ticks) {
             throw std::invalid_argument{
                 "message route send offset must equal the fixed one-tick causal offset"};

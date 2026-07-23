@@ -18,6 +18,7 @@
 #include <QAction>
 #include <QContextMenuEvent>
 #include <QHBoxLayout>
+#include <QLabel>
 #include <QMenu>
 #include <QMessageBox>
 #include <QPainter>
@@ -194,6 +195,14 @@ QtArchitectureView::QtArchitectureView(QtWorkbenchBridge& bridge,
     toolbar->addAction(auto_layout_action_);
     toolbar->addAction(snap_action_);
     toolbar->addAction(add_task_action_);
+    toolbar->addSeparator();
+    link_type_selector_ = new QComboBox(toolbar);
+    link_type_selector_->setObjectName("toolbar.architecture.linkType");
+    link_type_selector_->addItem("Communication");
+    link_type_selector_->addItem("Logical");
+    link_type_selector_->setToolTip("Link type for newly created connections");
+    toolbar->addWidget(new QLabel(" Link type:", toolbar));
+    toolbar->addWidget(link_type_selector_);
     layout->addWidget(view_.get());
 
     auto* graphics_view = static_cast<QtArchitectureGraphicsView*>(view_.get());
@@ -243,7 +252,8 @@ QtArchitectureView::QtArchitectureView(QtWorkbenchBridge& bridge,
                edits_.edit_policy() == ProjectSystemEditPolicy::Generic;
     });
     model_.set_connection_create_requested([this](TaskId source, TaskId destination) {
-        return edits_.create_connection(source, destination);
+        const int kind_int = current_link_type() == GuiConnectionKind::Logical ? 1 : 0;
+        return edits_.create_connection(source, destination, kind_int);
     });
     model_.set_connection_delete_requested([this](const GuiConnectionId& connection) {
         return edits_.delete_connection(connection);
@@ -469,6 +479,11 @@ void QtArchitectureView::auto_layout() {
                                              snap_architecture_position(position)));
     }
     bridge_.workspace_settings_changed();
+}
+
+GuiConnectionKind QtArchitectureView::current_link_type() const {
+    return link_type_selector_->currentIndex() == 1 ? GuiConnectionKind::Logical
+                                                    : GuiConnectionKind::Communication;
 }
 
 void QtArchitectureView::synchronize_scene_selection() {

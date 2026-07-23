@@ -311,6 +311,7 @@ build_architecture_graph(const ExperimentPresentationSnapshot& experiment,
                 ": destination task T" +
                 std::to_string(route.identity.destination_task_id.value()) + " is unavailable"};
         }
+        const auto is_comm = route.kind == 0; // 0=Communication, 1=Logical
         result.edges.push_back(
             {.id = {.kind = GuiGraphEdgeKind::MessageRoute,
                     .source = source,
@@ -322,11 +323,15 @@ build_architecture_graph(const ExperimentPresentationSnapshot& experiment,
              .functional_reference = std::nullopt,
              .assignment_reference = std::nullopt,
              .connection = GuiConnectionPresentation{
-                 .id = {GuiConnectionKind::Communication, route.identity.source_task_id,
+                 .id = {is_comm ? GuiConnectionKind::Communication
+                                : GuiConnectionKind::Logical,
+                        route.identity.source_task_id,
                         route.identity.destination_task_id},
-                 .label = "Communication",
-                 .displayed_latency = bosch_latency_presentation ? Tick{80} : route.delay,
-                 .creates_network_events = true,
+                 .label = is_comm ? "Communication" : "Logical",
+                 .displayed_latency = bosch_latency_presentation
+                                          ? Tick{80}
+                                          : is_comm ? route.delay : Tick{0},
+                 .creates_network_events = is_comm,
                  .protected_semantics = bosch_latency_presentation}});
     }
     for (const auto& assignment : assignments) {
