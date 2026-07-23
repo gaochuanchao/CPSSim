@@ -168,6 +168,12 @@ class QtArchitectureModelTest final : public QObject {
     void cycleAllPortsZero();
     void selfLoopPortZero();
     void noConnectionGraph();
+    void reverseConnectionLookup_communication();
+    void reverseConnectionLookup_logical();
+    void reverseConnectionLookup_wrongKind();
+    void reverseConnectionLookup_reversedEndpoints();
+    void reverseConnectionLookup_unknownPair();
+    void reverseConnectionLookup_rebuildStability();
     void rebuildStability();
     void visibleSceneNodesHaveOneInputOneOutputPort();
     void connectionEditingIsDisabled();
@@ -1143,6 +1149,184 @@ void QtArchitectureModelTest::noConnectionGraph() {
         QCOMPARE(in_cnt, QtNodes::PortCount{1});
         QCOMPARE(out_cnt, QtNodes::PortCount{1});
     }
+}
+
+// ---------------------------------------------------------------------------
+// Reverse connection mapping tests
+// ---------------------------------------------------------------------------
+
+void QtArchitectureModelTest::reverseConnectionLookup_communication() {
+    // A communication connection must be findable via its GuiConnectionId.
+    const auto first = task_graph_node_id(TaskId{1});
+    const auto second = task_graph_node_id(TaskId{2});
+    GuiArchitectureGraph graph;
+    graph.nodes = {{first, GuiGraphNodeKind::Task, TaskId{1}, "A", {40.0F, 40.0F}, {120.0F, 60.0F}},
+                   {second, GuiGraphNodeKind::Task, TaskId{2}, "B", {280.0F, 40.0F}, {120.0F, 60.0F}}};
+    const GuiConnectionId semantic{GuiConnectionKind::Communication, TaskId{1}, TaskId{2}};
+    graph.edges = {{{GuiGraphEdgeKind::MessageRoute, first, second},
+                    GuiGraphEdgeKind::MessageRoute,
+                    first,
+                    second,
+                    std::nullopt,
+                    std::nullopt,
+                    std::nullopt,
+                    GuiConnectionPresentation{.id = semantic,
+                                              .label = "comm",
+                                              .displayed_latency = 80,
+                                              .creates_network_events = true,
+                                              .protected_semantics = false}}};
+    QtArchitectureGraphModel model;
+    model.rebuild(graph);
+    const auto qt_id = model.connection_id_for(semantic);
+    QVERIFY(qt_id.has_value());
+    const auto roundtrip = model.connection_for(*qt_id);
+    QVERIFY(roundtrip.has_value());
+    QCOMPARE(*roundtrip, semantic);
+}
+
+void QtArchitectureModelTest::reverseConnectionLookup_logical() {
+    // A logical connection must be findable via its GuiConnectionId.
+    const auto first = task_graph_node_id(TaskId{1});
+    const auto second = task_graph_node_id(TaskId{2});
+    GuiArchitectureGraph graph;
+    graph.nodes = {{first, GuiGraphNodeKind::Task, TaskId{1}, "A", {40.0F, 40.0F}, {120.0F, 60.0F}},
+                   {second, GuiGraphNodeKind::Task, TaskId{2}, "B", {280.0F, 40.0F}, {120.0F, 60.0F}}};
+    const GuiConnectionId semantic{GuiConnectionKind::Logical, TaskId{1}, TaskId{2}};
+    graph.edges = {{{GuiGraphEdgeKind::FunctionalDependency, first, second},
+                    GuiGraphEdgeKind::FunctionalDependency,
+                    first,
+                    second,
+                    std::nullopt,
+                    std::nullopt,
+                    std::nullopt,
+                    GuiConnectionPresentation{.id = semantic,
+                                              .label = "logical",
+                                              .displayed_latency = 0,
+                                              .creates_network_events = false,
+                                              .protected_semantics = false}}};
+    QtArchitectureGraphModel model;
+    model.rebuild(graph);
+    const auto qt_id = model.connection_id_for(semantic);
+    QVERIFY(qt_id.has_value());
+    const auto roundtrip = model.connection_for(*qt_id);
+    QVERIFY(roundtrip.has_value());
+    QCOMPARE(*roundtrip, semantic);
+}
+
+void QtArchitectureModelTest::reverseConnectionLookup_wrongKind() {
+    // Looking up with the wrong kind must return nullopt.
+    const auto first = task_graph_node_id(TaskId{1});
+    const auto second = task_graph_node_id(TaskId{2});
+    GuiArchitectureGraph graph;
+    graph.nodes = {{first, GuiGraphNodeKind::Task, TaskId{1}, "A", {40.0F, 40.0F}, {120.0F, 60.0F}},
+                   {second, GuiGraphNodeKind::Task, TaskId{2}, "B", {280.0F, 40.0F}, {120.0F, 60.0F}}};
+    const GuiConnectionId present{GuiConnectionKind::Communication, TaskId{1}, TaskId{2}};
+    const GuiConnectionId wrong{GuiConnectionKind::Logical, TaskId{1}, TaskId{2}};
+    graph.edges = {{{GuiGraphEdgeKind::MessageRoute, first, second},
+                    GuiGraphEdgeKind::MessageRoute,
+                    first,
+                    second,
+                    std::nullopt,
+                    std::nullopt,
+                    std::nullopt,
+                    GuiConnectionPresentation{.id = present,
+                                              .label = "comm",
+                                              .displayed_latency = 80,
+                                              .creates_network_events = true,
+                                              .protected_semantics = false}}};
+    QtArchitectureGraphModel model;
+    model.rebuild(graph);
+    QVERIFY(model.connection_id_for(present).has_value());
+    QVERIFY(!model.connection_id_for(wrong).has_value());
+}
+
+void QtArchitectureModelTest::reverseConnectionLookup_reversedEndpoints() {
+    // Reversed endpoints must not match.
+    const auto first = task_graph_node_id(TaskId{1});
+    const auto second = task_graph_node_id(TaskId{2});
+    GuiArchitectureGraph graph;
+    graph.nodes = {{first, GuiGraphNodeKind::Task, TaskId{1}, "A", {40.0F, 40.0F}, {120.0F, 60.0F}},
+                   {second, GuiGraphNodeKind::Task, TaskId{2}, "B", {280.0F, 40.0F}, {120.0F, 60.0F}}};
+    const GuiConnectionId forward{GuiConnectionKind::Communication, TaskId{1}, TaskId{2}};
+    const GuiConnectionId backward{GuiConnectionKind::Communication, TaskId{2}, TaskId{1}};
+    graph.edges = {{{GuiGraphEdgeKind::MessageRoute, first, second},
+                    GuiGraphEdgeKind::MessageRoute,
+                    first,
+                    second,
+                    std::nullopt,
+                    std::nullopt,
+                    std::nullopt,
+                    GuiConnectionPresentation{.id = forward,
+                                              .label = "comm",
+                                              .displayed_latency = 80,
+                                              .creates_network_events = true,
+                                              .protected_semantics = false}}};
+    QtArchitectureGraphModel model;
+    model.rebuild(graph);
+    QVERIFY(model.connection_id_for(forward).has_value());
+    QVERIFY(!model.connection_id_for(backward).has_value());
+}
+
+void QtArchitectureModelTest::reverseConnectionLookup_unknownPair() {
+    // An endpoint pair not in the model must return nullopt.
+    const auto first = task_graph_node_id(TaskId{1});
+    const auto second = task_graph_node_id(TaskId{2});
+    const auto unknown = task_graph_node_id(TaskId{3});
+    GuiArchitectureGraph graph;
+    graph.nodes = {{first, GuiGraphNodeKind::Task, TaskId{1}, "A", {40.0F, 40.0F}, {120.0F, 60.0F}},
+                   {second, GuiGraphNodeKind::Task, TaskId{2}, "B", {280.0F, 40.0F}, {120.0F, 60.0F}},
+                   {unknown, GuiGraphNodeKind::Task, TaskId{3}, "C", {520.0F, 40.0F}, {120.0F, 60.0F}}};
+    const GuiConnectionId existing{GuiConnectionKind::Communication, TaskId{1}, TaskId{2}};
+    const GuiConnectionId missing{GuiConnectionKind::Communication, TaskId{1}, TaskId{3}};
+    graph.edges = {{{GuiGraphEdgeKind::MessageRoute, first, second},
+                    GuiGraphEdgeKind::MessageRoute,
+                    first,
+                    second,
+                    std::nullopt,
+                    std::nullopt,
+                    std::nullopt,
+                    GuiConnectionPresentation{.id = existing,
+                                              .label = "comm",
+                                              .displayed_latency = 80,
+                                              .creates_network_events = true,
+                                              .protected_semantics = false}}};
+    QtArchitectureGraphModel model;
+    model.rebuild(graph);
+    QVERIFY(model.connection_id_for(existing).has_value());
+    QVERIFY(!model.connection_id_for(missing).has_value());
+}
+
+void QtArchitectureModelTest::reverseConnectionLookup_rebuildStability() {
+    // Reverse lookup survives a rebuild.
+    const auto first = task_graph_node_id(TaskId{1});
+    const auto second = task_graph_node_id(TaskId{2});
+    GuiArchitectureGraph graph;
+    graph.nodes = {{first, GuiGraphNodeKind::Task, TaskId{1}, "A", {40.0F, 40.0F}, {120.0F, 60.0F}},
+                   {second, GuiGraphNodeKind::Task, TaskId{2}, "B", {280.0F, 40.0F}, {120.0F, 60.0F}}};
+    const GuiConnectionId semantic{GuiConnectionKind::Communication, TaskId{1}, TaskId{2}};
+    graph.edges = {{{GuiGraphEdgeKind::MessageRoute, first, second},
+                    GuiGraphEdgeKind::MessageRoute,
+                    first,
+                    second,
+                    std::nullopt,
+                    std::nullopt,
+                    std::nullopt,
+                    GuiConnectionPresentation{.id = semantic,
+                                              .label = "comm",
+                                              .displayed_latency = 80,
+                                              .creates_network_events = true,
+                                              .protected_semantics = false}}};
+    QtArchitectureGraphModel model;
+    model.rebuild(graph);
+    const auto qt_before = model.connection_id_for(semantic);
+    QVERIFY(qt_before.has_value());
+    model.rebuild(graph);
+    const auto qt_after = model.connection_id_for(semantic);
+    QVERIFY(qt_after.has_value());
+    // The QtNodes::ConnectionId may change across rebuilds (new adapter IDs),
+    // but the semantic mapping must be valid after each rebuild.
+    QVERIFY(model.connection_for(*qt_after).has_value());
+    QCOMPARE(*model.connection_for(*qt_after), semantic);
 }
 
 void QtArchitectureModelTest::rebuildStability() {

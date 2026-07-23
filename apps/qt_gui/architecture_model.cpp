@@ -226,6 +226,16 @@ QtArchitectureGraphModel::connection_for(const QtNodes::ConnectionId& connection
     return found == connection_ids_.end() ? std::nullopt : std::optional{found->second};
 }
 
+std::optional<QtNodes::ConnectionId>
+QtArchitectureGraphModel::connection_id_for(const GuiConnectionId& semantic_id) const {
+    for (const auto& [qt_id, gui_id] : connection_ids_) {
+        if (gui_id == semantic_id) {
+            return qt_id;
+        }
+    }
+    return std::nullopt;
+}
+
 std::optional<QtNodes::NodeId> QtArchitectureGraphModel::node_id_for(GuiGraphNodeId entity) const {
     const auto id = ids_.find_adapter_id(entity);
     return id.has_value() && nodes_.contains(*id) ? id : std::nullopt;

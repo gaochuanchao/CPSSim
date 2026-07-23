@@ -73,6 +73,8 @@ class QtArchitectureGraphModel final : public QtNodes::AbstractGraphModel {
     std::optional<QtNodes::NodeId> node_id_for(GuiGraphNodeId entity) const;
     std::optional<GuiGraphNodeId> entity_for(QtNodes::NodeId node_id) const;
     std::optional<GuiConnectionId> connection_for(const QtNodes::ConnectionId& connection_id) const;
+    std::optional<QtNodes::ConnectionId>
+    connection_id_for(const GuiConnectionId& semantic_id) const;
     std::size_t node_count() const noexcept { return nodes_.size(); }
     std::size_t connection_count() const noexcept { return connections_.size(); }
     std::vector<QRectF>

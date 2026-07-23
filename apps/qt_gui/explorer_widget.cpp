@@ -93,6 +93,8 @@ QtExperimentExplorerWidget::QtExperimentExplorerWidget(QtWorkbenchBridge& bridge
     layout->setContentsMargins(1, 1, 1, 1);
     layout->setSpacing(0);
     layout->addWidget(tree_);
+    tree_->setSelectionBehavior(QAbstractItemView::SelectRows);
+    tree_->setSelectionMode(QAbstractItemView::SingleSelection);
     connect(tree_->selectionModel(), &QItemSelectionModel::currentChanged, this,
             [this](const QModelIndex&, const QModelIndex&) { apply_current_selection(); });
     connect(tree_, &QTreeView::customContextMenuRequested, this,
@@ -247,7 +249,10 @@ void QtExperimentExplorerWidget::synchronize_selection() {
     while (!pending.empty()) {
         auto* candidate = pending.takeFirst();
         if (item_matches(*candidate, selected)) {
-            const QSignalBlocker blocker{tree_->selectionModel()};
+            const QSignalBlocker blocker{*tree_->selectionModel()};
+            tree_->selectionModel()->select(
+                candidate->index(),
+                QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
             tree_->setCurrentIndex(candidate->index());
             tree_->scrollTo(candidate->index());
             return;
@@ -257,8 +262,9 @@ void QtExperimentExplorerWidget::synchronize_selection() {
         }
     }
     // No matching explorer row found (e.g., logical connection).
-    // Clear the current index without changing the structural selection.
-    const QSignalBlocker blocker{tree_->selectionModel()};
+    // Clear selection and current index without changing structural selection.
+    const QSignalBlocker blocker{*tree_->selectionModel()};
+    tree_->selectionModel()->clearSelection();
     tree_->setCurrentIndex(QModelIndex{});
 }
 

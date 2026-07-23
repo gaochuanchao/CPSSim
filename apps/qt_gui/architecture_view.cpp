@@ -190,6 +190,9 @@ QtArchitectureView::QtArchitectureView(QtWorkbenchBridge& bridge,
 }
 
 void QtArchitectureView::select_scene_item() {
+    if (synchronizing_scene_selection_) {
+        return;
+    }
     for (auto* item : scene_->selectedItems()) {
         if (item->type() != QtNodes::ConnectionGraphicsObject::Type) {
             continue;
@@ -267,6 +270,9 @@ void QtArchitectureView::refresh() {
 }
 
 void QtArchitectureView::select_node(QtNodes::NodeId node_id) {
+    if (synchronizing_scene_selection_) {
+        return;
+    }
     const auto entity = model_.entity_for(node_id);
     if (!entity.has_value() || entity->kind != GuiGraphNodeKind::Task) {
         return;
@@ -348,17 +354,56 @@ void QtArchitectureView::auto_layout() {
 }
 
 void QtArchitectureView::synchronize_scene_selection() {
+    synchronizing_scene_selection_ = true;
     scene_->clearSelection();
-    const auto task = bridge_.application().structural_selection().task_id();
-    if (!task.has_value()) {
+
+    const auto& selection = bridge_.application().structural_selection();
+
+    // --- Connection selections ---
+    if (selection.kind() == StructuralSelectionKind::Connection) {
+        const auto conn = selection.connection();
+        if (conn.has_value()) {
+            const auto qt_id = model_.connection_id_for(*conn);
+            if (qt_id.has_value()) {
+                if (auto* cgo = scene_->connectionGraphicsObject(*qt_id); cgo != nullptr) {
+                    cgo->setSelected(true);
+                }
+            }
+        }
+        synchronizing_scene_selection_ = false;
         return;
     }
-    const auto node_id = model_.node_id_for(task_graph_node_id(*task));
-    if (node_id.has_value()) {
-        if (auto* item = scene_->nodeGraphicsObject(*node_id); item != nullptr) {
-            item->setSelected(true);
+
+    // --- MessageRoute selections (find matching communication connection) ---
+    if (selection.kind() == StructuralSelectionKind::MessageRoute) {
+        const auto mr = selection.message_route();
+        if (mr.has_value()) {
+            const GuiConnectionId semantic{GuiConnectionKind::Communication,
+                                           mr->source_task_id, mr->destination_task_id};
+            const auto qt_id = model_.connection_id_for(semantic);
+            if (qt_id.has_value()) {
+                if (auto* cgo = scene_->connectionGraphicsObject(*qt_id); cgo != nullptr) {
+                    cgo->setSelected(true);
+                }
+            }
+        }
+        synchronizing_scene_selection_ = false;
+        return;
+    }
+
+    // --- Task selections ---
+    const auto task = selection.task_id();
+    if (task.has_value() && selection.kind() == StructuralSelectionKind::Task) {
+        const auto node_id = model_.node_id_for(task_graph_node_id(*task));
+        if (node_id.has_value()) {
+            if (auto* item = scene_->nodeGraphicsObject(*node_id); item != nullptr) {
+                item->setSelected(true);
+            }
         }
     }
+    // Other selection kinds (System, Resource, Section) leave canvas cleared.
+
+    synchronizing_scene_selection_ = false;
 }
 
 // ---------------------------------------------------------------------------
