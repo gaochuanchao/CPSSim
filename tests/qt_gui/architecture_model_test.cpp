@@ -157,6 +157,21 @@ class QtArchitectureModelTest final : public QObject {
     void updateActionState_disabled_for_protected_adapter();
     void contextAddPosition_does_not_affect_toolbar_after_menu();
 
+    // Stable port contract (Prompt 3).
+    void isolatedTaskHasOneInOneOutPort();
+    void portZeroDataIsValid();
+    void invalidPortIndexReturnsInvalidData();
+    void existingEdgePortIndicesAreZero();
+    void fanOutUsesPortZero();
+    void fanInUsesPortZero();
+    void chainAllPortsZero();
+    void cycleAllPortsZero();
+    void selfLoopPortZero();
+    void noConnectionGraph();
+    void rebuildStability();
+    void visibleSceneNodesHaveOneInputOneOutputPort();
+    void connectionEditingIsDisabled();
+
     // Regression: editable draft rendering independent of session/snapshot.
     void editableDraftPopulatesGraphWithoutSession();
     void editableDraftNodeCountMatchesDraftTasks();
@@ -760,6 +775,469 @@ void QtArchitectureModelTest::contextAddPosition_does_not_affect_toolbar_after_m
         find_task_layout(bridge.application().workspace().architecture, *second_task);
     QVERIFY(first_layout != nullptr);
     QVERIFY(second_layout != nullptr);
+}
+
+// ---------------------------------------------------------------------------
+// Stable port contract tests (Prompt 3)
+// ---------------------------------------------------------------------------
+
+void QtArchitectureModelTest::isolatedTaskHasOneInOneOutPort() {
+    // An isolated task must have InPortCount == 1 and OutPortCount == 1 with
+    // no connections required.
+    const auto node_id = task_graph_node_id(TaskId{1});
+    GuiArchitectureGraph graph;
+    graph.nodes.push_back(
+        {node_id, GuiGraphNodeKind::Task, TaskId{1}, "Isolated", {40.0F, 40.0F}, {120.0F, 60.0F}});
+    graph.edges.clear();
+    graph.logical_size = {200.0F, 100.0F};
+
+    QtArchitectureGraphModel model;
+    model.rebuild(graph);
+
+    const auto adapter = model.node_id_for(node_id);
+    QVERIFY(adapter.has_value());
+
+    const auto in_count =
+        model.nodeData(*adapter, QtNodes::NodeRole::InPortCount).value<QtNodes::PortCount>();
+    const auto out_count =
+        model.nodeData(*adapter, QtNodes::NodeRole::OutPortCount).value<QtNodes::PortCount>();
+
+    QCOMPARE(in_count, QtNodes::PortCount{1});
+    QCOMPARE(out_count, QtNodes::PortCount{1});
+    QCOMPARE(model.connection_count(), std::size_t{0});
+}
+
+void QtArchitectureModelTest::portZeroDataIsValid() {
+    // Port 0 must have: valid DataType with cpssim.connection identifier,
+    // ConnectionPolicy::Many, hidden caption, empty caption string.
+    const auto node_id = task_graph_node_id(TaskId{1});
+    GuiArchitectureGraph graph;
+    graph.nodes.push_back(
+        {node_id, GuiGraphNodeKind::Task, TaskId{1}, "Task", {40.0F, 40.0F}, {120.0F, 60.0F}});
+    QtArchitectureGraphModel model;
+    model.rebuild(graph);
+
+    const auto adapter = model.node_id_for(node_id);
+    QVERIFY(adapter.has_value());
+
+    // Check input port 0.
+    const auto in_dt =
+        model.portData(*adapter, QtNodes::PortType::In, 0, QtNodes::PortRole::DataType)
+            .value<QtNodes::NodeDataType>();
+    QVERIFY(!in_dt.id.isEmpty());
+    QCOMPARE(in_dt.id, QStringLiteral("cpssim.connection"));
+
+    const auto in_policy =
+        model.portData(*adapter, QtNodes::PortType::In, 0, QtNodes::PortRole::ConnectionPolicyRole)
+            .value<QtNodes::ConnectionPolicy>();
+    QCOMPARE(in_policy, QtNodes::ConnectionPolicy::Many);
+
+    const auto in_cap_vis =
+        model.portData(*adapter, QtNodes::PortType::In, 0, QtNodes::PortRole::CaptionVisible)
+            .toBool();
+    QCOMPARE(in_cap_vis, false);
+
+    const auto in_cap =
+        model.portData(*adapter, QtNodes::PortType::In, 0, QtNodes::PortRole::Caption).toString();
+    QVERIFY(in_cap.isEmpty());
+
+    // Check output port 0.
+    const auto out_dt =
+        model.portData(*adapter, QtNodes::PortType::Out, 0, QtNodes::PortRole::DataType)
+            .value<QtNodes::NodeDataType>();
+    QVERIFY(!out_dt.id.isEmpty());
+    QCOMPARE(out_dt.id, QStringLiteral("cpssim.connection"));
+
+    const auto out_policy =
+        model
+            .portData(*adapter, QtNodes::PortType::Out, 0, QtNodes::PortRole::ConnectionPolicyRole)
+            .value<QtNodes::ConnectionPolicy>();
+    QCOMPARE(out_policy, QtNodes::ConnectionPolicy::Many);
+
+    const auto out_cap_vis =
+        model.portData(*adapter, QtNodes::PortType::Out, 0, QtNodes::PortRole::CaptionVisible)
+            .toBool();
+    QCOMPARE(out_cap_vis, false);
+
+    const auto out_cap =
+        model.portData(*adapter, QtNodes::PortType::Out, 0, QtNodes::PortRole::Caption).toString();
+    QVERIFY(out_cap.isEmpty());
+}
+
+void QtArchitectureModelTest::invalidPortIndexReturnsInvalidData() {
+    // Indices other than 0 must return invalid/empty QVariant.
+    const auto node_id = task_graph_node_id(TaskId{1});
+    GuiArchitectureGraph graph;
+    graph.nodes.push_back(
+        {node_id, GuiGraphNodeKind::Task, TaskId{1}, "Task", {40.0F, 40.0F}, {120.0F, 60.0F}});
+    QtArchitectureGraphModel model;
+    model.rebuild(graph);
+
+    const auto adapter = model.node_id_for(node_id);
+    QVERIFY(adapter.has_value());
+
+    // Input port 1.
+    QVERIFY(!model.portData(*adapter, QtNodes::PortType::In, 1, QtNodes::PortRole::DataType)
+                 .isValid());
+    QVERIFY(!model.portData(*adapter, QtNodes::PortType::In, 1, QtNodes::PortRole::ConnectionPolicyRole)
+                 .isValid());
+
+    // Output port 1.
+    QVERIFY(!model.portData(*adapter, QtNodes::PortType::Out, 1, QtNodes::PortRole::DataType)
+                 .isValid());
+    QVERIFY(!model.portData(*adapter, QtNodes::PortType::Out, 1, QtNodes::PortRole::ConnectionPolicyRole)
+                 .isValid());
+
+    // Input port 999.
+    QVERIFY(!model.portData(*adapter, QtNodes::PortType::In, 999, QtNodes::PortRole::DataType)
+                 .isValid());
+
+    // Non-existent node returns invalid regardless of port index.
+    QVERIFY(!model.portData(QtNodes::InvalidNodeId, QtNodes::PortType::In, 0,
+                            QtNodes::PortRole::DataType)
+                 .isValid());
+}
+
+void QtArchitectureModelTest::existingEdgePortIndicesAreZero() {
+    // Every existing edge must have output port index 0 and input port index 0.
+    const auto first = task_graph_node_id(TaskId{1});
+    const auto second = task_graph_node_id(TaskId{2});
+    GuiArchitectureGraph graph;
+    graph.nodes = {{first, GuiGraphNodeKind::Task, TaskId{1}, "First", {40.0F, 40.0F}, {120.0F, 60.0F}},
+                   {second, GuiGraphNodeKind::Task, TaskId{2}, "Second", {280.0F, 40.0F}, {120.0F, 60.0F}}};
+    graph.edges = {{{GuiGraphEdgeKind::FunctionalDependency, first, second},
+                    GuiGraphEdgeKind::FunctionalDependency,
+                    first,
+                    second,
+                    std::nullopt,
+                    std::nullopt,
+                    std::nullopt,
+                    GuiConnectionPresentation{
+                        .id = {GuiConnectionKind::Logical, TaskId{1}, TaskId{2}},
+                        .label = "dep",
+                        .displayed_latency = 0,
+                        .creates_network_events = false,
+                        .protected_semantics = false}}};
+
+    QtArchitectureGraphModel model;
+    model.rebuild(graph);
+
+    QCOMPARE(model.connection_count(), std::size_t{1});
+
+    const auto all_connections = model.allConnectionIds(QtNodes::NodeId{0});
+    // Collect all connections from the model.
+    const auto node_ids = model.allNodeIds();
+    std::unordered_set<QtNodes::ConnectionId> found;
+    for (const auto nid : node_ids) {
+        const auto conns = model.allConnectionIds(nid);
+        found.insert(conns.begin(), conns.end());
+    }
+    QCOMPARE(found.size(), std::size_t{1});
+
+    const auto conn = *found.begin();
+    QCOMPARE(conn.outPortIndex, QtNodes::PortIndex{0});
+    QCOMPARE(conn.inPortIndex, QtNodes::PortIndex{0});
+}
+
+void QtArchitectureModelTest::fanOutUsesPortZero() {
+    // Two destinations from one source both use source output port 0.
+    const auto source = task_graph_node_id(TaskId{1});
+    const auto dest_a = task_graph_node_id(TaskId{2});
+    const auto dest_b = task_graph_node_id(TaskId{3});
+    GuiArchitectureGraph graph;
+    graph.nodes = {{source, GuiGraphNodeKind::Task, TaskId{1}, "Src", {40.0F, 40.0F}, {120.0F, 60.0F}},
+                   {dest_a, GuiGraphNodeKind::Task, TaskId{2}, "A", {280.0F, 40.0F}, {120.0F, 60.0F}},
+                   {dest_b, GuiGraphNodeKind::Task, TaskId{3}, "B", {280.0F, 200.0F}, {120.0F, 60.0F}}};
+    graph.edges = {{{GuiGraphEdgeKind::FunctionalDependency, source, dest_a},
+                    GuiGraphEdgeKind::FunctionalDependency,
+                    source,
+                    dest_a,
+                    std::nullopt,
+                    std::nullopt,
+                    std::nullopt,
+                    std::nullopt},
+                   {{GuiGraphEdgeKind::FunctionalDependency, source, dest_b},
+                    GuiGraphEdgeKind::FunctionalDependency,
+                    source,
+                    dest_b,
+                    std::nullopt,
+                    std::nullopt,
+                    std::nullopt,
+                    std::nullopt}};
+
+    QtArchitectureGraphModel model;
+    model.rebuild(graph);
+    QCOMPARE(model.connection_count(), std::size_t{2});
+
+    const auto src_adapter = model.node_id_for(source);
+    QVERIFY(src_adapter.has_value());
+
+    const auto src_out_conns =
+        model.connections(*src_adapter, QtNodes::PortType::Out, 0);
+    QCOMPARE(src_out_conns.size(), std::size_t{2});
+
+    for (const auto& c : src_out_conns) {
+        QCOMPARE(c.outPortIndex, QtNodes::PortIndex{0});
+        QCOMPARE(c.outNodeId, *src_adapter);
+    }
+}
+
+void QtArchitectureModelTest::fanInUsesPortZero() {
+    // Two sources into one destination both use destination input port 0.
+    const auto src_a = task_graph_node_id(TaskId{1});
+    const auto src_b = task_graph_node_id(TaskId{2});
+    const auto dest = task_graph_node_id(TaskId{3});
+    GuiArchitectureGraph graph;
+    graph.nodes = {{src_a, GuiGraphNodeKind::Task, TaskId{1}, "A", {40.0F, 40.0F}, {120.0F, 60.0F}},
+                   {src_b, GuiGraphNodeKind::Task, TaskId{2}, "B", {40.0F, 200.0F}, {120.0F, 60.0F}},
+                   {dest, GuiGraphNodeKind::Task, TaskId{3}, "Dest", {280.0F, 120.0F}, {120.0F, 60.0F}}};
+    graph.edges = {{{GuiGraphEdgeKind::FunctionalDependency, src_a, dest},
+                    GuiGraphEdgeKind::FunctionalDependency,
+                    src_a,
+                    dest,
+                    std::nullopt,
+                    std::nullopt,
+                    std::nullopt,
+                    std::nullopt},
+                   {{GuiGraphEdgeKind::FunctionalDependency, src_b, dest},
+                    GuiGraphEdgeKind::FunctionalDependency,
+                    src_b,
+                    dest,
+                    std::nullopt,
+                    std::nullopt,
+                    std::nullopt,
+                    std::nullopt}};
+
+    QtArchitectureGraphModel model;
+    model.rebuild(graph);
+    QCOMPARE(model.connection_count(), std::size_t{2});
+
+    const auto dest_adapter = model.node_id_for(dest);
+    QVERIFY(dest_adapter.has_value());
+
+    const auto dest_in_conns = model.connections(*dest_adapter, QtNodes::PortType::In, 0);
+    QCOMPARE(dest_in_conns.size(), std::size_t{2});
+
+    for (const auto& c : dest_in_conns) {
+        QCOMPARE(c.inPortIndex, QtNodes::PortIndex{0});
+        QCOMPARE(c.inNodeId, *dest_adapter);
+    }
+}
+
+void QtArchitectureModelTest::chainAllPortsZero() {
+    // A chain A -> B -> C: all ports are 0.
+    const auto a = task_graph_node_id(TaskId{1});
+    const auto b = task_graph_node_id(TaskId{2});
+    const auto c = task_graph_node_id(TaskId{3});
+    GuiArchitectureGraph graph;
+    graph.nodes = {{a, GuiGraphNodeKind::Task, TaskId{1}, "A", {40.0F, 40.0F}, {120.0F, 60.0F}},
+                   {b, GuiGraphNodeKind::Task, TaskId{2}, "B", {280.0F, 40.0F}, {120.0F, 60.0F}},
+                   {c, GuiGraphNodeKind::Task, TaskId{3}, "C", {520.0F, 40.0F}, {120.0F, 60.0F}}};
+    graph.edges = {{{GuiGraphEdgeKind::FunctionalDependency, a, b},
+                    GuiGraphEdgeKind::FunctionalDependency,
+                    a,
+                    b,
+                    std::nullopt,
+                    std::nullopt,
+                    std::nullopt,
+                    std::nullopt},
+                   {{GuiGraphEdgeKind::FunctionalDependency, b, c},
+                    GuiGraphEdgeKind::FunctionalDependency,
+                    b,
+                    c,
+                    std::nullopt,
+                    std::nullopt,
+                    std::nullopt,
+                    std::nullopt}};
+
+    QtArchitectureGraphModel model;
+    model.rebuild(graph);
+    QCOMPARE(model.connection_count(), std::size_t{2});
+
+    const auto all_connections = model.allConnectionIds(QtNodes::NodeId{0});
+    const auto node_ids = model.allNodeIds();
+    std::unordered_set<QtNodes::ConnectionId> found;
+    for (const auto nid : node_ids) {
+        const auto conns = model.allConnectionIds(nid);
+        found.insert(conns.begin(), conns.end());
+    }
+    QCOMPARE(found.size(), std::size_t{2});
+
+    for (const auto& cid : found) {
+        QCOMPARE(cid.outPortIndex, QtNodes::PortIndex{0});
+        QCOMPARE(cid.inPortIndex, QtNodes::PortIndex{0});
+    }
+}
+
+void QtArchitectureModelTest::cycleAllPortsZero() {
+    // A cycle A -> B, B -> A: all ports are 0.
+    const auto graph = cyclic_graph();
+    QtArchitectureGraphModel model;
+    model.rebuild(graph);
+    QCOMPARE(model.connection_count(), std::size_t{2});
+
+    const auto node_ids = model.allNodeIds();
+    std::unordered_set<QtNodes::ConnectionId> found;
+    for (const auto nid : node_ids) {
+        const auto conns = model.allConnectionIds(nid);
+        found.insert(conns.begin(), conns.end());
+    }
+    QCOMPARE(found.size(), std::size_t{2});
+
+    for (const auto& cid : found) {
+        QCOMPARE(cid.outPortIndex, QtNodes::PortIndex{0});
+        QCOMPARE(cid.inPortIndex, QtNodes::PortIndex{0});
+    }
+}
+
+void QtArchitectureModelTest::selfLoopPortZero() {
+    // A self-loop A -> A: uses port 0 for both.
+    const auto node = task_graph_node_id(TaskId{1});
+    GuiArchitectureGraph graph;
+    graph.nodes = {{node, GuiGraphNodeKind::Task, TaskId{1}, "Self", {40.0F, 40.0F}, {120.0F, 60.0F}}};
+    graph.edges = {{{GuiGraphEdgeKind::FunctionalDependency, node, node},
+                    GuiGraphEdgeKind::FunctionalDependency,
+                    node,
+                    node,
+                    std::nullopt,
+                    std::nullopt,
+                    std::nullopt,
+                    std::nullopt}};
+
+    QtArchitectureGraphModel model;
+    model.rebuild(graph);
+    QCOMPARE(model.connection_count(), std::size_t{1});
+
+    const auto adapter = model.node_id_for(node);
+    QVERIFY(adapter.has_value());
+
+    const auto conns = model.allConnectionIds(*adapter);
+    QCOMPARE(conns.size(), std::size_t{1});
+
+    const auto& cid = *conns.begin();
+    QCOMPARE(cid.outNodeId, *adapter);
+    QCOMPARE(cid.inNodeId, *adapter);
+    QCOMPARE(cid.outPortIndex, QtNodes::PortIndex{0});
+    QCOMPARE(cid.inPortIndex, QtNodes::PortIndex{0});
+}
+
+void QtArchitectureModelTest::noConnectionGraph() {
+    // A graph with task nodes but no edges: each node still has 1/1 ports.
+    const auto a = task_graph_node_id(TaskId{1});
+    const auto b = task_graph_node_id(TaskId{2});
+    GuiArchitectureGraph graph;
+    graph.nodes = {{a, GuiGraphNodeKind::Task, TaskId{1}, "A", {40.0F, 40.0F}, {120.0F, 60.0F}},
+                   {b, GuiGraphNodeKind::Task, TaskId{2}, "B", {280.0F, 40.0F}, {120.0F, 60.0F}}};
+    graph.edges.clear();
+
+    QtArchitectureGraphModel model;
+    model.rebuild(graph);
+    QCOMPARE(model.node_count(), std::size_t{2});
+    QCOMPARE(model.connection_count(), std::size_t{0});
+
+    for (const auto nid : model.allNodeIds()) {
+        const auto in_cnt =
+            model.nodeData(nid, QtNodes::NodeRole::InPortCount).value<QtNodes::PortCount>();
+        const auto out_cnt =
+            model.nodeData(nid, QtNodes::NodeRole::OutPortCount).value<QtNodes::PortCount>();
+        QCOMPARE(in_cnt, QtNodes::PortCount{1});
+        QCOMPARE(out_cnt, QtNodes::PortCount{1});
+    }
+}
+
+void QtArchitectureModelTest::rebuildStability() {
+    // Repeated rebuilds preserve node-ID mapping, connection count,
+    // no duplicate connections, and semantic connection mapping.
+    const auto graph = cyclic_graph();
+    QtArchitectureGraphModel model;
+    model.rebuild(graph);
+
+    const auto first_pass_node = model.node_id_for(task_graph_node_id(TaskId{1}));
+    QVERIFY(first_pass_node.has_value());
+    const auto first_pass_conns = model.connection_count();
+
+    // Rebuild again with the same graph.
+    model.rebuild(graph);
+
+    // Node mapping stable.
+    QCOMPARE(model.node_id_for(task_graph_node_id(TaskId{1})), first_pass_node);
+
+    // Connection count stable.
+    QCOMPARE(model.connection_count(), first_pass_conns);
+
+    // No duplicate connections (collect from connections_ via allConnectionIds
+    // but deduplicate across endpoint nodes).
+    const auto node_ids = model.allNodeIds();
+    std::unordered_set<QtNodes::ConnectionId> unique;
+    for (const auto nid : node_ids) {
+        const auto conns = model.allConnectionIds(nid);
+        for (const auto& c : conns) {
+            unique.insert(c);
+        }
+    }
+    // A connection is reported by both its endpoints, so the deduplicated set
+    // must equal the total connection count.
+    QCOMPARE(unique.size(), model.connection_count());
+
+    // Semantic mapping preserved.
+    const auto all_connections = model.allConnectionIds(QtNodes::NodeId{0});
+    std::unordered_set<QtNodes::ConnectionId> all_conns;
+    for (const auto nid : node_ids) {
+        const auto cs = model.allConnectionIds(nid);
+        all_conns.insert(cs.begin(), cs.end());
+    }
+    for (const auto& c : all_conns) {
+        QVERIFY(model.connection_for(c).has_value());
+    }
+}
+
+void QtArchitectureModelTest::visibleSceneNodesHaveOneInputOneOutputPort() {
+    // When rendered, scene nodes must have one visible input port and one
+    // visible output port with valid opacity and non-empty geometry.
+    TemporaryDirectory temporary;
+    auto application = std::make_unique<WorkbenchApplication>();
+    application->create_project(make_generic_project_template(temporary.path(), "project"));
+    QtWorkbenchBridge bridge{std::move(application)};
+    QtStructuralEditController edits{bridge};
+    QtArchitectureView view{bridge, edits};
+
+    QApplication::processEvents();
+
+    const auto node_ids = view.graph_model().allNodeIds();
+    QVERIFY(!node_ids.empty());
+
+    for (const auto nid : node_ids) {
+        const auto in_cnt =
+            view.graph_model().nodeData(nid, QtNodes::NodeRole::InPortCount).value<QtNodes::PortCount>();
+        const auto out_cnt =
+            view.graph_model().nodeData(nid, QtNodes::NodeRole::OutPortCount).value<QtNodes::PortCount>();
+        QCOMPARE(in_cnt, QtNodes::PortCount{1});
+        QCOMPARE(out_cnt, QtNodes::PortCount{1});
+
+        auto* item = view.graphics_scene().nodeGraphicsObject(nid);
+        QVERIFY(item != nullptr);
+        QVERIFY(item->isVisible());
+        QVERIFY(item->effectiveOpacity() > 0.0);
+        QVERIFY(!item->boundingRect().isEmpty());
+    }
+}
+
+void QtArchitectureModelTest::connectionEditingIsDisabled() {
+    // connectionPossible must return false,
+    // addConnection must not mutate the model,
+    // deleteConnection must return false.
+    const auto graph = cyclic_graph();
+    QtArchitectureGraphModel model;
+    model.rebuild(graph);
+
+    QVERIFY(!model.connectionPossible({}));
+
+    const auto before = model.connection_count();
+    model.addConnection({});
+    QCOMPARE(model.connection_count(), before);
+
+    QVERIFY(!model.deleteConnection({}));
+    QCOMPARE(model.connection_count(), before);
 }
 
 void QtArchitectureModelTest::editableDraftPopulatesGraphWithoutSession() {

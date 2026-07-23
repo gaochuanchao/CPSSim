@@ -176,18 +176,19 @@ void QtArchitectureGraphModel::rebuild(
             task_presentations.begin(), task_presentations.end(), [&](const auto& candidate) {
                 return candidate.task_id == std::get<TaskId>(node.entity);
             });
-        nodes_.emplace(id, NodeRecord{.entity = node.id,
-                                      .caption = QString::fromStdString(node.label),
-                                      .position = position,
-                                      .size = QSize{230, 96},
-                                      .presentation = presentation == task_presentations.end()
-                                                          ? std::nullopt
-                                                          : std::optional{*presentation}});
+        nodes_.emplace(id,
+                       NodeRecord{.entity = node.id,
+                                  .caption = QString::fromStdString(node.label),
+                                  .position = position,
+                                  .size = QSize{230, 96},
+                                  .input_count = 1,
+                                  .output_count = 1,
+                                  .presentation = presentation == task_presentations.end()
+                                                      ? std::nullopt
+                                                      : std::optional{*presentation}});
         ++flat_index;
     }
 
-    std::map<QtNodes::NodeId, QtNodes::PortIndex> next_input;
-    std::map<QtNodes::NodeId, QtNodes::PortIndex> next_output;
     for (const auto& edge : graph.edges) {
         if (edge.kind == GuiGraphEdgeKind::Assignment) {
             continue;
@@ -198,15 +199,11 @@ void QtArchitectureGraphModel::rebuild(
             !nodes_.contains(*destination)) {
             continue;
         }
-        const auto output_port = next_output[*source]++;
-        const auto input_port = next_input[*destination]++;
-        const QtNodes::ConnectionId connection{*source, output_port, *destination, input_port};
+        const QtNodes::ConnectionId connection{*source, 0, *destination, 0};
         connections_.push_back(connection);
         if (edge.connection.has_value()) {
             connection_ids_.emplace_back(connection, edge.connection->id);
         }
-        nodes_.at(*source).output_count = next_output[*source];
-        nodes_.at(*destination).input_count = next_input[*destination];
     }
     Q_EMIT modelReset();
 }
@@ -356,15 +353,10 @@ bool QtArchitectureGraphModel::setNodeData(QtNodes::NodeId node_id, QtNodes::Nod
     return true;
 }
 
-QVariant QtArchitectureGraphModel::portData(QtNodes::NodeId node_id, QtNodes::PortType port_type,
+QVariant QtArchitectureGraphModel::portData(QtNodes::NodeId node_id, QtNodes::PortType /*port_type*/,
                                             QtNodes::PortIndex index,
                                             QtNodes::PortRole role) const {
-    if (!nodes_.contains(node_id)) {
-        return {};
-    }
-    const auto count = port_type == QtNodes::PortType::In ? nodes_.at(node_id).input_count
-                                                          : nodes_.at(node_id).output_count;
-    if (index >= count) {
+    if (!nodes_.contains(node_id) || index != 0) {
         return {};
     }
     switch (role) {
