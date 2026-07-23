@@ -384,11 +384,13 @@ void QtArchitectureGraphModel::addConnection(QtNodes::ConnectionId connection_id
     if (created) {
         // The draft already has the route — do NOT insert into connections_ here.
         // The rebuild from draft will repopulate connections_ authoritatively.
-        // BUT QtNodes needs the connectionCreated signal for the visual to appear.
-        // Since rebuild will call modelReset() which clears all graphics objects,
-        // we emit the signal so the temporary connection appears during the brief
-        // interval before rebuild completes.
-        Q_EMIT connectionCreated(connection_id);
+        // No connectionCreated signal is needed because the synchronous callback
+        // (edits_.create_connection → apply → RestoreDraftCommand::redo →
+        // bridge_.restore_draft → draftChanged → refresh → model_.rebuild →
+        // modelReset → BasicGraphicsScene::onModelReset) already clears and
+        // re-populates all ConnectionGraphicsObjects from the updated model
+        // state.  Emitting connectionCreated here would overwrite the
+        // already-placed authoritative graphics object with a redundant one.
     }
 }
 
@@ -506,7 +508,10 @@ bool QtArchitectureGraphModel::deleteConnection(QtNodes::ConnectionId connection
     if (removed) {
         // Do NOT erase from connections_ here — rely on domain rebuild.
         // The rebuild from draft will update connections_ authoritatively.
-        Q_EMIT connectionDeleted(connection_id);
+        // No connectionDeleted signal is needed because the synchronous callback
+        // already triggers model_.rebuild() → modelReset, which clears and
+        // re-populates all ConnectionGraphicsObjects from the updated model
+        // state (which no longer contains this connection).
     }
 
     return removed;

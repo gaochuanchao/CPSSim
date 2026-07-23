@@ -46,7 +46,7 @@ class QtArchitectureGraphicsView final : public QtNodes::GraphicsView {
     explicit QtArchitectureGraphicsView(QtNodes::BasicGraphicsScene* scene,
                                         QWidget* parent = nullptr)
         : QtNodes::GraphicsView(scene, parent) {
-        disable_qtnodes_history_shortcuts();
+        disable_qtnodes_conflicting_shortcuts();
     }
 
     void set_context_menu_handler(ContextMenuHandler handler) {
@@ -116,23 +116,34 @@ class QtArchitectureGraphicsView final : public QtNodes::GraphicsView {
     }
 
   private:
-    void disable_qtnodes_history_shortcuts() {
+    void disable_qtnodes_conflicting_shortcuts() {
+        // Build the set of shortcut values that QtNodes may install but CPSSim
+        // must own exclusively for structural editing.
         const auto undo_bindings = QKeySequence::keyBindings(QKeySequence::Undo);
         const auto redo_bindings = QKeySequence::keyBindings(QKeySequence::Redo);
+        const auto cut_bindings = QKeySequence::keyBindings(QKeySequence::Cut);
+        const auto copy_bindings = QKeySequence::keyBindings(QKeySequence::Copy);
+        const auto paste_bindings = QKeySequence::keyBindings(QKeySequence::Paste);
+        const QKeySequence delete_binding{QKeySequence::Delete};
+        const QKeySequence duplicate_binding{Qt::CTRL | Qt::Key_D};
+        const QKeySequence escape_binding{Qt::Key_Escape};
 
         for (auto* action : actions()) {
             if (action == nullptr) {
                 continue;
             }
             const auto shortcuts = action->shortcuts();
-            bool is_history_action = false;
+            bool is_conflicting = false;
             for (const auto& shortcut : shortcuts) {
-                if (undo_bindings.contains(shortcut) || redo_bindings.contains(shortcut)) {
-                    is_history_action = true;
+                if (undo_bindings.contains(shortcut) || redo_bindings.contains(shortcut) ||
+                    cut_bindings.contains(shortcut) || copy_bindings.contains(shortcut) ||
+                    paste_bindings.contains(shortcut) || shortcut == delete_binding ||
+                    shortcut == duplicate_binding || shortcut == escape_binding) {
+                    is_conflicting = true;
                     break;
                 }
             }
-            if (is_history_action) {
+            if (is_conflicting) {
                 action->setShortcuts({});
             }
         }
