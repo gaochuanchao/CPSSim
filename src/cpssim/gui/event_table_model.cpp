@@ -46,8 +46,8 @@ const char* gui_event_phase_name(EventPhase phase) noexcept {
     case EventPhase::Scheduling:
         return "Scheduling";
     case EventPhase::CausedAction:
-        return "Caused action";
-    }
+        return "Caused action";    case EventPhase::CausedActionLate:
+        return "caused_action_late";    }
     return "Unknown";
 }
 

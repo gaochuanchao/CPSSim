@@ -72,8 +72,8 @@ FixedDelayNetwork::FixedDelayNetwork(const std::vector<MessageRouteSpec>& routes
             throw std::invalid_argument{
                 "message route send offset must equal the fixed one-tick causal offset"};
         }
-        if (routes_[index].delay <= 0) {
-            throw std::invalid_argument{"message route delay must be positive"};
+        if (routes_[index].delay < 0) {
+            throw std::invalid_argument{"communication route delay must not be negative"};
         }
         if (index > 0 && routes_[index - 1].source_task_id == routes_[index].source_task_id &&
             routes_[index - 1].destination_task_id == routes_[index].destination_task_id) {
@@ -124,7 +124,7 @@ void FixedDelayNetwork::publish(const Event& completion, EventQueue& event_queue
         const Tick send_tick = checked_add(completion.tick(), route.send_offset,
                                            "message send offset must be positive");
         const Tick delivery_tick =
-            checked_add(send_tick, route.delay, "message delay must be positive");
+            checked_add(send_tick, route.delay, "message delay must not be negative");
         messages_.emplace_back(
             allocate_message_id(), JobIdentity{*task_id, *job_id}, route.destination_task_id,
             MessageTiming{
@@ -159,8 +159,14 @@ void FixedDelayNetwork::process_send(const Event& event, EventQueue& event_queue
 
     message.mark_sent();
     if (message.delivery_tick() <= stop_tick_) {
+        // For zero-delay links, the delivery occurs at the same tick as the send
+        // but after the CausedAction phase. Use CausedActionLate to ensure
+        // MessageSend (CausedAction) is processed before MessageDelivery.
+        const auto delivery_phase = (message.delivery_tick() == message.send_tick())
+            ? EventPhase::CausedActionLate
+            : EventPhase::MessageDelivery;
         const auto delivery_sequence = event_queue.schedule(
-            message.delivery_tick(), EventPhase::MessageDelivery, EventType::MessageDelivery,
+            message.delivery_tick(), delivery_phase, EventType::MessageDelivery,
             delivery_entities(message), event.sequence());
         message.set_delivery_event_sequence(delivery_sequence);
     }

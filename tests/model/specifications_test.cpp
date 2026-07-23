@@ -185,7 +185,7 @@ TEST_CASE("experiment configuration validates message routes", "[model][configur
     REQUIRE_THROWS_AS(make_with_routes({MessageRouteSpec{.source_task_id = TaskId{1},
                                                          .destination_task_id = TaskId{2},
                                                          .send_offset = 1,
-                                                         .delay = 0}}),
+                                                         .delay = -1}}),
                       std::invalid_argument);
     REQUIRE_THROWS_AS(make_with_routes({MessageRouteSpec{.source_task_id = TaskId{1},
                                                          .destination_task_id = TaskId{2},

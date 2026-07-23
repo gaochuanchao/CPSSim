@@ -157,8 +157,10 @@ void validate_message_routes(const std::vector<MessageRouteSpec>& routes,
             throw std::invalid_argument{
                 "message route send offset must equal the fixed one-tick causal offset"};
         }
-        if (current->delay <= 0) {
-            throw std::invalid_argument{"message route delay must be positive"};
+        if (current->kind == 1 && current->delay != 0) {
+            throw std::invalid_argument{"logical link latency must be zero"};
+        } else if (current->kind != 1 && current->delay < 0) {
+            throw std::invalid_argument{"communication link latency must not be negative"};
         }
 
         for (auto other = routes.begin(); other != current; ++other) {

@@ -129,7 +129,7 @@ TEST_CASE("fixed delay network rejects invalid routes and event progression",
     REQUIRE_THROWS_AS((FixedDelayNetwork{{MessageRouteSpec{.source_task_id = TaskId{1},
                                                            .destination_task_id = TaskId{2},
                                                            .send_offset = 1,
-                                                           .delay = 0}},
+                                                           .delay = -1}},
                                          10}),
                       std::invalid_argument);
     REQUIRE_THROWS_AS((FixedDelayNetwork{{MessageRouteSpec{.source_task_id = TaskId{1},

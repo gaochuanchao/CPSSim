@@ -48,6 +48,8 @@ int phase_precedence(EventPhase phase) {
         return 5;
     case EventPhase::CausedAction:
         return 6;
+    case EventPhase::CausedActionLate:
+        return 7;
     }
     return -1;
 }
@@ -68,6 +70,8 @@ const char* phase_name(EventPhase phase) {
         return "scheduling";
     case EventPhase::CausedAction:
         return "caused_action";
+    case EventPhase::CausedActionLate:
+        return "caused_action_late";
     }
     return "unknown";
 }

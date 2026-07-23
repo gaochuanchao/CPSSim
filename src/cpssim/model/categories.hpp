@@ -36,6 +36,7 @@ enum class EventPhase {
     PolicyUpdate,
     Scheduling,
     CausedAction,
+    CausedActionLate,
 };
 
 /*** Enumerates mutually exclusive lifecycle states of one job instance. ***/

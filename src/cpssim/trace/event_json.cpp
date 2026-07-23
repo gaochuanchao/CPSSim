@@ -43,6 +43,8 @@ std::string_view event_phase_name(EventPhase phase) {
         return "scheduling";
     case EventPhase::CausedAction:
         return "caused_action";
+    case EventPhase::CausedActionLate:
+        return "caused_action_late";
     }
 
     throw std::logic_error{"event phase has no JSON representation"};

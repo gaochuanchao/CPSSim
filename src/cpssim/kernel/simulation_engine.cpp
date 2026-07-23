@@ -31,6 +31,7 @@ bool is_pre_scheduling(EventPhase phase) {
         return true;
     case EventPhase::Scheduling:
     case EventPhase::CausedAction:
+    case EventPhase::CausedActionLate:
         return false;
     }
     throw std::logic_error{"event phase is outside the scheduling cycle"};

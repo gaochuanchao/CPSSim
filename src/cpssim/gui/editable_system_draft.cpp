@@ -660,10 +660,15 @@ SystemDraftBuildResult EditableSystemDraft::build() const {
                 "message route send offset must equal the fixed one-tick causal offset",
                 route.source_task_id);
         }
-        if (route.delay <= 0) {
-            add_diagnostic(result, SystemDraftDiagnosticCode::NonPositive,
+        if (route.kind == GuiConnectionKind::Logical && route.delay != 0) {
+            add_diagnostic(result, SystemDraftDiagnosticCode::Unsupported,
                            SystemDraftEntityKind::MessageRoute, index, SystemDraftField::Delay,
-                           "message delay must be positive", route.source_task_id);
+                           "logical link latency must be zero", route.source_task_id);
+        } else if (route.kind != GuiConnectionKind::Logical && route.delay < 0) {
+            add_diagnostic(result, SystemDraftDiagnosticCode::Negative,
+                           SystemDraftEntityKind::MessageRoute, index, SystemDraftField::Delay,
+                           "communication link latency must not be negative",
+                           route.source_task_id);
         }
         for (std::size_t other = 0; other < index; ++other) {
             if (route.source_task_id == routes_[other].source_task_id &&

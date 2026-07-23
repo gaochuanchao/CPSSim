@@ -37,6 +37,8 @@ int phase_precedence(EventPhase phase) {
         return 5;
     case EventPhase::CausedAction:
         return 6;
+    case EventPhase::CausedActionLate:
+        return 7;
     }
 
     throw std::logic_error{"event phase has no queue precedence"};
