@@ -180,7 +180,8 @@ void QtExperimentExplorerWidget::apply_current_selection() {
         selection.select_task(TaskId{first});
         break;
     case ExplorerItemKind::Route:
-        selection.select_message_route({TaskId{first}, TaskId{second}});
+        selection.select_connection(
+            GuiConnectionId{GuiConnectionKind::Communication, TaskId{first}, TaskId{second}});
         break;
     }
     bridge_.notify_structural_selection_changed();

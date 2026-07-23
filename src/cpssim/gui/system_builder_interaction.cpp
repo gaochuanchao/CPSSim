@@ -109,8 +109,11 @@ SystemBuilderInteractionResult create_message_route(TaskId source, TaskId destin
     // Create the route using existing domain defaults (send_offset=1, delay=1)
     static_cast<void>(draft.add_message_route(source, destination));
 
-    // Select the newly created route
-    selection.select_message_route(DraftMessageRouteKey{source, destination});
+    // Select the canonical Communication GuiConnectionId.
+    // This ensures the route is immediately editable and deletable through the
+    // Architecture view without requiring a second click.
+    selection.select_connection(
+        GuiConnectionId{GuiConnectionKind::Communication, source, destination});
 
     return {.changed = true, .diagnostic = {}};
 }
@@ -171,7 +174,9 @@ SystemExplorerActionResult SystemExplorerInteraction::create(StructuralSection s
         if (!route.has_value()) {
             return failed_action("No unused message-route endpoint pair is available.");
         }
-        selection.select_message_route(route.value());
+        selection.select_connection(
+            GuiConnectionId{GuiConnectionKind::Communication, route->source_task_id,
+                           route->destination_task_id});
         return select_created(section, selection, SystemBuilderFocusTarget::RouteSource);
     }
     }
@@ -230,7 +235,9 @@ SystemExplorerActionResult SystemExplorerInteraction::duplicate(const Structural
             return failed_action(
                 create_availability(StructuralSection::MessageRoutes, draft).explanation);
         }
-        selection.select_message_route(*duplicated);
+        selection.select_connection(
+            GuiConnectionId{GuiConnectionKind::Communication, duplicated->source_task_id,
+                           duplicated->destination_task_id});
         return select_created(StructuralSection::MessageRoutes, selection,
                               SystemBuilderFocusTarget::RouteSource);
     }

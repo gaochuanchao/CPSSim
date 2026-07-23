@@ -150,6 +150,11 @@ void synchronize_structural_selection(StructuralSelection& selection,
                        row.destination_task_id == key->destination_task_id;
             })) {
             selection.select_section(StructuralSection::MessageRoutes);
+        } else {
+            // Normalize to canonical Communication GuiConnectionId.
+            selection.select_connection(
+                GuiConnectionId{GuiConnectionKind::Communication, key->source_task_id,
+                                key->destination_task_id});
         }
         return;
     }

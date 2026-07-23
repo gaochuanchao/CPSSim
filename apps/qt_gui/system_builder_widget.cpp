@@ -583,8 +583,10 @@ void QtSystemBuilderWidget::connect_editors() {
                         else
                             route.destination_task_id = replacement;
                         draft.set_message_route(*index, route);
-                        selection.select_message_route(
-                            {route.source_task_id, route.destination_task_id});
+                        selection.select_connection(
+                            GuiConnectionId{GuiConnectionKind::Communication,
+                                            route.source_task_id,
+                                            route.destination_task_id});
                     }
                 });
             });

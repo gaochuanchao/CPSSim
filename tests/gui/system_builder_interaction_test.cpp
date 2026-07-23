@@ -132,7 +132,10 @@ TEST_CASE("create_message_route creates and selects a valid route",
     REQUIRE((draft.routes()[0].destination_task_id == TaskId{2}));
     REQUIRE((draft.routes()[0].send_offset == message_route_send_offset_ticks));
     REQUIRE((draft.routes()[0].delay == 1));
-    REQUIRE((selection.message_route() == DraftMessageRouteKey{TaskId{1}, TaskId{2}}));
+    // The canonical selection is a Communication GuiConnectionId.
+    REQUIRE((selection.connection() ==
+             GuiConnectionId{GuiConnectionKind::Communication, TaskId{1}, TaskId{2}}));
+    REQUIRE((selection.kind() == StructuralSelectionKind::Connection));
 }
 
 TEST_CASE("create_message_route rejects missing source",
@@ -182,14 +185,16 @@ TEST_CASE("create_message_route uses existing domain defaults",
     REQUIRE(draft.routes()[0].delay == 1);
 }
 
-TEST_CASE("create_message_route selects the created route",
+TEST_CASE("create_message_route selects canonical Communication GuiConnectionId",
           "[gui][system-builder][connection][selection]") {
     auto draft = EditableSystemDraft::minimal();
     draft.add_task(); // TaskId{2}
     StructuralSelection selection;
     selection.select_system();
     REQUIRE(create_message_route(TaskId{1}, TaskId{2}, draft, selection).changed);
-    REQUIRE((selection.message_route() == DraftMessageRouteKey{TaskId{1}, TaskId{2}}));
+    REQUIRE((selection.connection() ==
+             GuiConnectionId{GuiConnectionKind::Communication, TaskId{1}, TaskId{2}}));
+    REQUIRE((selection.kind() == StructuralSelectionKind::Connection));
 }
 
 TEST_CASE("delete route via remove_message_route",
