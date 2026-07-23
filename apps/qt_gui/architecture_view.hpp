@@ -55,6 +55,7 @@ class QtArchitectureView final : public QWidget {
     void persist_node_position(GuiGraphNodeId entity, QPointF position);
     void auto_layout();
     void snap_node_position(QtNodes::NodeId node_id, QPointF position);
+    void commit_graphics_node_positions();
     void synchronize_scene_selection();
     void trigger_add_task();
     void refresh_appearance();
@@ -80,6 +81,7 @@ class QtArchitectureView final : public QWidget {
     bool snap_to_grid_{true};
     bool synchronizing_scene_selection_{false};
     bool rebuilding_scene_{false};
+    bool committing_node_positions_{false};
 
     QAction* add_task_action_{nullptr};
     QAction* edit_action_{nullptr};

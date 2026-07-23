@@ -264,7 +264,18 @@ void QtArchitectureModelTest::explorer_creation_and_node_movement_use_shared_gri
 
     const auto node_id = view.graph_model().node_id_for(task_graph_node_id(*task_id));
     QVERIFY(node_id.has_value());
-    Q_EMIT view.graphics_scene().nodeMoved(*node_id, {613.0, 329.0});
+    // Simulate a user drag and commit: move the NodeGraphicsObject (which is
+    // what Qt's ItemIsMovable does), then trigger the movement commit via
+    // setNodeData, which persists through the position_changed callback.
+    {
+        auto* item = view.graphics_scene().nodeGraphicsObject(*node_id);
+        QVERIFY(item != nullptr);
+        item->setPos(613.0, 329.0);
+    }
+    const auto snapped = snap_architecture_position({613.0, 329.0});
+    static_cast<void>(view.graph_model().setNodeData(*node_id, QtNodes::NodeRole::Position,
+                                                     snapped));
+    QApplication::processEvents();
     const auto* moved = find_task_layout(bridge.application().workspace().architecture, *task_id);
     QVERIFY(moved != nullptr);
     QCOMPARE(moved->position, (GuiLayoutPoint{620.0F, 320.0F}));

@@ -42,9 +42,14 @@ class QtArchitectureGraphicsView final : public QtNodes::GraphicsView {
     using QtNodes::GraphicsView::GraphicsView;
     using ContextMenuHandler =
         std::function<void(const QPoint& viewport_position, const QPointF& scene_position)>;
+    using NodeMoveFinishedHandler = std::function<void()>;
 
     void set_context_menu_handler(ContextMenuHandler handler) {
         context_menu_handler_ = std::move(handler);
+    }
+
+    void set_node_move_finished_handler(NodeMoveFinishedHandler handler) {
+        node_move_finished_handler_ = std::move(handler);
     }
 
   protected:
@@ -98,8 +103,16 @@ class QtArchitectureGraphicsView final : public QtNodes::GraphicsView {
         QtNodes::GraphicsView::contextMenuEvent(event);
     }
 
+    void mouseReleaseEvent(QMouseEvent* event) override {
+        QtNodes::GraphicsView::mouseReleaseEvent(event);
+        if (node_move_finished_handler_) {
+            node_move_finished_handler_();
+        }
+    }
+
   private:
     ContextMenuHandler context_menu_handler_;
+    NodeMoveFinishedHandler node_move_finished_handler_;
 };
 
 GuiArchitectureGraph flat_graph(GuiArchitectureGraph graph,
@@ -170,8 +183,8 @@ QtArchitectureView::QtArchitectureView(QtWorkbenchBridge& bridge,
             &QtArchitectureView::select_node);
     connect(scene_.get(), &QGraphicsScene::selectionChanged, this,
             &QtArchitectureView::select_scene_item);
-    connect(scene_.get(), &QtNodes::BasicGraphicsScene::nodeMoved, this,
-            &QtArchitectureView::snap_node_position);
+    graphics_view->set_node_move_finished_handler(
+        [this] { commit_graphics_node_positions(); });
     connect(&bridge_, &QtWorkbenchBridge::presentationChanged, this,
             [this](quint64) { refresh(); });
     connect(&bridge_, &QtWorkbenchBridge::applicationStateChanged, this,
@@ -354,6 +367,47 @@ void QtArchitectureView::snap_node_position(QtNodes::NodeId node_id, QPointF pos
         static_cast<void>(model_.setNodeData(node_id, QtNodes::NodeRole::Position, snapped));
     }
     bridge_.workspace_settings_changed();
+}
+
+void QtArchitectureView::commit_graphics_node_positions() {
+    // Called after mouse release to persist the actual graphics-object
+    // positions to the model and workspace.  The QtNodes library moves
+    // NodeGraphicsObject via QGraphicsObject::mouseMoveEvent (ItemIsMovable)
+    // without calling setNodeData(), so the model position can become stale.
+    if (rebuilding_scene_ || committing_node_positions_) {
+        return;
+    }
+    committing_node_positions_ = true;
+
+    bool any_changed = false;
+    for (const auto node_id : model_.allNodeIds()) {
+        auto* item = scene_->nodeGraphicsObject(node_id);
+        if (item == nullptr) {
+            continue;
+        }
+        const QPointF graphics_pos = item->pos();
+        const QPointF model_pos =
+            model_.nodeData(node_id, QtNodes::NodeRole::Position).toPointF();
+
+        QPointF final_pos = graphics_pos;
+        if (snap_to_grid_) {
+            final_pos = snap_architecture_position(graphics_pos);
+        }
+
+        if (final_pos != model_pos) {
+            // setNodeData triggers position_changed_ -> persist_node_position,
+            // which writes to GuiArchitectureWorkspace.
+            static_cast<void>(
+                model_.setNodeData(node_id, QtNodes::NodeRole::Position, final_pos));
+            any_changed = true;
+        }
+    }
+
+    committing_node_positions_ = false;
+
+    if (any_changed) {
+        bridge_.workspace_settings_changed();
+    }
 }
 
 void QtArchitectureView::auto_layout() {
