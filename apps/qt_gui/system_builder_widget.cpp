@@ -2,6 +2,7 @@
 #include "apps/qt_gui/system_builder_widget.hpp"
 #include "apps/qt_gui/structural_edit_controller.hpp"
 
+#include <QApplication>
 #include <QComboBox>
 #include <QDialog>
 #include <QDialogButtonBox>
@@ -604,6 +605,29 @@ void QtSystemBuilderWidget::connect_editors() {
 
     connect(profile_button_, &QPushButton::clicked, this,
             &QtSystemBuilderWidget::open_execution_profile_dialog);
+}
+
+bool QtSystemBuilderWidget::commit_pending_edits() {
+    // Flush every editingFinished-based QLineEdit by forcing focus-out.
+    // This commits System Builder edits that the user typed but did not
+    // confirm with Enter or focus change.
+    if (refreshing_) {
+        return true;
+    }
+    // Use clearFocus() on the focused widget.  Qt sends editingFinished
+    // when the widget loses focus.  We re-focus the pages_ container so
+    // the editor finishes correctly.
+    auto* focused = QApplication::focusWidget();
+    if (focused != nullptr && focused->parent() != nullptr &&
+        focused->parent() == static_cast<QObject*>(pages_->currentWidget())) {
+        // Blocking signals during focus transfer prevents a recursive
+        // commit from the editor's editingFinished handler calling back
+        // into this function.
+        const QSignalBlocker blocker{*focused};
+        focused->clearFocus();
+        pages_->setFocus();
+    }
+    return true;
 }
 
 bool QtSystemBuilderWidget::create_component(StructuralSection section) {

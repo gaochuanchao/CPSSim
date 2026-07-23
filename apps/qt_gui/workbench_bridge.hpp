@@ -43,6 +43,7 @@ class QtWorkbenchBridge final : public QObject {
     void create_project(ProjectCreationRequest request, ProjectRuntimeInputs runtime_inputs = {});
     void open_project(const std::filesystem::path& project_file);
     void save_project();
+    bool apply_and_save_project();
     void save_project_as(const std::filesystem::path& parent_directory, std::string new_name);
     void close_project();
     void workspace_settings_changed();

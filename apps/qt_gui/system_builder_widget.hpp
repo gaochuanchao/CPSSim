@@ -58,6 +58,7 @@ class QtSystemBuilderWidget final : public QWidget {
                                    QWidget* parent = nullptr);
 
     void refresh();
+    bool commit_pending_edits();
     bool create_component(StructuralSection section);
     bool duplicate_selected();
     bool delete_selected(bool confirmed);

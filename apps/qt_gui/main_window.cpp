@@ -637,14 +637,28 @@ bool QtMainWindow::confirm_unapplied_changes() {
     if (message.clickedButton() == cancel) {
         return false;
     }
-    const auto decision = message.clickedButton() == apply ? UnappliedSystemDecision::ApplyAndSave
-                                                           : UnappliedSystemDecision::Discard;
-    const auto result = bridge_->application().resolve_unapplied_changes(decision);
-    if (result.status == ProjectTransitionStatus::Failed) {
-        QMessageBox::critical(this, "Cannot continue", QString::fromStdString(result.diagnostic));
-        return false;
+    if (message.clickedButton() == apply) {
+        // Commit pending editors then use the same complete-save workflow
+        // as Ctrl+S.
+        if (system_builder_ != nullptr) {
+            if (!system_builder_->commit_pending_edits()) {
+                QMessageBox::critical(this, "Cannot apply",
+                                      "System Builder contains invalid input.");
+                return false;
+            }
+        }
+        const auto result = bridge_->application().resolve_unapplied_changes(
+            UnappliedSystemDecision::ApplyAndSave);
+        if (result.status == ProjectTransitionStatus::Failed) {
+            QMessageBox::critical(this, "Cannot continue",
+                                  QString::fromStdString(result.diagnostic));
+            return false;
+        }
+        setWindowModified(false);
+        return result.status == ProjectTransitionStatus::Proceed;
     }
-    return result.status == ProjectTransitionStatus::Proceed;
+    // Discard: leave window dirty state as-is (close will clear it).
+    return true;
 }
 
 bool QtMainWindow::create_generic_project_at(const std::filesystem::path& parent,
@@ -683,7 +697,28 @@ bool QtMainWindow::save_project_now() {
         return false;
     }
     try {
-        bridge_->save_project();
+        // Commit any pending System Builder editor (e.g., user typed but
+        // did not press Enter or click elsewhere).
+        if (system_builder_ != nullptr) {
+            if (!system_builder_->commit_pending_edits()) {
+                return false;
+            }
+        }
+
+        // If there are system/run changes, apply and save the complete
+        // project.  Otherwise save workspace-only changes.
+        if (bridge_->application().editable_system().has_value() &&
+            bridge_->application().system_changes_dirty()) {
+            if (!bridge_->apply_and_save_project()) {
+                return false;
+            }
+        } else {
+            bridge_->save_project();
+        }
+
+        // Update title bar and dirty state after successful save.
+        setWindowModified(false);
+        statusBar()->showMessage("Project saved.", 3000);
         return true;
     } catch (const std::exception& error) {
         report_exception("Save Project", error);
@@ -696,7 +731,25 @@ bool QtMainWindow::save_project_as_to(const std::filesystem::path& parent, std::
         return false;
     }
     try {
+        // Commit pending System Builder edits first.
+        if (system_builder_ != nullptr) {
+            if (!system_builder_->commit_pending_edits()) {
+                return false;
+            }
+        }
+
+        // Apply draft changes before saving-as to ensure the copy includes
+        // all System Builder edits.
+        if (bridge_->application().editable_system().has_value() &&
+            bridge_->application().system_changes_dirty()) {
+            if (!bridge_->apply_and_save_project()) {
+                return false;
+            }
+        }
+
         bridge_->save_project_as(parent, std::move(name));
+        setWindowModified(false);
+        statusBar()->showMessage("Project saved.", 3000);
         refresh_home();
         return true;
     } catch (const std::exception& error) {

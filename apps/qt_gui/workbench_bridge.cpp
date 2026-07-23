@@ -185,6 +185,28 @@ void QtWorkbenchBridge::save_project() {
     Q_EMIT statusChanged();
 }
 
+bool QtWorkbenchBridge::apply_and_save_project() {
+    auto& app = *application_;
+    if (!app.has_active_project() || !app.editable_system().has_value()) {
+        // No draft to apply; just save the project as-is.
+        app.save_project();
+        app.set_status("Project saved.");
+        Q_EMIT statusChanged();
+        return true;
+    }
+    const auto result = app.resolve_unapplied_changes(UnappliedSystemDecision::ApplyAndSave);
+    if (result.status == ProjectTransitionStatus::Failed) {
+        return false;
+    }
+    // After successful replacement, synchronize notifications.
+    Q_EMIT applicationStateChanged();
+    Q_EMIT draftChanged();
+    Q_EMIT workspaceChanged();
+    Q_EMIT structuralSelectionChanged();
+    Q_EMIT statusChanged();
+    return true;
+}
+
 void QtWorkbenchBridge::save_project_as(const std::filesystem::path& parent_directory,
                                         std::string new_name) {
     live_timer_.stop();
