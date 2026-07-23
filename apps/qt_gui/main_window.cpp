@@ -496,6 +496,8 @@ void QtMainWindow::bind_workbench(QtWorkbenchBridge* bridge) {
     system_builder_ = new QtSystemBuilderWidget{*bridge_, *structural_edits_, builder_dock};
     connect(system_builder_, &QtSystemBuilderWidget::taskCreated, architecture,
             &QtArchitectureView::place_task_near_view_center);
+    connect(system_builder_, &QtSystemBuilderWidget::completeSaveRequested, this,
+            [this] { static_cast<void>(save_project_now()); });
     connect(architecture, &QtArchitectureView::editSelectionRequested, this,
             [this] {
                 auto* dock = findChild<QDockWidget*>("dock.systemBuilder");
@@ -697,23 +699,16 @@ bool QtMainWindow::save_project_now() {
         return false;
     }
     try {
-        // Commit any pending System Builder editor (e.g., user typed but
-        // did not press Enter or click elsewhere).
+        // Commit any pending System Builder editor.
         if (system_builder_ != nullptr) {
             if (!system_builder_->commit_pending_edits()) {
                 return false;
             }
         }
 
-        // If there are system/run changes, apply and save the complete
-        // project.  Otherwise save workspace-only changes.
-        if (bridge_->application().editable_system().has_value() &&
-            bridge_->application().system_changes_dirty()) {
-            if (!bridge_->apply_and_save_project()) {
-                return false;
-            }
-        } else {
-            bridge_->save_project();
+        // Apply and save the complete project.
+        if (!bridge_->apply_and_save_project()) {
+            return false;
         }
 
         // Update title bar and dirty state after successful save.

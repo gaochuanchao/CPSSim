@@ -65,10 +65,12 @@ class QtSystemBuilderWidget final : public QWidget {
 
   Q_SIGNALS:
     void taskCreated(TaskId task_id);
+    void completeSaveRequested();
 
   private:
     void build_pages();
     void connect_editors();
+    bool commit_route_latency();
     void refresh_system_page();
     void refresh_resource_page(ResourceId resource_id);
     void refresh_task_page(TaskId task_id,

@@ -561,22 +561,11 @@ void QtSystemBuilderWidget::connect_editors() {
             }));
     });
 
-    const auto route_edit = [this](QLineEdit* source, const QString& text) {
-        connect(source, &QLineEdit::editingFinished, this, [this, source, text] {
-            const auto key = selected_route(bridge_.application().structural_selection());
-            const auto value = tick_value(source);
-            if (refreshing_ || !editing_enabled() || !key.has_value() || !value.has_value())
-                return;
-            edits_.apply(text, [key, value](auto& draft, auto&, auto&) {
-                if (const auto index = route_index(draft, *key); index.has_value()) {
-                    auto route = draft.routes()[*index];
-                    route.delay = *value;
-                    draft.set_message_route(*index, route);
-                }
-            });
-        });
-    };
-    route_edit(route_delay_, "Change route delay");
+    connect(route_delay_, &QLineEdit::editingFinished, this, [this] {
+        if (commit_route_latency()) {
+            Q_EMIT completeSaveRequested();
+        }
+    });
     const auto endpoint_edit = [this](QComboBox* source, bool source_endpoint) {
         connect(
             source, &QComboBox::currentIndexChanged, this, [this, source, source_endpoint](int) {
@@ -608,25 +597,50 @@ void QtSystemBuilderWidget::connect_editors() {
 }
 
 bool QtSystemBuilderWidget::commit_pending_edits() {
-    // Flush every editingFinished-based QLineEdit by forcing focus-out.
-    // This commits System Builder edits that the user typed but did not
-    // confirm with Enter or focus change.
+    // Commit the currently focused System Builder editor by calling its
+    // explicit commit function.  This runs before Ctrl+S to ensure the
+    // visible text is in the draft before saving.
     if (refreshing_) {
         return true;
     }
-    // Use clearFocus() on the focused widget.  Qt sends editingFinished
-    // when the widget loses focus.  We re-focus the pages_ container so
-    // the editor finishes correctly.
     auto* focused = QApplication::focusWidget();
-    if (focused != nullptr && focused->parent() != nullptr &&
-        focused->parent() == static_cast<QObject*>(pages_->currentWidget())) {
-        // Blocking signals during focus transfer prevents a recursive
-        // commit from the editor's editingFinished handler calling back
-        // into this function.
-        const QSignalBlocker blocker{*focused};
-        focused->clearFocus();
-        pages_->setFocus();
+    if (focused == nullptr) {
+        return true;
     }
+    if (focused == route_delay_) {
+        return commit_route_latency();
+    }
+    // For all other QLineEdit fields, editingFinished fires on focus loss,
+    // so the value is already committed if the user clicked somewhere else.
+    // If the field still has focus, clearFocus triggers its editingFinished.
+    if (qobject_cast<QLineEdit*>(focused) != nullptr) {
+        focused->clearFocus();
+    }
+    return true;
+}
+
+bool QtSystemBuilderWidget::commit_route_latency() {
+    if (refreshing_ || !editing_enabled()) {
+        return true;
+    }
+    const auto key = selected_route(bridge_.application().structural_selection());
+    const auto value = tick_value(route_delay_);
+    if (!key.has_value() || !value.has_value()) {
+        return false;
+    }
+    // Check whether the value actually changed to avoid a no-op undo command.
+    const auto& draft = *bridge_.application().editable_system();
+    const auto index = route_index(draft, *key);
+    if (index.has_value() && draft.routes()[*index].delay == *value) {
+        return true;  // unchanged
+    }
+    edits_.apply("Change route delay", [key, value](auto& system_draft, auto&, auto&) {
+        if (const auto idx = route_index(system_draft, *key); idx.has_value()) {
+            auto route = system_draft.routes()[*idx];
+            route.delay = *value;
+            system_draft.set_message_route(*idx, route);
+        }
+    });
     return true;
 }
 
