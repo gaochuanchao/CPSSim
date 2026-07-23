@@ -39,10 +39,15 @@ namespace {
 
 class QtArchitectureGraphicsView final : public QtNodes::GraphicsView {
   public:
-    using QtNodes::GraphicsView::GraphicsView;
     using ContextMenuHandler =
         std::function<void(const QPoint& viewport_position, const QPointF& scene_position)>;
     using NodeMoveFinishedHandler = std::function<void()>;
+
+    explicit QtArchitectureGraphicsView(QtNodes::BasicGraphicsScene* scene,
+                                        QWidget* parent = nullptr)
+        : QtNodes::GraphicsView(scene, parent) {
+        disable_qtnodes_history_shortcuts();
+    }
 
     void set_context_menu_handler(ContextMenuHandler handler) {
         context_menu_handler_ = std::move(handler);
@@ -111,6 +116,28 @@ class QtArchitectureGraphicsView final : public QtNodes::GraphicsView {
     }
 
   private:
+    void disable_qtnodes_history_shortcuts() {
+        const auto undo_bindings = QKeySequence::keyBindings(QKeySequence::Undo);
+        const auto redo_bindings = QKeySequence::keyBindings(QKeySequence::Redo);
+
+        for (auto* action : actions()) {
+            if (action == nullptr) {
+                continue;
+            }
+            const auto shortcuts = action->shortcuts();
+            bool is_history_action = false;
+            for (const auto& shortcut : shortcuts) {
+                if (undo_bindings.contains(shortcut) || redo_bindings.contains(shortcut)) {
+                    is_history_action = true;
+                    break;
+                }
+            }
+            if (is_history_action) {
+                action->setShortcuts({});
+            }
+        }
+    }
+
     ContextMenuHandler context_menu_handler_;
     NodeMoveFinishedHandler node_move_finished_handler_;
 };
