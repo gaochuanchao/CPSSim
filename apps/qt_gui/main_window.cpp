@@ -627,9 +627,25 @@ void QtMainWindow::report_exception(const QString& action, const std::exception&
 }
 
 bool QtMainWindow::confirm_unapplied_changes() {
-    if (bridge_ == nullptr || !bridge_->application().system_changes_dirty()) {
+    if (bridge_ == nullptr) {
         return true;
     }
+
+    // Commit any pending System Builder editor before evaluating dirty state.
+    // This ensures focus-loss-uncommitted edits are reflected in the dirty
+    // check and the confirmation dialog provides an accurate choice.
+    if (system_builder_ != nullptr) {
+        if (!system_builder_->commit_pending_edits()) {
+            QMessageBox::critical(this, "Cannot apply",
+                                  "System Builder contains invalid input.");
+            return false;
+        }
+    }
+
+    if (!bridge_->application().system_changes_dirty()) {
+        return true;
+    }
+
     QMessageBox message{QMessageBox::Question, "Unapplied changes",
                         "The System Builder has unapplied changes.", QMessageBox::NoButton, this};
     auto* apply = message.addButton("Apply and Save", QMessageBox::AcceptRole);
@@ -641,13 +657,7 @@ bool QtMainWindow::confirm_unapplied_changes() {
     }
     if (message.clickedButton() == apply) {
         // Use the same complete-save workflow as Ctrl+S.
-        if (system_builder_ != nullptr) {
-            if (!system_builder_->commit_pending_edits()) {
-                QMessageBox::critical(this, "Cannot apply",
-                                      "System Builder contains invalid input.");
-                return false;
-            }
-        }
+        // commit_pending_edits was already called above, so no need to repeat.
         if (!bridge_->apply_and_save_project()) {
             return false;
         }

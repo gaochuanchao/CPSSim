@@ -62,7 +62,8 @@ std::optional<DraftMessageRouteKey> selected_route(const StructuralSelection& se
     }
     if (selection.kind() == StructuralSelectionKind::Connection) {
         const auto connection = selection.connection();
-        if (connection.has_value() && connection->kind == GuiConnectionKind::Communication) {
+        if (connection.has_value()) {
+            // Both Communication and Logical connections resolve to a route key.
             return DraftMessageRouteKey{connection->source_task_id,
                                         connection->destination_task_id};
         }
@@ -590,9 +591,10 @@ void QtSystemBuilderWidget::connect_editors() {
     });
 
     connect(route_delay_, &QLineEdit::editingFinished, this, [this] {
-        if (commit_route_latency()) {
-            Q_EMIT completeSaveRequested();
-        }
+        // editingFinished commits the field value only — it must never request
+        // project persistence.  Only explicit user actions (Ctrl+S, File Save)
+        // trigger the save workflow.
+        commit_route_latency();
     });
     const auto endpoint_edit = [this](QComboBox* source, bool source_endpoint) {
         connect(
@@ -639,6 +641,17 @@ bool QtSystemBuilderWidget::commit_pending_edits() {
         return true;
     }
     if (focused == route_delay_) {
+        // If the selected route is Logical, the latency field is hidden
+        // and should not block commits.  Just clear focus silently.
+        const auto key = selected_route(bridge_.application().structural_selection());
+        if (key.has_value() && bridge_.application().editable_system().has_value()) {
+            const auto& draft = *bridge_.application().editable_system();
+            const auto index = route_index(draft, *key);
+            if (index.has_value() && draft.routes()[*index].kind == GuiConnectionKind::Logical) {
+                focused->clearFocus();
+                return true;
+            }
+        }
         return commit_route_latency();
     }
     // For all other QLineEdit fields, editingFinished fires on focus loss,
@@ -932,11 +945,22 @@ void QtSystemBuilderWidget::refresh_connection_page() {
     const auto& application = bridge_.application();
     const auto& draft = *application.editable_system();
     const auto key = selected_route(application.structural_selection());
-    const auto conn = application.structural_selection().connection();
-    const auto logical =
-        conn.has_value() && conn->kind == GuiConnectionKind::Logical;
-    const auto communication =
-        conn.has_value() && conn->kind == GuiConnectionKind::Communication;
+
+    // Derive the authoritative kind from the draft route, not only from
+    // StructuralSelection (which may be stale during type conversion).
+    auto logical = false;
+    if (key.has_value()) {
+        const auto index = route_index(draft, *key);
+        if (index.has_value()) {
+            logical = draft.routes()[*index].kind == GuiConnectionKind::Logical;
+        }
+    }
+    if (!key.has_value()) {
+        // Fall back to selection when no draft route matches.
+        const auto conn = application.structural_selection().connection();
+        logical = conn.has_value() && conn->kind == GuiConnectionKind::Logical;
+    }
+    const auto communication = !logical;
     // Update heading text based on connection kind.
     if (logical) {
         connection_heading_->setText("Logical Connection Object");
@@ -944,18 +968,36 @@ void QtSystemBuilderWidget::refresh_connection_page() {
         connection_heading_->setText("Communication Connection Object");
     }
     pages_->setCurrentWidget(connection_page_);
-    connection_source_->clear();
-    connection_destination_->clear();
-    for (const auto& task : draft.tasks()) {
-        const auto value = static_cast<qulonglong>(task.id.value());
-        connection_source_->addItem(QString::fromStdString(task.name), value);
-        connection_destination_->addItem(QString::fromStdString(task.name), value);
-    }
-    if (key.has_value()) {
-        connection_source_->setCurrentIndex(
-            connection_source_->findData(static_cast<qulonglong>(key->source_task_id.value())));
-        connection_destination_->setCurrentIndex(connection_destination_->findData(
-            static_cast<qulonglong>(key->destination_task_id.value())));
+    {
+        // Block signals during population to prevent currentIndexChanged from
+        // triggering structural edits during refresh.
+        const QSignalBlocker src_blocker{connection_source_};
+        const QSignalBlocker dst_blocker{connection_destination_};
+        connection_source_->clear();
+        connection_destination_->clear();
+        for (const auto& task : draft.tasks()) {
+            const auto value = static_cast<qulonglong>(task.id.value());
+            connection_source_->addItem(QString::fromStdString(task.name), value);
+            connection_destination_->addItem(QString::fromStdString(task.name), value);
+        }
+        if (key.has_value()) {
+            auto select_or_warn = [](QComboBox* combo, TaskId expected) {
+                const auto idx = combo->findData(static_cast<qulonglong>(expected.value()));
+                if (idx >= 0) {
+                    combo->setCurrentIndex(idx);
+                } else {
+                    // Task unavailable — insert a placeholder to avoid showing
+                    // the wrong task name at index 0.
+                    combo->insertItem(0,
+                                      QStringLiteral("<Unavailable task %1>")
+                                          .arg(expected.value()),
+                                      static_cast<qulonglong>(expected.value()));
+                    combo->setCurrentIndex(0);
+                }
+            };
+            select_or_warn(connection_source_, key->source_task_id);
+            select_or_warn(connection_destination_, key->destination_task_id);
+        }
     }
     const auto index = key.has_value() ? route_index(draft, *key) : std::nullopt;
     // Update kind combo without triggering its signal.

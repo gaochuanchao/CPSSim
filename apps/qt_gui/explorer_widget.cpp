@@ -179,10 +179,25 @@ void QtExperimentExplorerWidget::apply_current_selection() {
     case ExplorerItemKind::Task:
         selection.select_task(TaskId{first});
         break;
-    case ExplorerItemKind::Route:
+    case ExplorerItemKind::Route: {
+        // Look up the actual route kind from the draft so Logical links
+        // are selected as Logical, not always Communication.
+        auto route_kind = GuiConnectionKind::Communication;
+        if (bridge_.application().editable_system().has_value()) {
+            const auto& routes = bridge_.application().editable_system()->routes();
+            const auto found = std::find_if(routes.begin(), routes.end(),
+                                            [&](const auto& r) {
+                                                return r.source_task_id == TaskId{first} &&
+                                                       r.destination_task_id == TaskId{second};
+                                            });
+            if (found != routes.end()) {
+                route_kind = found->kind;
+            }
+        }
         selection.select_connection(
-            GuiConnectionId{GuiConnectionKind::Communication, TaskId{first}, TaskId{second}});
+            GuiConnectionId{route_kind, TaskId{first}, TaskId{second}});
         break;
+    }
     }
     bridge_.notify_structural_selection_changed();
 }
