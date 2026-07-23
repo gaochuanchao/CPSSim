@@ -63,6 +63,9 @@ class QtStructuralEditControllerTest final : public QObject {
     void projectSwitchClearsStaleHistory();
     void systemBuilderFieldEditsRemainUndoable();
     void architectureTaskCreationSharesHistory();
+    void mixedChronologicalUndoRedo();
+    void runningStateRejectsConnectionCreation();
+    void projectSaveAsClearsHistory();
 };
 
 void QtStructuralEditControllerTest::applyMutationUndoRedo() {
@@ -211,6 +214,195 @@ void QtStructuralEditControllerTest::protectedProjectRejection() {
     QCOMPARE(edits.edit_policy(), ProjectSystemEditPolicy::Generic);
     const auto task_id = edits.create_task();
     QVERIFY(task_id.has_value());
+}
+
+void QtStructuralEditControllerTest::mixedChronologicalUndoRedo() {
+    TemporaryDirectory temporary;
+    QtWorkbenchBridge bridge{make_application(temporary.path())};
+    QtStructuralEditController edits{bridge};
+
+    // 1. Add a task
+    const auto task2 = edits.create_task();
+    QVERIFY(task2.has_value());
+    QCOMPARE(bridge.application().editable_system()->tasks().size(), 2);
+    const auto task2_id = *task2;
+
+    // 2. Edit task property (rename)
+    QVERIFY(edits.apply("Rename task", [&](auto& draft, auto&, auto&) {
+        const auto idx = std::distance(draft.tasks().begin(),
+                                       std::find_if(draft.tasks().begin(), draft.tasks().end(),
+                                                    [&](const auto& t) { return t.id == task2_id; }));
+        draft.set_task_name(static_cast<std::size_t>(idx), "RenamedTask");
+    }));
+    QCOMPARE(bridge.application().editable_system()->tasks().back().name, std::string{"RenamedTask"});
+
+    // 3. Duplicate a task
+    bridge.application().structural_selection().select_task(
+        bridge.application().editable_system()->tasks().front().id);
+    QVERIFY(edits.duplicate_selected());
+    QCOMPARE(bridge.application().editable_system()->tasks().size(), 3);
+
+    // 4. Create a Communication link
+    const auto& tasks = bridge.application().editable_system()->tasks();
+    const TaskId first_id = tasks[0].id;
+    QVERIFY(edits.create_connection(first_id, task2_id, 0)); // Communication
+    QCOMPARE(bridge.application().editable_system()->routes().size(), 1);
+    QCOMPARE(bridge.application().editable_system()->routes()[0].kind,
+             GuiConnectionKind::Communication);
+
+    // 5. Convert it to Logical
+    // Select the route, then apply the kind change via set_message_route
+    auto route = bridge.application().editable_system()->routes()[0];
+    route.kind = GuiConnectionKind::Logical;
+    route.delay = Tick{0};
+    QVERIFY(edits.apply("Change link type", [&](auto& draft, auto&, auto& selection) {
+        draft.set_message_route(0, route);
+        selection.select_connection(
+            GuiConnectionId{GuiConnectionKind::Logical, route.source_task_id, route.destination_task_id});
+    }));
+    QCOMPARE(bridge.application().editable_system()->routes()[0].kind,
+             GuiConnectionKind::Logical);
+
+    // 6. Change an endpoint
+    const TaskId third_id = tasks.back().id;
+    QVERIFY(edits.apply("Change route endpoint", [&](auto& draft, auto&, auto& selection) {
+        auto r = draft.routes()[0];
+        r.source_task_id = third_id;
+        draft.set_message_route(0, r);
+        selection.select_connection(
+            GuiConnectionId{GuiConnectionKind::Logical, r.source_task_id, r.destination_task_id});
+    }));
+    QCOMPARE(bridge.application().editable_system()->routes()[0].source_task_id, third_id);
+
+    // 7. Delete the link
+    GuiConnectionId conn{GuiConnectionKind::Logical, third_id, task2_id};
+    QVERIFY(edits.delete_connection(conn));
+    QCOMPARE(bridge.application().editable_system()->routes().size(), 0);
+
+    // --- Verify full undo sequence ---
+    // Undo 7: Delete link → link restored
+    QVERIFY(edits.undo_stack().canUndo());
+    edits.undo_stack().undo();
+    QCOMPARE(bridge.application().editable_system()->routes().size(), 1);
+    QCOMPARE(bridge.application().editable_system()->routes()[0].source_task_id, third_id);
+
+    // Undo 6: Endpoint change → source restored
+    edits.undo_stack().undo();
+    QCOMPARE(bridge.application().editable_system()->routes()[0].source_task_id, first_id);
+
+    // Undo 5: Kind conversion → Communication
+    edits.undo_stack().undo();
+    QCOMPARE(bridge.application().editable_system()->routes()[0].kind,
+             GuiConnectionKind::Communication);
+
+    // Undo 4: Delete link creation → no routes
+    edits.undo_stack().undo();
+    QCOMPARE(bridge.application().editable_system()->routes().size(), 0);
+
+    // Undo 3: Duplicate → task count back to 2
+    edits.undo_stack().undo();
+    QCOMPARE(bridge.application().editable_system()->tasks().size(), 2);
+
+    // Undo 2: Rename → original name
+    edits.undo_stack().undo();
+    QCOMPARE(bridge.application().editable_system()->tasks().size(), 2);
+    // After undoing the rename, the task with task2_id now has its original default name "task-2".
+    {
+        const auto& ts = bridge.application().editable_system()->tasks();
+        const auto found = std::find_if(ts.begin(), ts.end(),
+                                        [&](const auto& t) { return t.id == task2_id; });
+        QVERIFY(found != ts.end());
+        QCOMPARE(found->name, std::string{"task-2"});
+    }
+
+    // Undo 1: Task creation → back to 1 task
+    edits.undo_stack().undo();
+    QCOMPARE(bridge.application().editable_system()->tasks().size(), 1);
+
+    // --- Verify full redo sequence ---
+    edits.undo_stack().redo();
+    QCOMPARE(bridge.application().editable_system()->tasks().size(), 2);
+
+    edits.undo_stack().redo();
+    QCOMPARE(bridge.application().editable_system()->tasks().size(), 2);
+    {
+        const auto& ts = bridge.application().editable_system()->tasks();
+        const auto found = std::find_if(ts.begin(), ts.end(),
+                                        [&](const auto& t) { return t.id == task2_id; });
+        QVERIFY(found != ts.end());
+        QCOMPARE(found->name, std::string{"RenamedTask"});
+    }
+
+    edits.undo_stack().redo();
+    QCOMPARE(bridge.application().editable_system()->tasks().size(), 3);
+
+    edits.undo_stack().redo();
+    QCOMPARE(bridge.application().editable_system()->routes().size(), 1);
+    QCOMPARE(bridge.application().editable_system()->routes()[0].kind,
+             GuiConnectionKind::Communication);
+
+    edits.undo_stack().redo();
+    QCOMPARE(bridge.application().editable_system()->routes()[0].kind,
+             GuiConnectionKind::Logical);
+
+    edits.undo_stack().redo();
+    QCOMPARE(bridge.application().editable_system()->routes()[0].source_task_id, third_id);
+
+    edits.undo_stack().redo();
+    QCOMPARE(bridge.application().editable_system()->routes().size(), 0);
+}
+
+void QtStructuralEditControllerTest::runningStateRejectsConnectionCreation() {
+    TemporaryDirectory temporary;
+    QtWorkbenchBridge bridge{make_application(temporary.path())};
+    QtStructuralEditController edits{bridge};
+
+    // Create a second task
+    QVERIFY(edits.create_task());
+    const auto second = bridge.application().structural_selection().task_id();
+    QVERIFY(second.has_value());
+    const auto first = bridge.application().editable_system()->tasks().front().id;
+
+    // Enter running state
+    bridge.application().enqueue(GuiCommand::Run);
+    bridge.application().update();
+    QVERIFY(!edits.editing_enabled());
+
+    // Connection creation should be rejected
+    const auto count_before = edits.undo_stack().count();
+    QVERIFY(!edits.create_connection(first, *second, 0));
+    QCOMPARE(edits.undo_stack().count(), count_before);
+
+    // Exit running state
+    bridge.application().enqueue(GuiCommand::Pause);
+    bridge.application().update();
+    QVERIFY(edits.editing_enabled());
+}
+
+void QtStructuralEditControllerTest::projectSaveAsClearsHistory() {
+    TemporaryDirectory temporary;
+    const auto root = temporary.path();
+
+    // Create project A
+    auto application = std::make_unique<WorkbenchApplication>();
+    application->create_project(make_generic_project_template(root, "project-a"));
+    QtWorkbenchBridge bridge{std::move(application)};
+    QtStructuralEditController edits{bridge};
+
+    // Perform edits
+    QVERIFY(edits.create_task().has_value());
+    QVERIFY(edits.create_task().has_value());
+    QVERIFY(edits.undo_stack().canUndo());
+
+    // Save As creates a new project root
+    bridge.save_project_as(root, "project-b");
+    QVERIFY(bridge.application().has_active_project());
+    QCOMPARE(bridge.application().active_project().metadata().name, std::string{"project-b"});
+
+    // History should be cleared by synchronize_active_project
+    edits.synchronize_active_project();
+    QCOMPARE(edits.undo_stack().count(), 0);
+    QVERIFY(!edits.undo_stack().canUndo());
 }
 
 void QtStructuralEditControllerTest::projectSwitchClearsStaleHistory() {

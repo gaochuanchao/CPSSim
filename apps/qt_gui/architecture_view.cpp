@@ -197,6 +197,7 @@ QtArchitectureView::QtArchitectureView(QtWorkbenchBridge& bridge,
     toolbar->addAction(actual_size_action_);
     toolbar->addAction(auto_layout_action_);
     toolbar->addAction(snap_action_);
+    toolbar->addSeparator();
     toolbar->addAction(add_task_action_);
     toolbar->addSeparator();
     link_type_selector_ = new QComboBox(toolbar);

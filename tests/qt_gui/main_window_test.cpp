@@ -71,6 +71,13 @@ class QtMainWindowTest final : public QObject {
     // Delete action state reacts to structural selection.
     void structuralSelectionUpdate_enables_delete();
     void structuralSelectionUpdate_disables_delete();
+
+    // Loaded-link Delete tests.
+    void loadedCommunicationLinkDelete();
+    void loadedLogicalLinkDelete();
+
+    // Save/reload and dirty state.
+    void saveReloadPreservesStructure();
 };
 
 void QtMainWindowTest::starts_on_home_with_stable_actions() {
@@ -1255,6 +1262,235 @@ void QtMainWindowTest::structuralSelectionUpdate_disables_delete() {
     bridge->notify_structural_selection_changed();
     QCoreApplication::processEvents();
     QVERIFY(!delete_action->isEnabled());
+}
+
+// ---------------------------------------------------------------------------
+// Loaded-link Delete tests
+// ---------------------------------------------------------------------------
+
+void QtMainWindowTest::loadedCommunicationLinkDelete() {
+    QTemporaryDir temporary;
+    const std::filesystem::path root{temporary.path().toStdString()};
+    QtMainWindow window{false};
+    auto application = std::make_unique<WorkbenchApplication>();
+    application->create_project(make_generic_project_template(root, "project"));
+    auto* bridge = new QtWorkbenchBridge(std::move(application), &window);
+    window.bind_workbench(bridge);
+    window.show();
+    QApplication::setActiveWindow(&window);
+    QCoreApplication::processEvents();
+    QCoreApplication::processEvents();
+
+    auto* edits = window.findChild<QtStructuralEditController*>();
+    QVERIFY(edits != nullptr);
+
+    // Create tasks and a Communication link
+    QVERIFY(edits->create_task());
+    const auto second = bridge->application().structural_selection().task_id();
+    QVERIFY(second.has_value() && *second != TaskId{1});
+    QVERIFY(edits->create_connection(TaskId{1}, *second, 0));
+
+    // Save the project (simulates "loaded from disk")
+    auto* save_action = window.findChild<QAction*>("action.saveProject");
+    QVERIFY(save_action != nullptr);
+    save_action->trigger();
+    QCoreApplication::processEvents();
+    QCoreApplication::processEvents();
+
+    // Verify the link was saved
+    QCOMPARE(bridge->application().editable_system()->routes().size(), 1);
+
+    // Select the Communication link
+    GuiConnectionId conn{GuiConnectionKind::Communication, TaskId{1}, *second};
+    bridge->application().structural_selection().select_connection(conn);
+    bridge->notify_structural_selection_changed();
+    QCoreApplication::processEvents();
+
+    // Delete it through the controller (simulates loaded-link Delete)
+    QVERIFY(edits->delete_connection(conn));
+    QCOMPARE(bridge->application().editable_system()->routes().size(), 0);
+
+    // Undo restores the link
+    edits->undo_stack().undo();
+    QCOMPARE(bridge->application().editable_system()->routes().size(), 1);
+
+    // Redo removes again
+    edits->undo_stack().redo();
+    QCOMPARE(bridge->application().editable_system()->routes().size(), 0);
+}
+
+void QtMainWindowTest::loadedLogicalLinkDelete() {
+    QTemporaryDir temporary;
+    const std::filesystem::path root{temporary.path().toStdString()};
+    QtMainWindow window{false};
+    auto application = std::make_unique<WorkbenchApplication>();
+    application->create_project(make_generic_project_template(root, "project"));
+    auto* bridge = new QtWorkbenchBridge(std::move(application), &window);
+    window.bind_workbench(bridge);
+    window.show();
+    QApplication::setActiveWindow(&window);
+    QCoreApplication::processEvents();
+    QCoreApplication::processEvents();
+
+    auto* edits = window.findChild<QtStructuralEditController*>();
+    QVERIFY(edits != nullptr);
+
+    // Create tasks and a Logical link
+    QVERIFY(edits->create_task());
+    const auto second = bridge->application().structural_selection().task_id();
+    QVERIFY(second.has_value() && *second != TaskId{1});
+    QVERIFY(edits->create_connection(TaskId{1}, *second, 1)); // kind=1 -> Logical
+
+    // Save the project
+    auto* save_action = window.findChild<QAction*>("action.saveProject");
+    QVERIFY(save_action != nullptr);
+    save_action->trigger();
+    QCoreApplication::processEvents();
+    QCoreApplication::processEvents();
+
+    QCOMPARE(bridge->application().editable_system()->routes().size(), 1);
+    QCOMPARE(bridge->application().editable_system()->routes()[0].kind,
+             GuiConnectionKind::Logical);
+
+    // Select and delete the Logical link
+    GuiConnectionId conn{GuiConnectionKind::Logical, TaskId{1}, *second};
+    bridge->application().structural_selection().select_connection(conn);
+    bridge->notify_structural_selection_changed();
+    QCoreApplication::processEvents();
+
+    QVERIFY(edits->delete_connection(conn));
+    QCOMPARE(bridge->application().editable_system()->routes().size(), 0);
+
+    // Undo restores
+    edits->undo_stack().undo();
+    QCOMPARE(bridge->application().editable_system()->routes().size(), 1);
+    QCOMPARE(bridge->application().editable_system()->routes()[0].kind,
+             GuiConnectionKind::Logical);
+
+    // Redo removes again
+    edits->undo_stack().redo();
+    QCOMPARE(bridge->application().editable_system()->routes().size(), 0);
+}
+
+// ---------------------------------------------------------------------------
+// Save/reload and dirty-state tests
+// ---------------------------------------------------------------------------
+
+void QtMainWindowTest::saveReloadPreservesStructure() {
+    QTemporaryDir temporary;
+    const std::filesystem::path root{temporary.path().toStdString()};
+    const auto project_dir = root / "save-reload-test";
+    std::filesystem::create_directories(project_dir);
+
+    // Phase 1: Create and edit
+    {
+        QtMainWindow window{false};
+        auto application = std::make_unique<WorkbenchApplication>();
+        application->create_project(make_generic_project_template(project_dir, "project"));
+        auto* bridge = new QtWorkbenchBridge(std::move(application), &window);
+        window.bind_workbench(bridge);
+        window.show();
+        QApplication::setActiveWindow(&window);
+        QCoreApplication::processEvents();
+        QCoreApplication::processEvents();
+
+        auto* edits = window.findChild<QtStructuralEditController*>();
+        QVERIFY(edits != nullptr);
+
+        // Add a resource
+        QVERIFY(edits->create_component(StructuralSection::Resources));
+        const auto resource_id = bridge->application().structural_selection().resource_id();
+        QVERIFY(resource_id.has_value());
+
+        // Add a task
+        QVERIFY(edits->create_task());
+        const auto task_id = bridge->application().structural_selection().task_id();
+        QVERIFY(task_id.has_value());
+
+        // Assign and set profile
+        QVERIFY(edits->apply("Assign and profile", [&](auto& draft, auto& assignments, auto&) {
+            draft.set_execution_profile(*task_id, *resource_id, Tick{5});
+            const auto found = std::find_if(assignments.begin(), assignments.end(),
+                                           [&](const auto& a) { return a.task_id == *task_id; });
+            if (found != assignments.end()) {
+                found->resource_id = resource_id;
+            } else {
+                assignments.push_back({*task_id, resource_id});
+            }
+        }));
+
+        // Create Communication link
+        const auto& tasks = bridge->application().editable_system()->tasks();
+        QVERIFY(edits->create_connection(tasks[0].id, *task_id, 0));
+
+        // Create Logical link on distinct ordered pair (reverse direction)
+        QVERIFY(edits->create_connection(*task_id, tasks[0].id, 1));
+
+        // Move a task node (via workspace)
+        const auto& workspace = bridge->application().workspace().architecture;
+        set_task_layout_position(const_cast<GuiArchitectureWorkspace&>(workspace),
+                                 tasks[0].id, {100.0F, 200.0F});
+
+        // Save
+        auto* save_action = window.findChild<QAction*>("action.saveProject");
+        QVERIFY(save_action != nullptr);
+        save_action->trigger();
+        QCoreApplication::processEvents();
+        QCoreApplication::processEvents();
+    }
+
+    // Phase 2: Open a fresh application and reload the project
+    {
+        QtMainWindow window{false};
+        auto application = std::make_unique<WorkbenchApplication>();
+        auto* bridge = new QtWorkbenchBridge(std::move(application), &window);
+        window.bind_workbench(bridge);
+        window.show();
+        QApplication::setActiveWindow(&window);
+        QCoreApplication::processEvents();
+        QCoreApplication::processEvents();
+
+        // Open the saved project
+        bridge->open_project(project_dir / "project" / "project.json");
+        QCoreApplication::processEvents();
+        QCoreApplication::processEvents();
+
+        // Verify task count
+        QVERIFY(bridge->application().editable_system().has_value());
+        const auto& draft = *bridge->application().editable_system();
+        QCOMPARE(draft.tasks().size(), 2);
+        QCOMPARE(draft.resources().size(), 2); // default + added
+
+        // Verify link endpoints and kinds
+        QCOMPARE(draft.routes().size(), 2);
+        bool found_comm = false;
+        bool found_logical = false;
+        for (const auto& route : draft.routes()) {
+            if (route.kind == GuiConnectionKind::Communication) {
+                found_comm = true;
+            }
+            if (route.kind == GuiConnectionKind::Logical) {
+                found_logical = true;
+            }
+        }
+        QVERIFY(found_comm);
+        QVERIFY(found_logical);
+
+        // Verify assignments and profiles
+        const auto& assignments = bridge->application().run_assignments();
+        const auto task_id = draft.tasks().back().id;
+        const auto res_id = draft.resources().back().id;
+        const auto assigned = std::find_if(assignments.begin(), assignments.end(),
+                                          [&](const auto& a) { return a.task_id == task_id; });
+        QVERIFY(assigned != assignments.end());
+        QVERIFY(assigned->resource_id.has_value());
+        QCOMPARE(*assigned->resource_id, res_id);
+        QVERIFY(draft.execution_profile(task_id, res_id).has_value());
+        QCOMPARE(*draft.execution_profile(task_id, res_id), Tick{5});
+
+        // Clean dirty state
+        QVERIFY(!bridge->application().system_changes_dirty());
+    }
 }
 
 } // namespace cpssim::qt

@@ -44,10 +44,64 @@ Generic projects now provide a complete forms-and-tables System Builder over a
 detached typed draft. Resources, tasks, execution profiles, routes, and
 explicit default assignments validate before one atomic paused project/session
 replacement; valid unapplied drafts can drive a read-only architecture preview.
+The System Builder layout is a `QSplitter(Qt::Vertical)`:
+the selected-item editor scroll area occupies the top portion, and a compact
+component library (Task / Resource / Connection buttons) occupies the bottom
+portion. The library is visible across all selection pages and uses the shared
+structural controller.
+
 Explorer now owns structural create/duplicate/confirmed-cascade actions and
 drives the selected property editor below it. Structural selection is separate
 from runtime selection; Run Configuration and Runtime Inspector occupy the
 split right sidebar without duplicating structural properties.
+
+The **interactive Architecture** view is fully implemented. It supports:
+
+- right-click empty canvas to add a task at the clicked position;
+- right-click a task node to edit, duplicate, or delete it;
+- right-click a connection to edit or delete it;
+- toolbar Add Task, Fit, 100%, Auto Layout, Snap to Grid;
+- interactive port-drag connection creation for both Communication and Logical
+  link kinds;
+- connection deletion via context menu, Delete key, or Explorer;
+- one shared `QUndoStack` for all structural mutations from Architecture,
+  System Builder, and Explorer;
+- CPSSim-owned Delete, Ctrl+Z, Ctrl+Shift+Z, Ctrl+D, F, Ctrl+0 shortcuts;
+- QtNodes conflicting structural shortcuts suppressed;
+- running-state rejection of all structural mutations;
+- Generic/BoschCompatible/ReadOnlyAdapter edit policy enforcement;
+- refresh preserves workspace task-node positions.
+
+**Ownership invariants:**
+
+- `EditableSystemDraft` is authoritative for editable structure.
+- `GuiArchitectureWorkspace` is authoritative for task-node positions.
+- `StructuralSelection` (in `WorkbenchApplication`) is the single structural
+  selection authority.
+- `QtStructuralEditController` owns all persistent structural mutations and
+  the single shared `QUndoStack`.
+- `QtWorkbenchBridge` coordinates refresh and selection synchronization.
+- `QtNodes` is a rendering and interaction adapter — never persistent truth.
+- `SystemExplorerInteraction` owns headless create/duplicate/cascade-delete
+  lifecycle logic.
+
+**Link invariants (Communication and Logical):**
+
+- links are directed; at most one per ordered task pair.
+- Both kinds are persisted in Generic projects.
+- Communication is drawn solid; Logical is drawn dashed.
+- Logical latency is zero; Logical produces no network events.
+- Communication latency may be zero or positive.
+- Both retain the fixed one-tick send offset.
+- Source, Destination, and kind are editable in System Builder.
+- Kind conversion preserves endpoints, selection, persistence, and Undo.
+- Bosch adapter-owned dependencies are protected.
+
+**Deferred features (not in active scope):**
+
+- Component palette drag/drop onto the Architecture canvas.
+- Component library enhancements beyond the current static button set.
+- Multiple scheduling domains.
 The repository command surface is limited to `make`, `make run-cli`,
 `make run-gui`, `make test`, `make clean`, and `make help`. The CLI provides a
 registered persistent shell and direct commands; its Bosch wizard/direct path
