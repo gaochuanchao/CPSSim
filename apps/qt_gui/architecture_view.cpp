@@ -239,8 +239,10 @@ QtArchitectureView::QtArchitectureView(QtWorkbenchBridge& bridge,
             [this](quint64) { refresh(); });
     connect(&bridge_, &QtWorkbenchBridge::applicationStateChanged, this,
             &QtArchitectureView::refresh);
-    connect(&bridge_, &QtWorkbenchBridge::structuralSelectionChanged, this,
-            &QtArchitectureView::synchronize_scene_selection);
+    connect(&bridge_, &QtWorkbenchBridge::structuralSelectionChanged, this, [this] {
+        synchronize_scene_selection();
+        update_action_state();
+    });
     connect(&bridge_, &QtWorkbenchBridge::draftChanged, this, &QtArchitectureView::refresh);
     connect(&bridge_, &QtWorkbenchBridge::resourceHighlightChanged, this,
             &QtArchitectureView::refresh);

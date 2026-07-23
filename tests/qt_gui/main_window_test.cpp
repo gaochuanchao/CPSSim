@@ -67,6 +67,10 @@ class QtMainWindowTest final : public QObject {
     void link_type_change_marks_dirty();
     void ctrlS_clears_dirty_after_type_change();
     void noop_type_selection_does_not_mutate();
+
+    // Delete action state reacts to structural selection.
+    void structuralSelectionUpdate_enables_delete();
+    void structuralSelectionUpdate_disables_delete();
 };
 
 void QtMainWindowTest::starts_on_home_with_stable_actions() {
@@ -1170,6 +1174,87 @@ void QtMainWindowTest::noop_type_selection_does_not_mutate() {
     // Verify no changes
     QCOMPARE(edits->undo_stack().count(), undo_count_before);
     QCOMPARE(bridge->application().system_changes_dirty(), was_dirty);
+}
+
+// ---------------------------------------------------------------------------
+// Delete action state reacts to structural selection
+// ---------------------------------------------------------------------------
+
+void QtMainWindowTest::structuralSelectionUpdate_enables_delete() {
+    QTemporaryDir temporary;
+    const std::filesystem::path root{temporary.path().toStdString()};
+    QtMainWindow window{false};
+    auto application = std::make_unique<WorkbenchApplication>();
+    application->create_project(make_generic_project_template(root, "project"));
+    auto* bridge = new QtWorkbenchBridge(std::move(application), &window);
+    window.bind_workbench(bridge);
+    window.show();
+    QApplication::setActiveWindow(&window);
+    QCoreApplication::processEvents();
+    QCoreApplication::processEvents();
+
+    auto* edits = window.findChild<QtStructuralEditController*>();
+    QVERIFY(edits != nullptr);
+    QVERIFY(edits->create_task());
+    const auto second = bridge->application().structural_selection().task_id();
+    QVERIFY(second.has_value() && *second != TaskId{1});
+    bridge->application().editable_system()->set_execution_profile(*second, ResourceId{1}, 2);
+    QVERIFY(edits->create_connection(TaskId{1}, *second));
+
+    auto* delete_action = window.findChild<QAction*>("action.architecture.delete");
+    QVERIFY(delete_action != nullptr);
+
+    // After creation the link is selected — Delete should be enabled.
+    QVERIFY(delete_action->isEnabled());
+
+    // Select via explorer-like path: set connection and notify.
+    GuiConnectionId conn{GuiConnectionKind::Communication, TaskId{1}, *second};
+    bridge->application().structural_selection().select_connection(conn);
+    bridge->notify_structural_selection_changed();
+    QCoreApplication::processEvents();
+    QVERIFY(delete_action->isEnabled());
+
+    // Delete through the controller.
+    QVERIFY(edits->delete_connection(conn));
+    QCoreApplication::processEvents();
+    QCOMPARE(bridge->application().editable_system()->routes().size(), 0);
+
+    // Undo restores it.
+    edits->undo_stack().undo();
+    QCoreApplication::processEvents();
+    QCOMPARE(bridge->application().editable_system()->routes().size(), 1);
+}
+
+void QtMainWindowTest::structuralSelectionUpdate_disables_delete() {
+    QTemporaryDir temporary;
+    const std::filesystem::path root{temporary.path().toStdString()};
+    QtMainWindow window{false};
+    auto application = std::make_unique<WorkbenchApplication>();
+    application->create_project(make_generic_project_template(root, "project"));
+    auto* bridge = new QtWorkbenchBridge(std::move(application), &window);
+    window.bind_workbench(bridge);
+    window.show();
+    QApplication::setActiveWindow(&window);
+    QCoreApplication::processEvents();
+    QCoreApplication::processEvents();
+
+    auto* delete_action = window.findChild<QAction*>("action.architecture.delete");
+    QVERIFY(delete_action != nullptr);
+
+    // Initially no selection — Delete disabled.
+    QVERIFY(!delete_action->isEnabled());
+
+    // Select a task — Delete becomes enabled.
+    bridge->application().structural_selection().select_task(TaskId{1});
+    bridge->notify_structural_selection_changed();
+    QCoreApplication::processEvents();
+    QVERIFY(delete_action->isEnabled());
+
+    // Select system — Delete becomes disabled.
+    bridge->application().structural_selection().select_system();
+    bridge->notify_structural_selection_changed();
+    QCoreApplication::processEvents();
+    QVERIFY(!delete_action->isEnabled());
 }
 
 } // namespace cpssim::qt
