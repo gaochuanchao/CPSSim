@@ -11,6 +11,7 @@
 #include <QSignalBlocker>
 #include <QStandardItem>
 #include <QStandardItemModel>
+#include <QTimer>
 #include <QTreeView>
 #include <QVBoxLayout>
 
@@ -103,7 +104,7 @@ QtExperimentExplorerWidget::QtExperimentExplorerWidget(QtWorkbenchBridge& bridge
     connect(&bridge_, &QtWorkbenchBridge::applicationStateChanged, this,
             &QtExperimentExplorerWidget::refresh);
     connect(&bridge_, &QtWorkbenchBridge::structuralSelectionChanged, this,
-            &QtExperimentExplorerWidget::synchronize_selection);
+            &QtExperimentExplorerWidget::schedule_selection_sync);
     refresh();
 }
 
@@ -239,33 +240,78 @@ void QtExperimentExplorerWidget::show_context_menu(const QPoint& position) {
     }
 }
 
+void QtExperimentExplorerWidget::schedule_selection_sync() {
+    if (selection_sync_pending_) {
+        return;
+    }
+    selection_sync_pending_ = true;
+    QTimer::singleShot(0, this, [this] {
+        selection_sync_pending_ = false;
+        // refresh() performs its own synchronization after rebuilding the model.
+        if (!refreshing_) {
+            synchronize_selection();
+        }
+    });
+}
+
 void QtExperimentExplorerWidget::synchronize_selection() {
+    auto* selection_model = tree_->selectionModel();
+    if (selection_model == nullptr) {
+        return;
+    }
+
     const auto selected = bridge_.application().structural_selection();
-    const auto root = model_->invisibleRootItem();
+    const auto* root = model_->invisibleRootItem();
+
     QList<QStandardItem*> pending;
     for (int row = 0; row < root->rowCount(); ++row) {
         pending.push_back(root->child(row));
     }
+
     while (!pending.empty()) {
         auto* candidate = pending.takeFirst();
+
         if (item_matches(*candidate, selected)) {
-            const QSignalBlocker blocker{*tree_->selectionModel()};
-            tree_->selectionModel()->select(
-                candidate->index(),
-                QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
-            tree_->setCurrentIndex(candidate->index());
-            tree_->scrollTo(candidate->index());
+            const auto index = candidate->index();
+
+            // Ensure every parent is visible.
+            for (auto parent = index.parent(); parent.isValid();
+                 parent = parent.parent()) {
+                tree_->expand(parent);
+            }
+
+            {
+                const QSignalBlocker blocker{*selection_model};
+
+                selection_model->setCurrentIndex(
+                    index, QItemSelectionModel::NoUpdate);
+
+                selection_model->select(
+                    index,
+                    QItemSelectionModel::ClearAndSelect |
+                        QItemSelectionModel::Rows);
+            }
+
+            tree_->scrollTo(
+                index, QAbstractItemView::PositionAtCenter);
+            tree_->viewport()->update();
             return;
         }
+
         for (int row = 0; row < candidate->rowCount(); ++row) {
             pending.push_back(candidate->child(row));
         }
     }
-    // No matching explorer row found (e.g., logical connection).
-    // Clear selection and current index without changing structural selection.
-    const QSignalBlocker blocker{*tree_->selectionModel()};
-    tree_->selectionModel()->clearSelection();
-    tree_->setCurrentIndex(QModelIndex{});
+
+    // Logical connections and other entities without Explorer rows.
+    {
+        const QSignalBlocker blocker{*selection_model};
+        selection_model->clearSelection();
+        selection_model->setCurrentIndex(
+            QModelIndex{}, QItemSelectionModel::NoUpdate);
+    }
+
+    tree_->viewport()->update();
 }
 
 } // namespace cpssim::qt

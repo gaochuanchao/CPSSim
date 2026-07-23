@@ -79,6 +79,7 @@ class QtArchitectureView final : public QWidget {
     std::unique_ptr<QtNodes::GraphicsView> view_;
     bool snap_to_grid_{true};
     bool synchronizing_scene_selection_{false};
+    bool rebuilding_scene_{false};
 
     QAction* add_task_action_{nullptr};
     QAction* edit_action_{nullptr};

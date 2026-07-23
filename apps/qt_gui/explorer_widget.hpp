@@ -25,6 +25,7 @@ class QtExperimentExplorerWidget final : public QWidget {
   private:
     void apply_current_selection();
     void show_context_menu(const QPoint& position);
+    void schedule_selection_sync();
     void synchronize_selection();
 
     QtWorkbenchBridge& bridge_;
@@ -32,6 +33,7 @@ class QtExperimentExplorerWidget final : public QWidget {
     QTreeView* tree_{nullptr};
     QStandardItemModel* model_{nullptr};
     bool refreshing_{false};
+    bool selection_sync_pending_{false};
 };
 
 } // namespace cpssim::qt

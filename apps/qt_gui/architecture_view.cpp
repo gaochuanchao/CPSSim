@@ -22,6 +22,8 @@
 #include <QMessageBox>
 #include <QPainter>
 #include <QPushButton>
+#include <QScopedValueRollback>
+#include <QSignalBlocker>
 #include <QToolBar>
 #include <QVBoxLayout>
 
@@ -224,7 +226,11 @@ void QtArchitectureView::refresh() {
     }
 
     if (!presentation.has_value()) {
-        model_.rebuild({});
+        {
+            QScopedValueRollback<bool> rb{rebuilding_scene_, true};
+            const QSignalBlocker scene_signals{scene_.get()};
+            model_.rebuild({});
+        }
         update_action_state();
         return;
     }
@@ -237,7 +243,11 @@ void QtArchitectureView::refresh() {
                                           &application.workspace().architecture);
     const auto tasks = build_task_node_presentations(*presentation, current_workbench_theme(),
                                                      bridge_.resource_highlight());
-    model_.rebuild(flat_graph(std::move(graph), application.workspace().architecture), tasks);
+    {
+        QScopedValueRollback<bool> rb{rebuilding_scene_, true};
+        const QSignalBlocker scene_signals{scene_.get()};
+        model_.rebuild(flat_graph(std::move(graph), application.workspace().architecture), tasks);
+    }
     for (const auto node_id : model_.allNodeIds()) {
         const auto* node_task = model_.task_presentation(node_id);
         if (node_task == nullptr) {
@@ -282,6 +292,9 @@ void QtArchitectureView::select_node(QtNodes::NodeId node_id) {
 }
 
 void QtArchitectureView::persist_node_position(GuiGraphNodeId entity, QPointF position) {
+    if (rebuilding_scene_) {
+        return;
+    }
     if (entity.kind != GuiGraphNodeKind::Task) {
         return;
     }
@@ -329,6 +342,9 @@ void QtArchitectureView::place_task_near_view_center(TaskId task_id) {
 }
 
 void QtArchitectureView::snap_node_position(QtNodes::NodeId node_id, QPointF position) {
+    if (rebuilding_scene_) {
+        return;
+    }
     if (!snap_to_grid_) {
         bridge_.workspace_settings_changed();
         return;
