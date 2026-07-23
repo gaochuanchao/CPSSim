@@ -491,6 +491,30 @@ WorkbenchApplication::resolve_unapplied_changes(UnappliedSystemDecision decision
         configuration.has_value() ? &*configuration : nullptr);
 }
 
+ProjectTransitionResult WorkbenchApplication::apply_and_save_project() {
+    if (!system_draft_.has_value() || !has_active_project()) {
+        // No draft; just synchronize workspace and save.
+        synchronize_project_workspace();
+        cpssim::save_project(active_project());
+        return {.status = ProjectTransitionStatus::Proceed, .diagnostic = {}};
+    }
+
+    synchronize_project_workspace();
+
+    const auto result = resolve_unapplied_changes(UnappliedSystemDecision::ApplyAndSave);
+    if (result.status == ProjectTransitionStatus::Failed) {
+        return result;
+    }
+
+    // After successful replacement, reinitialize all cached state from the
+    // now-active project so the draft baseline matches the saved config.
+    initialize_system_draft();
+    invalidate_completed_results();
+    publish_complete_snapshot(false);
+
+    return {.status = ProjectTransitionStatus::Proceed, .diagnostic = {}};
+}
+
 RunExportArtifacts
 WorkbenchApplication::export_completed_result(const RunExportOptions& options) const {
     if (!has_active_project() || completed_results_.get() == nullptr ||

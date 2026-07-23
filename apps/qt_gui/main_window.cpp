@@ -640,8 +640,7 @@ bool QtMainWindow::confirm_unapplied_changes() {
         return false;
     }
     if (message.clickedButton() == apply) {
-        // Commit pending editors then use the same complete-save workflow
-        // as Ctrl+S.
+        // Use the same complete-save workflow as Ctrl+S.
         if (system_builder_ != nullptr) {
             if (!system_builder_->commit_pending_edits()) {
                 QMessageBox::critical(this, "Cannot apply",
@@ -649,15 +648,11 @@ bool QtMainWindow::confirm_unapplied_changes() {
                 return false;
             }
         }
-        const auto result = bridge_->application().resolve_unapplied_changes(
-            UnappliedSystemDecision::ApplyAndSave);
-        if (result.status == ProjectTransitionStatus::Failed) {
-            QMessageBox::critical(this, "Cannot continue",
-                                  QString::fromStdString(result.diagnostic));
+        if (!bridge_->apply_and_save_project()) {
             return false;
         }
         setWindowModified(false);
-        return result.status == ProjectTransitionStatus::Proceed;
+        return true;
     }
     // Discard: leave window dirty state as-is (close will clear it).
     return true;

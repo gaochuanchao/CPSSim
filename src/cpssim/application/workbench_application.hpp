@@ -132,6 +132,7 @@ class WorkbenchApplication {
                          const ProjectContentWriter& content_writer = {});
     void close_project();
     ProjectTransitionResult resolve_unapplied_changes(UnappliedSystemDecision decision);
+    ProjectTransitionResult apply_and_save_project();
     RunExportArtifacts export_completed_result(const RunExportOptions& options) const;
 
     void synchronize_project_workspace();
