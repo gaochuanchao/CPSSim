@@ -60,7 +60,11 @@ The **interactive Architecture** view is fully implemented. It supports:
 - right-click empty canvas to add a task at the clicked position;
 - right-click a task node to edit, duplicate, or delete it;
 - right-click a connection to edit or delete it;
-- toolbar Add Task, Fit, 100%, Auto Layout, Snap to Grid;
+- toolbar: Fit All, **Center View**, 100%, Auto Layout, Snap to Grid, Add Task,
+  link-type selector;
+- Center View centers the graph at the current zoom without changing scale;
+- the graph is automatically centered once when a project is opened,
+  created, or replaced (including when Architecture is initially hidden);
 - interactive port-drag connection creation for both Communication and Logical
   link kinds;
 - connection deletion via context menu, Delete key, or Explorer;
