@@ -417,7 +417,6 @@ void draw_route_table(const EditableSystemDraft& draft) {
                               ImGuiTableFlags_ScrollX)) {
         ImGui::TableSetupColumn("Source");
         ImGui::TableSetupColumn("Destination");
-        ImGui::TableSetupColumn("Send offset");
         ImGui::TableSetupColumn("Delay");
         ImGui::TableHeadersRow();
         for (const auto& route : draft.routes()) {
@@ -426,8 +425,6 @@ void draw_route_table(const EditableSystemDraft& draft) {
             ImGui::TextUnformatted(task_label(draft, route.source_task_id).c_str());
             ImGui::TableNextColumn();
             ImGui::TextUnformatted(task_label(draft, route.destination_task_id).c_str());
-            ImGui::TableNextColumn();
-            ImGui::Text("%lld", static_cast<long long>(route.send_offset));
             ImGui::TableNextColumn();
             ImGui::Text("%lld", static_cast<long long>(route.delay));
         }
@@ -492,10 +489,6 @@ void draw_route(EditableSystemDraft& draft, const SystemDraftBuildResult& valida
         ImGui::EndCombo();
     }
     ImGui::EndDisabled();
-    property_label("Send offset");
-    ImGui::InputScalar("##send-offset", ImGuiDataType_S64, &route.send_offset);
-    draw_field_diagnostics(validation, SystemDraftEntityKind::MessageRoute, *index,
-                           SystemDraftField::SendOffset);
     property_label("Delay");
     ImGui::InputScalar("##delay", ImGuiDataType_S64, &route.delay);
     draw_field_diagnostics(validation, SystemDraftEntityKind::MessageRoute, *index,
@@ -506,7 +499,7 @@ void draw_route(EditableSystemDraft& draft, const SystemDraftBuildResult& valida
     }
     if (protected_endpoints) {
         property_help(
-            "Bosch network route endpoints are fixed; send offset and delay remain editable.");
+            "Bosch network route endpoints are fixed; delay remains editable.");
     }
     ImGui::EndTable();
 }

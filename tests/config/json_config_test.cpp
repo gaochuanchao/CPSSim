@@ -194,6 +194,13 @@ TEST_CASE("version-four JSON rejects invalid message routes", "[config][json][ne
                       std::invalid_argument);
     REQUIRE_THROWS_AS(parse_experiment_config(common_prefix + R"json(,
           "message_routes": [
+            {"source_task_id": 1, "destination_task_id": 2,
+             "send_offset_ticks": 2, "delay_ticks": 1}
+          ]
+        })json"),
+                      std::invalid_argument);
+    REQUIRE_THROWS_AS(parse_experiment_config(common_prefix + R"json(,
+          "message_routes": [
             {"source_task_id": 1, "destination_task_id": 3,
              "send_offset_ticks": 1, "delay_ticks": 1}
           ]

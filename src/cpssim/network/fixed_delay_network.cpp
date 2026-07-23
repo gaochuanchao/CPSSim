@@ -65,8 +65,9 @@ FixedDelayNetwork::FixedDelayNetwork(const std::vector<MessageRouteSpec>& routes
               });
 
     for (std::size_t index = 0; index < routes_.size(); ++index) {
-        if (routes_[index].send_offset <= 0) {
-            throw std::invalid_argument{"message route send offset must be positive"};
+        if (routes_[index].send_offset != message_route_send_offset_ticks) {
+            throw std::invalid_argument{
+                "message route send offset must equal the fixed one-tick causal offset"};
         }
         if (routes_[index].delay <= 0) {
             throw std::invalid_argument{"message route delay must be positive"};

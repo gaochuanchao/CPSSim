@@ -18,6 +18,21 @@
 namespace cpssim::qt {
 namespace {
 
+// Port caption helpers.  Returns "in" / "out" when count == 1,
+// or "in[N]" / "out[N]" when count > 1.
+QString port_caption(QtNodes::PortType port_type, QtNodes::PortCount count,
+                     QtNodes::PortIndex index) {
+    if (index >= count) {
+        return {};
+    }
+    const auto prefix = port_type == QtNodes::PortType::In ? QStringLiteral("in")
+                                                           : QStringLiteral("out");
+    if (count == 1) {
+        return prefix;
+    }
+    return QStringLiteral("%1[%2]").arg(prefix).arg(index);
+}
+
 QPalette active_palette_for_theme(GuiTheme theme) {
     // Use the stored palette rather than qApp->palette() to avoid
     // depending on when the theme was last applied.
@@ -166,12 +181,7 @@ void QtArchitectureGraphModel::rebuild(
             continue;
         }
         const auto id = ids_.adapter_id(node.id);
-        auto position = QPointF{node.position.x, node.position.y};
-        if (position.isNull()) {
-            position = QPointF{40.0 + static_cast<qreal>(flat_index % 4) * 240.0,
-                               40.0 + static_cast<qreal>(flat_index / 4) * 140.0};
-        }
-        position = snap_architecture_position(position);
+        const auto position = QPointF{node.position.x, node.position.y};
         const auto presentation = std::find_if(
             task_presentations.begin(), task_presentations.end(), [&](const auto& candidate) {
                 return candidate.task_id == std::get<TaskId>(node.entity);
@@ -353,10 +363,16 @@ bool QtArchitectureGraphModel::setNodeData(QtNodes::NodeId node_id, QtNodes::Nod
     return true;
 }
 
-QVariant QtArchitectureGraphModel::portData(QtNodes::NodeId node_id, QtNodes::PortType /*port_type*/,
+QVariant QtArchitectureGraphModel::portData(QtNodes::NodeId node_id, QtNodes::PortType port_type,
                                             QtNodes::PortIndex index,
                                             QtNodes::PortRole role) const {
-    if (!nodes_.contains(node_id) || index != 0) {
+    const auto found = nodes_.find(node_id);
+    if (found == nodes_.end()) {
+        return {};
+    }
+    const auto count = port_type == QtNodes::PortType::In ? found->second.input_count
+                                                          : found->second.output_count;
+    if (index >= count) {
         return {};
     }
     switch (role) {
@@ -366,9 +382,9 @@ QVariant QtArchitectureGraphModel::portData(QtNodes::NodeId node_id, QtNodes::Po
     case QtNodes::PortRole::ConnectionPolicyRole:
         return QVariant::fromValue(QtNodes::ConnectionPolicy::Many);
     case QtNodes::PortRole::CaptionVisible:
-        return false;
+        return true;
     case QtNodes::PortRole::Caption:
-        return QString{};
+        return port_caption(port_type, count, index);
     default:
         return {};
     }

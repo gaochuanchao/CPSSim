@@ -56,9 +56,22 @@ bool item_matches(const QStandardItem& item_value, const StructuralSelection& se
     case ExplorerItemKind::Task:
         return selection.task_id() == TaskId{first} &&
                selection.kind() == StructuralSelectionKind::Task;
-    case ExplorerItemKind::Route:
-        return selection.message_route() ==
-               std::optional<DraftMessageRouteKey>{{TaskId{first}, TaskId{second}}};
+    case ExplorerItemKind::Route: {
+        if (selection.message_route() ==
+            std::optional<DraftMessageRouteKey>{{TaskId{first}, TaskId{second}}}) {
+            return true;
+        }
+        // A Communication connection with matching endpoints also selects this row.
+        if (selection.kind() == StructuralSelectionKind::Connection) {
+            const auto conn = selection.connection();
+            if (conn.has_value() && conn->kind == GuiConnectionKind::Communication &&
+                conn->source_task_id == TaskId{first} &&
+                conn->destination_task_id == TaskId{second}) {
+                return true;
+            }
+        }
+        return false;
+    }
     }
     return false;
 }
@@ -243,6 +256,10 @@ void QtExperimentExplorerWidget::synchronize_selection() {
             pending.push_back(candidate->child(row));
         }
     }
+    // No matching explorer row found (e.g., logical connection).
+    // Clear the current index without changing the structural selection.
+    const QSignalBlocker blocker{tree_->selectionModel()};
+    tree_->setCurrentIndex(QModelIndex{});
 }
 
 } // namespace cpssim::qt

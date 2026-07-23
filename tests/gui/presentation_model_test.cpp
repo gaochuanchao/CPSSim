@@ -41,11 +41,11 @@ ExperimentConfig make_presentation_config(bool reverse_declarations) {
             {.task_id = TaskId{1}, .resource_id = ResourceId{1}, .execution_time = 2});
         routes.push_back({.source_task_id = TaskId{2},
                           .destination_task_id = TaskId{1},
-                          .send_offset = 2,
+                          .send_offset = message_route_send_offset_ticks,
                           .delay = 5});
         routes.push_back({.source_task_id = TaskId{1},
                           .destination_task_id = TaskId{2},
-                          .send_offset = 1,
+                          .send_offset = message_route_send_offset_ticks,
                           .delay = 3});
     } else {
         resources.emplace_back(ResourceId{1}, "local");
@@ -62,11 +62,11 @@ ExperimentConfig make_presentation_config(bool reverse_declarations) {
             {.task_id = TaskId{2}, .resource_id = ResourceId{2}, .execution_time = 4});
         routes.push_back({.source_task_id = TaskId{1},
                           .destination_task_id = TaskId{2},
-                          .send_offset = 1,
+                          .send_offset = message_route_send_offset_ticks,
                           .delay = 3});
         routes.push_back({.source_task_id = TaskId{2},
                           .destination_task_id = TaskId{1},
-                          .send_offset = 2,
+                          .send_offset = message_route_send_offset_ticks,
                           .delay = 5});
     }
 

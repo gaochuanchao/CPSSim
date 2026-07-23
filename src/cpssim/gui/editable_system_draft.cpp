@@ -407,7 +407,7 @@ std::size_t EditableSystemDraft::add_message_route(TaskId source_task_id,
                                                    TaskId destination_task_id) {
     routes_.push_back({.source_task_id = source_task_id,
                        .destination_task_id = destination_task_id,
-                       .send_offset = 1,
+                       .send_offset = message_route_send_offset_ticks,
                        .delay = 1});
     return routes_.size() - 1;
 }
@@ -465,6 +465,8 @@ void EditableSystemDraft::set_message_route(std::size_t index, DraftMessageRoute
     if (index >= routes_.size()) {
         throw std::out_of_range{"message-route draft index is out of range"};
     }
+    // The send_offset is a core invariant, not a user-configurable parameter.
+    route.send_offset = message_route_send_offset_ticks;
     routes_[index] = route;
 }
 
@@ -645,10 +647,12 @@ SystemDraftBuildResult EditableSystemDraft::build() const {
                 SystemDraftEntityKind::MessageRoute, index, SystemDraftField::DestinationTask,
                 "message route destination refers to an unknown task", route.destination_task_id);
         }
-        if (route.send_offset <= 0) {
-            add_diagnostic(result, SystemDraftDiagnosticCode::NonPositive,
-                           SystemDraftEntityKind::MessageRoute, index, SystemDraftField::SendOffset,
-                           "message send offset must be positive", route.source_task_id);
+        if (route.send_offset != message_route_send_offset_ticks) {
+            add_diagnostic(
+                result, SystemDraftDiagnosticCode::NonPositive,
+                SystemDraftEntityKind::MessageRoute, index, SystemDraftField::SendOffset,
+                "message route send offset must equal the fixed one-tick causal offset",
+                route.source_task_id);
         }
         if (route.delay <= 0) {
             add_diagnostic(result, SystemDraftDiagnosticCode::NonPositive,

@@ -148,8 +148,9 @@ void validate_message_routes(const std::vector<MessageRouteSpec>& routes,
             !contains_task(tasks, current->destination_task_id)) {
             throw std::invalid_argument{"message route refers to an unknown task"};
         }
-        if (current->send_offset <= 0) {
-            throw std::invalid_argument{"message route send offset must be positive"};
+        if (current->send_offset != message_route_send_offset_ticks) {
+            throw std::invalid_argument{
+                "message route send offset must equal the fixed one-tick causal offset"};
         }
         if (current->delay <= 0) {
             throw std::invalid_argument{"message route delay must be positive"};

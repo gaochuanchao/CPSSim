@@ -31,7 +31,7 @@ ExperimentConfig make_graph_config(bool reverse = false, bool cyclic = false,
                                               .delay = 3};
     const auto return_route = MessageRouteSpec{.source_task_id = TaskId{2},
                                                .destination_task_id = TaskId{1},
-                                               .send_offset = 2,
+                                               .send_offset = message_route_send_offset_ticks,
                                                .delay = 4};
     if (reverse) {
         resources.emplace_back(ResourceId{9}, "cloud");

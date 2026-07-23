@@ -199,12 +199,14 @@ TEST_CASE("message route editing converts valid rows and maps invalid duplicates
     const auto invalid = draft.build();
     REQUIRE(has_diagnostic(invalid, SystemDraftDiagnosticCode::Duplicate,
                            SystemDraftEntityKind::MessageRoute, SystemDraftField::Collection));
+    // send_offset is enforced as the fixed constant by set_message_route,
+    // so it no longer produces a non-positive diagnostic. Negative delay still fails.
     REQUIRE(has_diagnostic(invalid, SystemDraftDiagnosticCode::NonPositive,
-                           SystemDraftEntityKind::MessageRoute, SystemDraftField::SendOffset));
+                           SystemDraftEntityKind::MessageRoute, SystemDraftField::Delay));
 
     draft.set_message_route(duplicate, {.source_task_id = TaskId{8},
                                         .destination_task_id = TaskId{3},
-                                        .send_offset = 2,
+                                        .send_offset = message_route_send_offset_ticks,
                                         .delay = 6});
     REQUIRE(draft.build().valid());
     const auto first_json = serialize_experiment_config_json(*draft.build().config);

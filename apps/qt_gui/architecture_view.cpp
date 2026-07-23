@@ -226,10 +226,6 @@ void QtArchitectureView::refresh() {
         return;
     }
 
-    for (auto& task : application.workspace().architecture.tasks) {
-        const auto snapped = snap_architecture_position({task.position.x, task.position.y});
-        task.position = {static_cast<float>(snapped.x()), static_cast<float>(snapped.y())};
-    }
     const auto bosch = application.has_active_project() &&
                        application.active_project().metadata().scenario_kind == "bosch";
     const auto dependencies =
@@ -251,6 +247,19 @@ void QtArchitectureView::refresh() {
                                        .arg(*node_task->execution_time)
                                  : QString{"%1: assignment is incomplete or inaccessible"}.arg(
                                        node_task->resource_name));
+        }
+    }
+    // Set pointing-hand cursor on all connection graphics objects.
+    {
+        std::unordered_set<QtNodes::ConnectionId> seen;
+        for (const auto nid : model_.allNodeIds()) {
+            for (const auto& cid : model_.allConnectionIds(nid)) {
+                if (seen.insert(cid).second) {
+                    if (auto* cgo = scene_->connectionGraphicsObject(cid); cgo != nullptr) {
+                        cgo->setCursor(Qt::PointingHandCursor);
+                    }
+                }
+            }
         }
     }
     synchronize_scene_selection();

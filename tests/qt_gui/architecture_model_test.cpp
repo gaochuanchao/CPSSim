@@ -809,7 +809,7 @@ void QtArchitectureModelTest::isolatedTaskHasOneInOneOutPort() {
 
 void QtArchitectureModelTest::portZeroDataIsValid() {
     // Port 0 must have: valid DataType with cpssim.connection identifier,
-    // ConnectionPolicy::Many, hidden caption, empty caption string.
+    // ConnectionPolicy::Many, visible "in" / "out" caption.
     const auto node_id = task_graph_node_id(TaskId{1});
     GuiArchitectureGraph graph;
     graph.nodes.push_back(
@@ -835,11 +835,11 @@ void QtArchitectureModelTest::portZeroDataIsValid() {
     const auto in_cap_vis =
         model.portData(*adapter, QtNodes::PortType::In, 0, QtNodes::PortRole::CaptionVisible)
             .toBool();
-    QCOMPARE(in_cap_vis, false);
+    QCOMPARE(in_cap_vis, true);
 
     const auto in_cap =
         model.portData(*adapter, QtNodes::PortType::In, 0, QtNodes::PortRole::Caption).toString();
-    QVERIFY(in_cap.isEmpty());
+    QCOMPARE(in_cap, QStringLiteral("in"));
 
     // Check output port 0.
     const auto out_dt =
@@ -857,11 +857,11 @@ void QtArchitectureModelTest::portZeroDataIsValid() {
     const auto out_cap_vis =
         model.portData(*adapter, QtNodes::PortType::Out, 0, QtNodes::PortRole::CaptionVisible)
             .toBool();
-    QCOMPARE(out_cap_vis, false);
+    QCOMPARE(out_cap_vis, true);
 
     const auto out_cap =
         model.portData(*adapter, QtNodes::PortType::Out, 0, QtNodes::PortRole::Caption).toString();
-    QVERIFY(out_cap.isEmpty());
+    QCOMPARE(out_cap, QStringLiteral("out"));
 }
 
 void QtArchitectureModelTest::invalidPortIndexReturnsInvalidData() {

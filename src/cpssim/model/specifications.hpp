@@ -43,6 +43,14 @@ struct SchedulingSpec {
     PreemptionMode preemption_mode;
 };
 
+/*** Fixed causal offset between source-job completion and MessageSend event.
+ *  This is a core timing invariant, not a user-configurable channel parameter.
+ *  source completion at tick t
+ *  MessageSend at t + message_route_send_offset_ticks
+ *  MessageDelivery at t + message_route_send_offset_ticks + configured delay
+ ***/
+inline constexpr Tick message_route_send_offset_ticks = Tick{1};
+
 /*** Defines one completion-triggered task route with fixed integer timing. ***/
 struct MessageRouteSpec {
     TaskId source_task_id;

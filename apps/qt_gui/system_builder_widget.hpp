@@ -108,11 +108,13 @@ class QtSystemBuilderWidget final : public QWidget {
     QComboBox* task_assignment_{nullptr};
     QLabel* assignment_status_{nullptr};
     QPushButton* profile_button_{nullptr};
+    QLabel* system_heading_{nullptr};
+    QLabel* resource_heading_{nullptr};
+    QLabel* task_heading_{nullptr};
+    QLabel* connection_heading_{nullptr};
     QComboBox* connection_source_{nullptr};
     QComboBox* connection_destination_{nullptr};
     QLabel* connection_kind_{nullptr};
-    QLabel* connection_latency_{nullptr};
-    QLineEdit* route_send_offset_{nullptr};
     QLineEdit* route_delay_{nullptr};
     bool refreshing_{false};
 };

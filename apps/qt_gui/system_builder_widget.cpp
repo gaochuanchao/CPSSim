@@ -285,6 +285,14 @@ void QtSystemBuilderWidget::build_pages() {
     form->addRow(empty_message_);
 
     system_page_ = form_page(pages_, form);
+    system_heading_ = new QLabel("System Object", system_page_);
+    system_heading_->setObjectName("systemBuilder.systemObjectHeading");
+    {
+        QFont f = system_heading_->font();
+        f.setBold(true);
+        system_heading_->setFont(f);
+    }
+    form->addRow(system_heading_);
     /*
     * Keep fields beside their labels when space permits.
     * Move fields below their labels when the dock becomes narrow.
@@ -304,6 +312,14 @@ void QtSystemBuilderWidget::build_pages() {
     form->addRow(system_diagnostic_);
 
     resource_page_ = form_page(pages_, form);
+    resource_heading_ = new QLabel("Resource Object", resource_page_);
+    resource_heading_->setObjectName("systemBuilder.resourceObjectHeading");
+    {
+        QFont f = resource_heading_->font();
+        f.setBold(true);
+        resource_heading_->setFont(f);
+    }
+    form->addRow(resource_heading_);
     resource_id_ = new QLineEdit(resource_page_);
     resource_name_ = new QLineEdit(resource_page_);
     resource_id_->setObjectName("systemBuilder.resourceId");
@@ -316,6 +332,14 @@ void QtSystemBuilderWidget::build_pages() {
     form->addRow(resource_diagnostic_);
 
     task_page_ = form_page(pages_, form);
+    task_heading_ = new QLabel("Task Object", task_page_);
+    task_heading_->setObjectName("systemBuilder.taskObjectHeading");
+    {
+        QFont f = task_heading_->font();
+        f.setBold(true);
+        task_heading_->setFont(f);
+    }
+    form->addRow(task_heading_);
     task_id_ = new QLineEdit(task_page_);
     task_name_ = new QLineEdit(task_page_);
     task_period_ = new QLineEdit(task_page_);
@@ -372,18 +396,22 @@ void QtSystemBuilderWidget::build_pages() {
     form->addRow(task_diagnostic_);
 
     connection_page_ = form_page(pages_, form);
+    connection_heading_ = new QLabel("Connection Object", connection_page_);
+    connection_heading_->setObjectName("systemBuilder.connectionObjectHeading");
+    {
+        QFont f = connection_heading_->font();
+        f.setBold(true);
+        connection_heading_->setFont(f);
+    }
+    form->addRow(connection_heading_);
     connection_source_ = new QComboBox(connection_page_);
     connection_destination_ = new QComboBox(connection_page_);
     connection_kind_ = new QLabel(connection_page_);
-    connection_latency_ = new QLabel(connection_page_);
-    route_send_offset_ = new QLineEdit(connection_page_);
     route_delay_ = new QLineEdit(connection_page_);
     form->addRow("Source:", connection_source_);
     form->addRow("Destination:", connection_destination_);
     form->addRow("Kind:", connection_kind_);
-    form->addRow("Displayed latency:", connection_latency_);
-    form->addRow("Send offset:", route_send_offset_);
-    form->addRow("Delay:", route_delay_);
+    form->addRow("Latency:", route_delay_);
     auto* help = new QLabel(
         "Logical dependencies create no network events. Bosch communication displays 80 ticks; "
         "the adapter-owned one-tick handoff is hidden.",
@@ -404,7 +432,7 @@ void QtSystemBuilderWidget::build_pages() {
 void QtSystemBuilderWidget::connect_editors() {
     auto* unsigned_validator = new QRegularExpressionValidator(QRegularExpression{"[0-9]+"}, this);
     for (auto* edit : {tick_period_, resource_id_, task_id_, task_period_, task_deadline_,
-                       task_offset_, task_priority_, route_send_offset_, route_delay_}) {
+                       task_offset_, task_priority_, route_delay_}) {
         edit->setValidator(unsigned_validator);
     }
     connect(tick_period_, &QLineEdit::editingFinished, this, [this] {
@@ -538,19 +566,15 @@ void QtSystemBuilderWidget::connect_editors() {
             const auto value = tick_value(source);
             if (refreshing_ || !editing_enabled() || !key.has_value() || !value.has_value())
                 return;
-            edits_.apply(text, [key, value, source, this](auto& draft, auto&, auto&) {
+            edits_.apply(text, [key, value](auto& draft, auto&, auto&) {
                 if (const auto index = route_index(draft, *key); index.has_value()) {
                     auto route = draft.routes()[*index];
-                    if (source == route_send_offset_)
-                        route.send_offset = *value;
-                    else
-                        route.delay = *value;
+                    route.delay = *value;
                     draft.set_message_route(*index, route);
                 }
             });
         });
     };
-    route_edit(route_send_offset_, "Change send offset");
     route_edit(route_delay_, "Change route delay");
     const auto endpoint_edit = [this](QComboBox* source, bool source_endpoint) {
         connect(
@@ -836,6 +860,15 @@ void QtSystemBuilderWidget::refresh_connection_page() {
     const auto& application = bridge_.application();
     const auto& draft = *application.editable_system();
     const auto key = selected_route(application.structural_selection());
+    const auto logical =
+        application.structural_selection().connection().has_value() &&
+        application.structural_selection().connection()->kind == GuiConnectionKind::Logical;
+    // Update heading text based on connection kind.
+    if (logical) {
+        connection_heading_->setText("Logical Connection Object");
+    } else {
+        connection_heading_->setText("Communication Connection Object");
+    }
     pages_->setCurrentWidget(connection_page_);
     connection_source_->clear();
     connection_destination_->clear();
@@ -851,26 +884,15 @@ void QtSystemBuilderWidget::refresh_connection_page() {
             static_cast<qulonglong>(key->destination_task_id.value())));
     }
     const auto index = key.has_value() ? route_index(draft, *key) : std::nullopt;
-    const auto logical =
-        application.structural_selection().connection().has_value() &&
-        application.structural_selection().connection()->kind == GuiConnectionKind::Logical;
     connection_kind_->setText(logical ? "Logical" : "Communication");
     const auto bosch = edit_policy() == ProjectSystemEditPolicy::BoschCompatible;
-    const auto latency = logical             ? Tick{0}
-                         : bosch             ? Tick{80}
-                         : index.has_value() ? draft.routes()[*index].delay
-                                             : Tick{0};
-    connection_latency_->setText(QString{"%1 ticks"}.arg(latency));
-    route_send_offset_->setVisible(index.has_value());
-    route_delay_->setVisible(index.has_value());
-    if (index.has_value()) {
-        route_send_offset_->setText(QString::number(draft.routes()[*index].send_offset));
+    route_delay_->setVisible(!logical && index.has_value());
+    if (!logical && index.has_value()) {
         route_delay_->setText(QString::number(draft.routes()[*index].delay));
     }
     connection_source_->setEnabled(editing_enabled() && index.has_value() && !bosch);
     connection_destination_->setEnabled(editing_enabled() && index.has_value() && !bosch);
-    route_send_offset_->setEnabled(editing_enabled() && index.has_value());
-    route_delay_->setEnabled(editing_enabled() && index.has_value());
+    route_delay_->setEnabled(editing_enabled() && !logical && index.has_value());
 }
 
 void QtSystemBuilderWidget::refresh_diagnostics() {
