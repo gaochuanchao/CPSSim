@@ -16,6 +16,7 @@ struct DraftTaskAssignment;
 enum class StructuralSection : int;
 enum class ProjectSystemEditPolicy : int;
 class TaskId;
+struct GuiConnectionId;
 
 } // namespace cpssim
 
@@ -61,6 +62,14 @@ class QtStructuralEditController final : public QObject {
 
     bool duplicate_selected();
     bool delete_selected();
+
+    // Create one communication/message route between explicit task endpoints.
+    // Returns false and sets the application diagnostic on failure.
+    bool create_connection(TaskId source, TaskId destination);
+
+    // Delete the communication route identified by the given connection id.
+    // Returns false and sets the application diagnostic on failure.
+    bool delete_connection(const GuiConnectionId& connection);
 
     // Clear undo history only when the active project root genuinely changes.
     void synchronize_active_project();

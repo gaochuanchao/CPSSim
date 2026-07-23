@@ -64,12 +64,26 @@ QPointF next_available_node_position(QPointF requested, const QSizeF& size,
 class QtArchitectureGraphModel final : public QtNodes::AbstractGraphModel {
   public:
     using PositionChanged = std::function<void(GuiGraphNodeId, QPointF)>;
+    using ConnectionCreateRequested = std::function<bool(TaskId, TaskId)>;
+    using ConnectionDeleteRequested = std::function<bool(const GuiConnectionId&)>;
+    using StructuralEditEnabled = std::function<bool()>;
 
     explicit QtArchitectureGraphModel(QObject* parent = nullptr);
 
     void rebuild(const GuiArchitectureGraph& graph,
                  const std::vector<QtTaskNodePresentation>& task_presentations = {});
     void set_position_changed(PositionChanged callback) { position_changed_ = std::move(callback); }
+
+    void set_connection_create_requested(ConnectionCreateRequested callback) {
+        connection_create_requested_ = std::move(callback);
+    }
+    void set_connection_delete_requested(ConnectionDeleteRequested callback) {
+        connection_delete_requested_ = std::move(callback);
+    }
+    void set_structural_edit_enabled(StructuralEditEnabled callback) {
+        structural_edit_enabled_ = std::move(callback);
+    }
+
     std::optional<QtNodes::NodeId> node_id_for(GuiGraphNodeId entity) const;
     std::optional<GuiGraphNodeId> entity_for(QtNodes::NodeId node_id) const;
     std::optional<GuiConnectionId> connection_for(const QtNodes::ConnectionId& connection_id) const;
@@ -119,6 +133,9 @@ class QtArchitectureGraphModel final : public QtNodes::AbstractGraphModel {
     std::vector<QtNodes::ConnectionId> connections_;
     std::vector<std::pair<QtNodes::ConnectionId, GuiConnectionId>> connection_ids_;
     PositionChanged position_changed_;
+    ConnectionCreateRequested connection_create_requested_;
+    ConnectionDeleteRequested connection_delete_requested_;
+    StructuralEditEnabled structural_edit_enabled_;
 };
 
 } // namespace cpssim::qt

@@ -39,6 +39,25 @@ struct SystemDeletionImpact {
     std::size_t run_plan_assignments{0};
 };
 
+/*** Lightweight result for a single connection-creation attempt. ***/
+struct SystemBuilderInteractionResult {
+    bool changed{false};
+    std::string diagnostic;
+};
+
+/***
+ * Creates one message route between explicit task endpoints in the detached
+ * draft, selects it, and returns a diagnostic on failure.
+ *
+ * Validates: source exists, destination exists, duplicate ordered pair,
+ * self-loop per current domain policy.
+ *
+ * Graphics-independent — emits no Qt signals.
+ ***/
+SystemBuilderInteractionResult
+create_message_route(TaskId source, TaskId destination, EditableSystemDraft& draft,
+                     StructuralSelection& selection);
+
 /*** Owns pending confirmation while all mutations remain in caller-owned drafts. ***/
 class SystemExplorerInteraction {
   public:

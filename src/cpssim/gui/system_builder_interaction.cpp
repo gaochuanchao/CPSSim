@@ -72,6 +72,49 @@ void clear_resource_assignments(std::vector<DraftTaskAssignment>& assignments,
 
 } // namespace
 
+SystemBuilderInteractionResult create_message_route(TaskId source, TaskId destination,
+                                                    EditableSystemDraft& draft,
+                                                    StructuralSelection& selection) {
+    // Validate source exists
+    const auto source_found = std::find_if(draft.tasks().begin(), draft.tasks().end(),
+                                           [source](const auto& task) { return task.id == source; });
+    if (source_found == draft.tasks().end()) {
+        return {.changed = false,
+                .diagnostic = "Source task does not exist in the system draft."};
+    }
+
+    // Validate destination exists
+    const auto dest_found =
+        std::find_if(draft.tasks().begin(), draft.tasks().end(),
+                     [destination](const auto& task) { return task.id == destination; });
+    if (dest_found == draft.tasks().end()) {
+        return {.changed = false,
+                .diagnostic = "Destination task does not exist in the system draft."};
+    }
+
+    // Reject duplicate ordered endpoint pair
+    const auto duplicate = std::any_of(draft.routes().begin(), draft.routes().end(),
+                                       [source, destination](const auto& route) {
+                                           return route.source_task_id == source &&
+                                                  route.destination_task_id == destination;
+                                       });
+    if (duplicate) {
+        return {.changed = false,
+                .diagnostic = "A message route between these tasks already exists."};
+    }
+
+    // Self-loops are currently valid per domain policy — no explicit rejection.
+    // If policy changes, add the check here.
+
+    // Create the route using existing domain defaults (send_offset=1, delay=1)
+    static_cast<void>(draft.add_message_route(source, destination));
+
+    // Select the newly created route
+    selection.select_message_route(DraftMessageRouteKey{source, destination});
+
+    return {.changed = true, .diagnostic = {}};
+}
+
 SystemEntityCreateAvailability
 SystemExplorerInteraction::create_availability(StructuralSection section,
                                                const EditableSystemDraft& draft) const {

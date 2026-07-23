@@ -233,4 +233,70 @@ bool QtStructuralEditController::duplicate_selected() {
     return true;
 }
 
+bool QtStructuralEditController::create_connection(TaskId source, TaskId destination) {
+    auto& application = bridge_.application();
+    if (!editing_enabled() || !application.editable_system().has_value()) {
+        application.set_status("Editing is not available in the current state.", true);
+        Q_EMIT bridge_.statusChanged();
+        return false;
+    }
+    if (edit_policy() != ProjectSystemEditPolicy::Generic) {
+        application.set_status("Adapter-owned route structure is protected.", true);
+        Q_EMIT bridge_.statusChanged();
+        return false;
+    }
+    synchronize_active_project();
+
+    DraftState before{*application.editable_system(), application.run_assignments(),
+                      application.structural_selection()};
+    auto after = before;
+
+    const auto result = create_message_route(source, destination, after.draft, after.selection);
+    if (!result.changed) {
+        application.set_status(result.diagnostic, true);
+        Q_EMIT bridge_.statusChanged();
+        return false;
+    }
+
+    undo_stack_.push(new RestoreDraftCommand{bridge_, std::move(before), std::move(after),
+                                             QStringLiteral("Create connection")});
+    return true;
+}
+
+bool QtStructuralEditController::delete_connection(const GuiConnectionId& connection) {
+    auto& application = bridge_.application();
+    if (!editing_enabled() || !application.editable_system().has_value()) {
+        application.set_status("Editing is not available in the current state.", true);
+        Q_EMIT bridge_.statusChanged();
+        return false;
+    }
+    if (connection.kind != GuiConnectionKind::Communication) {
+        application.set_status("Only communication routes can be deleted.", true);
+        Q_EMIT bridge_.statusChanged();
+        return false;
+    }
+    if (edit_policy() == ProjectSystemEditPolicy::BoschCompatible) {
+        application.set_status("This Bosch route identity is protected.", true);
+        Q_EMIT bridge_.statusChanged();
+        return false;
+    }
+    synchronize_active_project();
+
+    DraftState before{*application.editable_system(), application.run_assignments(),
+                      application.structural_selection()};
+    auto after = before;
+
+    const DraftMessageRouteKey key{connection.source_task_id, connection.destination_task_id};
+    if (!after.draft.remove_message_route(key)) {
+        application.set_status("The selected route could not be found in the draft.", true);
+        Q_EMIT bridge_.statusChanged();
+        return false;
+    }
+    synchronize_structural_selection(after.selection, after.draft);
+
+    undo_stack_.push(new RestoreDraftCommand{bridge_, std::move(before), std::move(after),
+                                             QStringLiteral("Delete connection")});
+    return true;
+}
+
 } // namespace cpssim::qt

@@ -116,4 +116,94 @@ TEST_CASE("resource cascade clears affected draft assignments without touching t
     REQUIRE((selection.section() == StructuralSection::Resources));
 }
 
+TEST_CASE("create_message_route creates and selects a valid route",
+          "[gui][system-builder][connection]") {
+    auto draft = EditableSystemDraft::minimal();
+    draft.add_task(); // TaskId{2}
+    StructuralSelection selection;
+    selection.select_system();
+
+    const auto result =
+        create_message_route(TaskId{1}, TaskId{2}, draft, selection);
+    REQUIRE(result.changed);
+    REQUIRE(result.diagnostic.empty());
+    REQUIRE(draft.routes().size() == 1);
+    REQUIRE((draft.routes()[0].source_task_id == TaskId{1}));
+    REQUIRE((draft.routes()[0].destination_task_id == TaskId{2}));
+    REQUIRE((draft.routes()[0].send_offset == message_route_send_offset_ticks));
+    REQUIRE((draft.routes()[0].delay == 1));
+    REQUIRE((selection.message_route() == DraftMessageRouteKey{TaskId{1}, TaskId{2}}));
+}
+
+TEST_CASE("create_message_route rejects missing source",
+          "[gui][system-builder][connection]") {
+    auto draft = EditableSystemDraft::minimal();
+    StructuralSelection selection;
+    const auto result =
+        create_message_route(TaskId{99}, TaskId{1}, draft, selection);
+    REQUIRE_FALSE(result.changed);
+    REQUIRE_FALSE(result.diagnostic.empty());
+    REQUIRE(draft.routes().empty());
+}
+
+TEST_CASE("create_message_route rejects missing destination",
+          "[gui][system-builder][connection]") {
+    auto draft = EditableSystemDraft::minimal();
+    StructuralSelection selection;
+    const auto result =
+        create_message_route(TaskId{1}, TaskId{99}, draft, selection);
+    REQUIRE_FALSE(result.changed);
+    REQUIRE_FALSE(result.diagnostic.empty());
+    REQUIRE(draft.routes().empty());
+}
+
+TEST_CASE("create_message_route rejects duplicate ordered pair",
+          "[gui][system-builder][connection]") {
+    auto draft = EditableSystemDraft::minimal();
+    draft.add_task(); // TaskId{2}
+    StructuralSelection selection;
+    REQUIRE(create_message_route(TaskId{1}, TaskId{2}, draft, selection).changed);
+
+    StructuralSelection second_selection;
+    const auto result =
+        create_message_route(TaskId{1}, TaskId{2}, draft, second_selection);
+    REQUIRE_FALSE(result.changed);
+    REQUIRE_FALSE(result.diagnostic.empty());
+    REQUIRE(draft.routes().size() == 1);
+}
+
+TEST_CASE("create_message_route uses existing domain defaults",
+          "[gui][system-builder][connection][defaults]") {
+    auto draft = EditableSystemDraft::minimal();
+    draft.add_task(); // TaskId{2}
+    StructuralSelection selection;
+    REQUIRE(create_message_route(TaskId{1}, TaskId{2}, draft, selection).changed);
+    REQUIRE((draft.routes()[0].send_offset == message_route_send_offset_ticks));
+    REQUIRE(draft.routes()[0].delay == 1);
+}
+
+TEST_CASE("create_message_route selects the created route",
+          "[gui][system-builder][connection][selection]") {
+    auto draft = EditableSystemDraft::minimal();
+    draft.add_task(); // TaskId{2}
+    StructuralSelection selection;
+    selection.select_system();
+    REQUIRE(create_message_route(TaskId{1}, TaskId{2}, draft, selection).changed);
+    REQUIRE((selection.message_route() == DraftMessageRouteKey{TaskId{1}, TaskId{2}}));
+}
+
+TEST_CASE("delete route via remove_message_route",
+          "[gui][system-builder][connection][delete]") {
+    auto draft = EditableSystemDraft::minimal();
+    draft.add_task();
+    static_cast<void>(draft.add_message_route(TaskId{1}, TaskId{2}));
+    REQUIRE(draft.routes().size() == 1);
+
+    StructuralSelection selection;
+    const bool removed = draft.remove_message_route(
+        DraftMessageRouteKey{TaskId{1}, TaskId{2}});
+    REQUIRE(removed);
+    REQUIRE(draft.routes().empty());
+}
+
 } // namespace

@@ -310,9 +310,87 @@ bool QtArchitectureGraphModel::connectionExists(QtNodes::ConnectionId connection
 
 QtNodes::NodeId QtArchitectureGraphModel::addNode(const QString) { return QtNodes::InvalidNodeId; }
 
-bool QtArchitectureGraphModel::connectionPossible(QtNodes::ConnectionId) const { return false; }
+bool QtArchitectureGraphModel::connectionPossible(QtNodes::ConnectionId connection_id) const {
+    // Callback-based guard: reject when structural editing is unavailable.
+    if (!structural_edit_enabled_ || !structural_edit_enabled_()) {
+        return false;
+    }
 
-void QtArchitectureGraphModel::addConnection(QtNodes::ConnectionId) {}
+    // Both nodes must exist
+    const auto source_node = nodes_.find(connection_id.outNodeId);
+    const auto dest_node = nodes_.find(connection_id.inNodeId);
+    if (source_node == nodes_.end() || dest_node == nodes_.end()) {
+        return false;
+    }
+
+    // Both entities must be tasks
+    if (source_node->second.entity.kind != GuiGraphNodeKind::Task ||
+        dest_node->second.entity.kind != GuiGraphNodeKind::Task) {
+        return false;
+    }
+
+    // Source must be output port 0, destination must be input port 0
+    if (connection_id.outPortIndex != 0 || connection_id.inPortIndex != 0) {
+        return false;
+    }
+
+    // Self-loops: currently valid per domain policy (next_message_route includes them).
+    // No explicit rejection here unless policy changes.
+
+    // Duplicate ordered endpoint pair: reject if already exists
+    if (connectionExists(connection_id)) {
+        return false;
+    }
+
+    return true;
+}
+
+void QtArchitectureGraphModel::addConnection(QtNodes::ConnectionId connection_id) {
+    // Validate again
+    if (!connectionPossible(connection_id)) {
+        return;
+    }
+
+    // Callback check
+    if (!connection_create_requested_) {
+        return;
+    }
+
+    // Map QtNodes node IDs to TaskIds
+    const auto source_entity = entity_for(connection_id.outNodeId);
+    const auto dest_entity = entity_for(connection_id.inNodeId);
+    if (!source_entity.has_value() || !dest_entity.has_value()) {
+        return;
+    }
+
+    const auto* source_node = nodes_.find(connection_id.outNodeId) != nodes_.end()
+                                  ? &nodes_.at(connection_id.outNodeId)
+                                  : nullptr;
+    const auto* dest_node = nodes_.find(connection_id.inNodeId) != nodes_.end()
+                                ? &nodes_.at(connection_id.inNodeId)
+                                : nullptr;
+    if (source_node == nullptr || dest_node == nullptr) {
+        return;
+    }
+
+    const TaskId source_task{source_entity->entity_value};
+    const TaskId dest_task{dest_entity->entity_value};
+
+    // Invoke the creation callback exactly once.
+    // The callback creates the route via the controller, which mutates the draft
+    // and invokes bridge notification leading to rebuild.
+    const bool created = connection_create_requested_(source_task, dest_task);
+
+    if (created) {
+        // The draft already has the route — do NOT insert into connections_ here.
+        // The rebuild from draft will repopulate connections_ authoritatively.
+        // BUT QtNodes needs the connectionCreated signal for the visual to appear.
+        // Since rebuild will call modelReset() which clears all graphics objects,
+        // we emit the signal so the temporary connection appears during the brief
+        // interval before rebuild completes.
+        Q_EMIT connectionCreated(connection_id);
+    }
+}
 
 bool QtArchitectureGraphModel::nodeExists(QtNodes::NodeId node_id) const {
     return nodes_.contains(node_id);
@@ -405,7 +483,34 @@ bool QtArchitectureGraphModel::setPortData(QtNodes::NodeId, QtNodes::PortType, Q
     return false;
 }
 
-bool QtArchitectureGraphModel::deleteConnection(QtNodes::ConnectionId) { return false; }
+bool QtArchitectureGraphModel::deleteConnection(QtNodes::ConnectionId connection_id) {
+    if (!connection_delete_requested_) {
+        return false;
+    }
+
+    // Resolve the domain connection identity
+    const auto gui_connection = connection_for(connection_id);
+    if (!gui_connection.has_value()) {
+        // Non-domain edges (logical, decorative) — reject cleanly
+        return false;
+    }
+
+    // Only editable communication routes may be deleted through this path
+    if (gui_connection->kind != GuiConnectionKind::Communication) {
+        return false;
+    }
+
+    // Invoke the deletion callback — it removes the route via the controller
+    const bool removed = connection_delete_requested_(*gui_connection);
+
+    if (removed) {
+        // Do NOT erase from connections_ here — rely on domain rebuild.
+        // The rebuild from draft will update connections_ authoritatively.
+        Q_EMIT connectionDeleted(connection_id);
+    }
+
+    return removed;
+}
 
 bool QtArchitectureGraphModel::deleteNode(QtNodes::NodeId) { return false; }
 

@@ -200,6 +200,16 @@ QtArchitectureView::QtArchitectureView(QtWorkbenchBridge& bridge,
     model_.set_position_changed([this](GuiGraphNodeId entity, QPointF position) {
         persist_node_position(entity, position);
     });
+    model_.set_structural_edit_enabled([this] {
+        return edits_.editing_enabled() &&
+               edits_.edit_policy() == ProjectSystemEditPolicy::Generic;
+    });
+    model_.set_connection_create_requested([this](TaskId source, TaskId destination) {
+        return edits_.create_connection(source, destination);
+    });
+    model_.set_connection_delete_requested([this](const GuiConnectionId& connection) {
+        return edits_.delete_connection(connection);
+    });
     update_action_state();
     refresh();
 }
@@ -640,15 +650,27 @@ void QtArchitectureView::delete_selected_with_confirmation() {
         if (answer != QMessageBox::Yes) {
             return;
         }
-    } else if (selection.connection().has_value()) {
-        // Connection deletion not yet implemented.
-        return;
-    } else {
+        edits_.delete_selected();
+        refresh();
         return;
     }
 
-    edits_.delete_selected();
-    refresh();
+    const auto conn = selection.connection();
+    if (conn.has_value() && conn->kind == GuiConnectionKind::Communication) {
+        const auto answer =
+            QMessageBox::question(this, QStringLiteral("Delete Connection"),
+                                  QStringLiteral("Delete this communication route?"),
+                                  QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+        if (answer != QMessageBox::Yes) {
+            return;
+        }
+        edits_.delete_connection(*conn);
+        bridge_.notify_structural_selection_changed();
+        refresh();
+        return;
+    }
+
+    // Non-domain or invalid selection — nothing to delete.
 }
 
 void QtArchitectureView::request_edit_selected() {
@@ -713,16 +735,16 @@ void QtArchitectureView::update_action_state() {
 
     add_task_action_->setEnabled(can_edit);
 
-    const auto task_selected =
-        bridge_.application().structural_selection().task_id().has_value();
-    const auto connection_selected =
-        bridge_.application().structural_selection().connection().has_value();
+    const auto& selection = bridge_.application().structural_selection();
+    const auto task_selected = selection.task_id().has_value();
+    const auto conn = selection.connection();
+    const bool connection_selected =
+        conn.has_value() && conn->kind == GuiConnectionKind::Communication;
     const bool has_selection = task_selected || connection_selected;
 
     edit_action_->setEnabled(has_selection);
     duplicate_action_->setEnabled(can_edit && task_selected);
-    // Connection deletion not yet implemented; disable for connections.
-    delete_action_->setEnabled(can_edit && task_selected);
+    delete_action_->setEnabled(can_edit && (task_selected || connection_selected));
 }
 
 } // namespace cpssim::qt
