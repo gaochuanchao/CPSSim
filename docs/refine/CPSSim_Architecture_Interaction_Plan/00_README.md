@@ -89,10 +89,6 @@ Do not skip ahead.
 | 3 | `03_ARCHITECTURE_ACTIONS_AND_CONTEXT_MENUS.md` | Add, duplicate, delete, fit, and keyboard interactions |
 | 4 | `04_NODE_PORT_MODEL_REDESIGN.md` | Every task has one stable input and one stable output port |
 | 5 | `05_INTERACTIVE_CONNECTIONS.md` | Drag-to-connect and connection deletion update the draft |
-| 6 | `06_COMPONENT_LIBRARY_AND_ADD_AT_CENTER.md` | Component library and DesCartes-style add-at-center |
-| 7 | `07_DRAG_AND_DROP_TO_CANVAS.md` | Drag Task from library and drop at scene location |
-| 8 | `08_TEST_AND_ACCEPTANCE_MATRIX.md` | Automated and manual verification |
-| 9 | `09_COPILOT_PROMPTS.md` | Copy/paste prompts for each isolated implementation step |
 
 Each step must compile and pass tests before starting the next step.
 
