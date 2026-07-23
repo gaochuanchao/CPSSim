@@ -1,73 +1,44 @@
 # CPSSim
 
 CPSSim is a portable, deterministic, event-driven C++ simulator for studying
-real-time cyber-physical systems. It separates a generic simulation core from
-scenario adapters, scheduling policies, functional models, and visualization.
+the interaction between real-time execution and cyber-physical behavior. It
+separates a reusable simulation core from scheduling policies, resource
+allocation, communication models, functional-model adapters, application
+services, and visualization.
 
-The first validation scenario is the Bosch Physics-Driven Real-Time CPS
-Challenge. CPSSim is now developed as a standalone repository rather than as a
-continuously synchronized fork of the Bosch challenge repository.
+The first validated scenario is the Bosch Physics-Driven Real-Time CPS
+Challenge: a distributed vehicle-control chain whose timing behavior affects
+physical performance and whose physical state can inform online scheduling.
 
-## Current status
+```mermaid
+flowchart LR
+    Config[Tasks, resources,<br/>execution profiles] --> Engine[Deterministic<br/>event engine]
+    Policy[Scheduling and<br/>allocation policies] --> Engine
+    Engine --> Timing[Jobs, deadlines,<br/>preemptions, messages]
+    Engine <--> Model[Optional functional model<br/>or FMU]
+    Timing --> Results[Trace, metrics,<br/>signals, export]
+```
 
-The project currently provides:
+## What CPSSim currently supports
 
-- a C++20 CMake project with Debug, Release, sanitizer, Clang, and clang-tidy
-  workflows;
-- strong identifier types;
-- signed integer simulation ticks and exact physical-duration conversions;
-- event and job-lifecycle categories;
-- validated immutable resources, resource-independent tasks, and per-resource
-  execution profiles;
-- a strict, versioned JSON experiment configuration format with an explicit
-  preemptive/non-preemptive scheduling assumption and generic message routes;
-- runtime `Task` and `Resource` objects plus validated job lifecycle transitions;
-- a portable canonical event record with deterministic versioned JSON Lines
-  serialization;
-- a deterministic pending-event queue ordered by integer tick, explicit phase,
-  and stable insertion sequence;
-- task-level resource assignment and task-driven job generation with offsets,
-  an inclusive horizon, one pending release per task, and task-local job IDs;
-- separate task-placement and job-ordering policy interfaces, with a
-  single-resource allocator, explicitly configured allocator, and
-  fixed-priority policy;
-- a runtime scheduler that owns jobs, independent per-resource Ready queues,
-  resources, and dispatch/preemption mechanism;
-- an event-driven multi-resource engine focused on deterministic global time,
-  event routing, release progression, and processed canonical traces;
-- generic completion-triggered messages with deterministic runtime IDs,
-  positive fixed send/delivery timing, causal trace links, and inspectable
-  horizon-truncated lifecycle;
-- a separate Bosch trigger adapter with explicit sixteen-input mapping and
-  deterministic sparse CSV export;
-- a captured-reference conformance tool whose dedicated and shared-cloud
-  scheduler, network, and trigger streams match exactly;
-- a core-independent FMI 2.0 Co-Simulation adapter with dynamic loading,
-  lifecycle ownership, typed value-reference access, stepping, explicit
-  statuses, and real Bosch-source execution tests on Linux;
-- a generic functional-model boundary with typed online observations, a
-  policy observation hook, append-only functional traces, and offline replay;
-- a Bosch FMI functional adapter whose complete initialization, trajectory,
-  trigger, and output mappings reproduce both 150,001-row references within
-  documented numerical tolerances;
-- a strict Bosch example loader and executable that run the supplied 10, 12.5,
-  and 15 m/s trajectory formats through the normal engine and real FMU;
-- a persistent, extensible terminal interface with interactive and direct
-  Bosch execution over one shared application service;
-- resumable next-event-tick engine progression plus a GUI-neutral FIFO command
-  and detached snapshot boundary;
-- an optional DPI-aware Dear ImGui/GLFW/OpenGL workbench with a validated
-  run-plan editor, shared selection, architecture graph, scheduling timeline,
-  typed functional plots, canonical events, and resource/runtime inspection;
-- Catch2 unit tests; and
-- captured MATLAB/Simulink references for trigger, replay, and later numerical
-  conformance work.
+- periodic tasks with offsets, deadlines, fixed priorities, and deterministic
+  per-resource execution demand;
+- independent exclusive resources and explicit task-to-resource assignments;
+- preemptive or non-preemptive fixed-priority scheduling;
+- deterministic event ordering using integer ticks, semantic phases, and stable
+  insertion sequence;
+- directed Logical links and fixed-delay Communication links;
+- an optional functional-model boundary and FMI 2.0 Co-Simulation adapter;
+- Bosch trigger, timing, and functional conformance against captured references;
+- a native Qt workbench for project editing, execution, inspection, plotting,
+  result analysis, and export;
+- a persistent CLI for supplied Bosch workflows;
+- unit, integration, GUI, conformance, sanitizer, Release, and Clang workflows.
 
-The initial fixed-delay network, online functional interaction, and GUI
-workbench are implemented. Rich networking (payloads, contention, loss, and
-random delay), broader FMI packaging, workspace persistence, and advanced
-visualization remain later roadmap work. Resources currently behave as
-independent exclusive uniprocessors without global scheduling or migration.
+Current limitations are explicit: resources are exclusive uniprocessors;
+migration and global multicore scheduling are absent; Communication links have
+fixed timing and no payload, contention, loss, or random delay; and generic
+tasks are periodic.
 
 ## Quick start
 
@@ -75,64 +46,49 @@ On the supported Ubuntu development environment:
 
 ```bash
 make
-make run-cli
-```
-
-Use the graphical workbench instead with:
-
-```bash
 make run-gui
 ```
 
-Open the verification menu with:
+Use the terminal interface instead:
+
+```bash
+make run-cli
+```
+
+Open the verification menu:
 
 ```bash
 make test
 ```
 
-See the [command handbook](docs/COMMANDS.md) for the complete terminal
-workflow. The [documentation home](docs/README.md) provides short paths for
-learning the architecture, exact simulation behavior, code-reading order,
-testing, and extension work.
-
 ## Documentation
 
-Start with the [documentation home](docs/README.md), then choose the
-[project tour](docs/guide/PROJECT-TOUR.md),
-[simulation semantics](docs/guide/SIMULATION-SEMANTICS.md), or
-[developer guide](docs/guide/DEVELOPER-GUIDE.md) according to your goal.
-For visual experiment work, use the [GUI tutorial](docs/gui/README.md).
-Improvements that have been discussed but not implemented are separated by
-status and proposed implementation path in the
-[future-work guide](docs/guide/FUTURE-WORK.md).
+Start at the [documentation home](docs/README.md).
 
-Stable project direction is defined by the
-[project charter](docs/instructions/00_PROJECT_CHARTER.md),
-[architecture](docs/instructions/01_ARCHITECTURE.md), and
-[roadmap](docs/instructions/02_ROADMAP.md).
+- [User Guide](docs/user/README.md): install CPSSim, understand the model,
+  build experiments, operate the workbench, inspect results, and run the Bosch
+  scenario.
+- [Developer Guide](docs/developer/README.md): architecture, source ownership,
+  call flows, implementation locations, tests, customization recipes, and
+  future development.
+- [Supporting documentation](docs/assist/README.md): ADRs, detailed module
+  notes, implementation plans, historical guides, and acceptance evidence.
 
-Durable design decisions are recorded under [`docs/adr/`](docs/adr/). Current
-behavior and validation guidance stay in the guides, module pages, tests, and
-experiment documentation; Git retains chronological history.
-
-## Bosch and MATLAB provenance
+## Bosch provenance
 
 CPSSim originated from the
-[Bosch CPS Challenge repository](https://github.com/boschresearch/CPSChallenge).
-The supplied FMU, Simulink model, example data, paper, presentation, and related
-materials retain their original authorship and license notices.
-
-The original Bosch root README is preserved as
-[BOSCH_CHALLENGE_README.md](resources/BOSCH_CHALLENGE_README.md). Earlier
-MATLAB-first development is retained on the
-[`matlab` branch](https://github.com/gaochuanchao/CPSSim/tree/matlab), while the
-captured behavior oracle is documented under
+[Bosch CPS Challenge repository](https://github.com/boschresearch/CPSChallenge)
+and is now developed as a standalone simulator. Supplied FMU, Simulink,
+trajectory, paper, presentation, and reference materials retain their original
+authorship and license notices. The original challenge README is preserved in
+[`resources/BOSCH_CHALLENGE_README.md`](resources/BOSCH_CHALLENGE_README.md),
+and captured conformance data is documented under
 [`experiments/bosch_v10_reference/`](experiments/bosch_v10_reference/).
 
-The generic simulator core must not depend on Bosch trigger definitions,
-MATLAB, Simulink, FMI, or GUI libraries.
+The generic core must remain independent of Bosch, FMI, MATLAB, Simulink, Qt,
+and other GUI libraries.
 
 ## License
 
-See [LICENSE.txt](LICENSE.txt). Individual supplied resources also retain the
+See [LICENSE.txt](LICENSE.txt). Individual supplied resources retain the
 copyright and attribution stated in their accompanying documentation.
