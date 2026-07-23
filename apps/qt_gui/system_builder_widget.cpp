@@ -407,12 +407,19 @@ void QtSystemBuilderWidget::build_pages() {
     form->addRow(connection_heading_);
     connection_source_ = new QComboBox(connection_page_);
     connection_destination_ = new QComboBox(connection_page_);
-    connection_kind_ = new QLabel(connection_page_);
+    connection_kind_ = new QComboBox(connection_page_);
+    connection_kind_->setObjectName("systemBuilder.connectionKind");
+    connection_kind_->addItem("Communication");
+    connection_kind_->addItem("Logical");
+    connection_kind_->setFixedWidth(140);
+    route_delay_label_ = new QLabel(QStringLiteral("Latency:"), connection_page_);
     route_delay_ = new QLineEdit(connection_page_);
+    route_delay_->setObjectName("systemBuilder.connectionDelay");
+    route_delay_->setFixedWidth(100);
     form->addRow("Source:", connection_source_);
     form->addRow("Destination:", connection_destination_);
     form->addRow("Kind:", connection_kind_);
-    form->addRow("Latency:", route_delay_);
+    form->addRow(route_delay_label_, route_delay_);
     auto* help = new QLabel(
         "Logical dependencies create no network events. Bosch communication displays 80 ticks; "
         "the adapter-owned one-tick handoff is hidden.",
@@ -561,6 +568,27 @@ void QtSystemBuilderWidget::connect_editors() {
             }));
     });
 
+    connect(connection_kind_, &QComboBox::currentIndexChanged, this, [this](int index) {
+        if (refreshing_ || !editing_enabled())
+            return;
+        const auto key = selected_route(bridge_.application().structural_selection());
+        if (!key.has_value())
+            return;
+        const auto new_kind = index == 1 ? GuiConnectionKind::Logical
+                                          : GuiConnectionKind::Communication;
+        edits_.apply("Change link type", [key, new_kind](auto& draft, auto&, auto& selection) {
+            if (const auto idx = route_index(draft, *key); idx.has_value()) {
+                auto route = draft.routes()[*idx];
+                route.kind = new_kind;
+                route.delay = new_kind == GuiConnectionKind::Logical ? Tick{0} : Tick{0};
+                route.send_offset = message_route_send_offset_ticks;
+                draft.set_message_route(*idx, route);
+                selection.select_connection(
+                    GuiConnectionId{new_kind, route.source_task_id, route.destination_task_id});
+            }
+        });
+    });
+
     connect(route_delay_, &QLineEdit::editingFinished, this, [this] {
         if (commit_route_latency()) {
             Q_EMIT completeSaveRequested();
@@ -583,8 +611,9 @@ void QtSystemBuilderWidget::connect_editors() {
                         else
                             route.destination_task_id = replacement;
                         draft.set_message_route(*index, route);
+                        // Preserve the route's kind when selecting the edited route.
                         selection.select_connection(
-                            GuiConnectionId{GuiConnectionKind::Communication,
+                            GuiConnectionId{route.kind,
                                             route.source_task_id,
                                             route.destination_task_id});
                     }
@@ -630,9 +659,12 @@ bool QtSystemBuilderWidget::commit_route_latency() {
     if (!key.has_value() || !value.has_value()) {
         return false;
     }
-    // Check whether the value actually changed to avoid a no-op undo command.
     const auto& draft = *bridge_.application().editable_system();
     const auto index = route_index(draft, *key);
+    // Reject latency commits for Logical links.
+    if (index.has_value() && draft.routes()[*index].kind == GuiConnectionKind::Logical) {
+        return false;
+    }
     if (index.has_value() && draft.routes()[*index].delay == *value) {
         return true;  // unchanged
     }
@@ -900,9 +932,11 @@ void QtSystemBuilderWidget::refresh_connection_page() {
     const auto& application = bridge_.application();
     const auto& draft = *application.editable_system();
     const auto key = selected_route(application.structural_selection());
+    const auto conn = application.structural_selection().connection();
     const auto logical =
-        application.structural_selection().connection().has_value() &&
-        application.structural_selection().connection()->kind == GuiConnectionKind::Logical;
+        conn.has_value() && conn->kind == GuiConnectionKind::Logical;
+    const auto communication =
+        conn.has_value() && conn->kind == GuiConnectionKind::Communication;
     // Update heading text based on connection kind.
     if (logical) {
         connection_heading_->setText("Logical Connection Object");
@@ -924,15 +958,24 @@ void QtSystemBuilderWidget::refresh_connection_page() {
             static_cast<qulonglong>(key->destination_task_id.value())));
     }
     const auto index = key.has_value() ? route_index(draft, *key) : std::nullopt;
-    connection_kind_->setText(logical ? "Logical" : "Communication");
-    const auto bosch = edit_policy() == ProjectSystemEditPolicy::BoschCompatible;
-    route_delay_->setVisible(!logical && index.has_value());
-    if (!logical && index.has_value()) {
+    // Update kind combo without triggering its signal.
+    {
+        const QSignalBlocker blocker{connection_kind_};
+        connection_kind_->setCurrentIndex(logical ? 1 : 0);
+    }
+    connection_kind_->setEnabled(editing_enabled() && index.has_value() &&
+                                 edit_policy() == ProjectSystemEditPolicy::Generic);
+    // Latency row: hidden for Logical, visible for Communication.
+    const bool show_latency = communication && index.has_value();
+    route_delay_label_->setVisible(show_latency);
+    route_delay_->setVisible(show_latency);
+    if (communication && index.has_value()) {
         route_delay_->setText(QString::number(draft.routes()[*index].delay));
     }
+    const auto bosch = edit_policy() == ProjectSystemEditPolicy::BoschCompatible;
     connection_source_->setEnabled(editing_enabled() && index.has_value() && !bosch);
     connection_destination_->setEnabled(editing_enabled() && index.has_value() && !bosch);
-    route_delay_->setEnabled(editing_enabled() && !logical && index.has_value());
+    route_delay_->setEnabled(editing_enabled() && communication && index.has_value());
 }
 
 void QtSystemBuilderWidget::refresh_diagnostics() {

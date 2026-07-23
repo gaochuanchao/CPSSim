@@ -438,6 +438,7 @@ if(CPSSIM_BUILD_GUI OR CPSSIM_BUILD_QT_GUI)
         cpssim_qt_gui_support STATIC
         apps/qt_gui/analysis_widgets.cpp
         apps/qt_gui/appearance_preferences.cpp
+        apps/qt_gui/architecture_connection_painter.cpp
         apps/qt_gui/architecture_model.cpp
         apps/qt_gui/architecture_node_painter.cpp
         apps/qt_gui/architecture_view.cpp

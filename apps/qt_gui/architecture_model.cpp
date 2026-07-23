@@ -175,6 +175,7 @@ void QtArchitectureGraphModel::rebuild(
     nodes_.clear();
     connections_.clear();
     connection_ids_.clear();
+    protected_connections_.clear();
     std::size_t flat_index = 0;
     for (const auto& node : graph.nodes) {
         if (node.kind != GuiGraphNodeKind::Task) {
@@ -213,6 +214,9 @@ void QtArchitectureGraphModel::rebuild(
         connections_.push_back(connection);
         if (edge.connection.has_value()) {
             connection_ids_.emplace_back(connection, edge.connection->id);
+            if (edge.connection->protected_semantics) {
+                protected_connections_.insert(connection);
+            }
         }
     }
     Q_EMIT modelReset();
@@ -497,8 +501,8 @@ bool QtArchitectureGraphModel::deleteConnection(QtNodes::ConnectionId connection
         return false;
     }
 
-    // Only editable communication routes may be deleted through this path
-    if (gui_connection->kind != GuiConnectionKind::Communication) {
+    // Reject protected connections (adapter-owned Bosch functional deps).
+    if (protected_connections_.contains(connection_id)) {
         return false;
     }
 

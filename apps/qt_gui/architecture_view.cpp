@@ -1,6 +1,7 @@
 /*** Render CPSSim tasks and semantic connections through flat QtNodes. ***/
 #include "apps/qt_gui/architecture_view.hpp"
 
+#include "apps/qt_gui/architecture_connection_painter.hpp"
 #include "apps/qt_gui/architecture_node_painter.hpp"
 #include "apps/qt_gui/structural_edit_controller.hpp"
 #include "apps/qt_gui/workbench_bridge.hpp"
@@ -182,6 +183,8 @@ QtArchitectureView::QtArchitectureView(QtWorkbenchBridge& bridge,
     view_->setObjectName("architecture.graphicsView");
     view_->setScaleRange(0.1, 4.0);
     scene_->setNodePainter(std::make_unique<QtArchitectureNodePainter>());
+    scene_->setConnectionPainter(
+        std::make_unique<QtArchitectureConnectionPainter>(model_));
 
     auto* toolbar = new QToolBar("Architecture", this);
     toolbar->setObjectName("toolbar.architecture");
@@ -201,7 +204,7 @@ QtArchitectureView::QtArchitectureView(QtWorkbenchBridge& bridge,
     link_type_selector_->addItem("Communication");
     link_type_selector_->addItem("Logical");
     link_type_selector_->setToolTip("Link type for newly created connections");
-    toolbar->addWidget(new QLabel(" Link type:", toolbar));
+    toolbar->addWidget(new QLabel(" New link type:", toolbar));
     toolbar->addWidget(link_type_selector_);
     layout->addWidget(view_.get());
 
@@ -709,10 +712,12 @@ void QtArchitectureView::delete_selected_with_confirmation() {
     }
 
     const auto conn = selection.connection();
-    if (conn.has_value() && conn->kind == GuiConnectionKind::Communication) {
+    if (conn.has_value() &&
+        (conn->kind == GuiConnectionKind::Communication || conn->kind == GuiConnectionKind::Logical)) {
+        const auto link_type = conn->kind == GuiConnectionKind::Communication ? "communication" : "logical";
         const auto answer =
             QMessageBox::question(this, QStringLiteral("Delete Connection"),
-                                  QStringLiteral("Delete this communication route?"),
+                                  QStringLiteral("Delete this %1 link?").arg(link_type),
                                   QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
         if (answer != QMessageBox::Yes) {
             return;
@@ -792,7 +797,8 @@ void QtArchitectureView::update_action_state() {
     const auto task_selected = selection.task_id().has_value();
     const auto conn = selection.connection();
     const bool connection_selected =
-        conn.has_value() && conn->kind == GuiConnectionKind::Communication;
+        conn.has_value() &&
+        (conn->kind == GuiConnectionKind::Communication || conn->kind == GuiConnectionKind::Logical);
     const bool has_selection = task_selected || connection_selected;
 
     edit_action_->setEnabled(has_selection);

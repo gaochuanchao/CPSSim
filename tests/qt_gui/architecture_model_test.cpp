@@ -2183,9 +2183,26 @@ void QtArchitectureModelTest::addConnection_failedCallback_doesNotMutate() {
 }
 
 void QtArchitectureModelTest::deleteConnection_resolvesCorrectGuiConnectionId() {
-    // Use the cyclic graph which has communication and logical edges
-    // We need to verify the delete callback receives the right GuiConnectionId
-    const auto graph = cyclic_graph();
+    // Build a graph with a non-protected Communication edge.
+    GuiArchitectureGraph graph;
+    const auto first = task_graph_node_id(TaskId{1});
+    const auto second = task_graph_node_id(TaskId{2});
+    const auto res = resource_graph_node_id(ResourceId{1});
+    graph.nodes = {
+        {first, GuiGraphNodeKind::Task, TaskId{1}, "First", {40, 40}, {120, 60}},
+        {second, GuiGraphNodeKind::Task, TaskId{2}, "Second", {280, 40}, {120, 60}},
+        {res, GuiGraphNodeKind::Resource, ResourceId{1}, "CPU", {0, 0}, {500, 200}}};
+    graph.edges = {
+        {{GuiGraphEdgeKind::MessageRoute, first, second},
+         GuiGraphEdgeKind::MessageRoute, first, second,
+         std::nullopt, std::nullopt, std::nullopt,
+         GuiConnectionPresentation{
+             .id = {GuiConnectionKind::Communication, TaskId{1}, TaskId{2}},
+             .label = "Communication",
+             .displayed_latency = 1,
+             .creates_network_events = true,
+             .protected_semantics = false}}};
+
     QtArchitectureGraphModel model;
     model.set_structural_edit_enabled([] { return true; });
     GuiConnectionId deleted_connection{GuiConnectionKind::Logical, TaskId{0}, TaskId{0}};
@@ -2198,24 +2215,21 @@ void QtArchitectureModelTest::deleteConnection_resolvesCorrectGuiConnectionId() 
         });
     model.rebuild(graph);
 
-    // Find the Task2->Task1 communication edge
-    const auto src = model.node_id_for(task_graph_node_id(TaskId{2}));
-    const auto dst = model.node_id_for(task_graph_node_id(TaskId{1}));
+    const auto src = model.node_id_for(first);
+    const auto dst = model.node_id_for(second);
     QVERIFY(src.has_value());
     QVERIFY(dst.has_value());
 
     const QtNodes::ConnectionId qt_conn{*src, 0, *dst, 0};
-    // Verify this maps to a communication connection
     const auto gui_id = model.connection_for(qt_conn);
     QVERIFY(gui_id.has_value());
     QCOMPARE(gui_id->kind, GuiConnectionKind::Communication);
 
-    // Now delete through the model
     const auto result = model.deleteConnection(qt_conn);
     QVERIFY(result);
     QVERIFY(callback_invoked);
-    QCOMPARE(deleted_connection.source_task_id, TaskId{2});
-    QCOMPARE(deleted_connection.destination_task_id, TaskId{1});
+    QCOMPARE(deleted_connection.source_task_id, TaskId{1});
+    QCOMPARE(deleted_connection.destination_task_id, TaskId{2});
     QCOMPARE(deleted_connection.kind, GuiConnectionKind::Communication);
 }
 
@@ -2242,6 +2256,8 @@ void QtArchitectureModelTest::deleteConnection_rejectsLogicalEdge() {
     QVERIFY(gui_id.has_value());
     QCOMPARE(gui_id->kind, GuiConnectionKind::Logical);
 
+    // The cyclic_graph marks this edge as protected_semantics=true,
+    // so the model must reject it.
     const auto result = model.deleteConnection(qt_conn);
     QVERIFY(!result);
     QVERIFY(!callback_invoked);

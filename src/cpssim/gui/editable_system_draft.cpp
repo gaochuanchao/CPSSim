@@ -705,14 +705,10 @@ SystemDraftBuildResult EditableSystemDraft::build() const {
         std::vector<MessageRouteSpec> routes;
         routes.reserve(routes_.size());
         for (const auto& route : routes_) {
-            // Only Communication routes are passed to the simulator.
-            // Logical routes are structural-only and produce no network events.
-            if (route.kind != GuiConnectionKind::Communication) {
-                continue;
-            }
+            const int kind_int = route.kind == GuiConnectionKind::Logical ? 1 : 0;
             routes.push_back({.source_task_id = route.source_task_id,
                               .destination_task_id = route.destination_task_id,
-                              .kind = 0, // Communication
+                              .kind = kind_int,
                               .send_offset = route.send_offset,
                               .delay = route.delay});
         }

@@ -272,11 +272,8 @@ bool QtStructuralEditController::delete_connection(const GuiConnectionId& connec
         Q_EMIT bridge_.statusChanged();
         return false;
     }
-    if (connection.kind != GuiConnectionKind::Communication) {
-        application.set_status("Only communication routes can be deleted.", true);
-        Q_EMIT bridge_.statusChanged();
-        return false;
-    }
+    // Both Communication and Logical routes are deletable in editable projects.
+    // Protected Bosch routes are caught by the edit-policy check below.
     if (edit_policy() == ProjectSystemEditPolicy::BoschCompatible) {
         application.set_status("This Bosch route identity is protected.", true);
         Q_EMIT bridge_.statusChanged();

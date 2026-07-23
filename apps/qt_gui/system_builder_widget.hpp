@@ -117,7 +117,8 @@ class QtSystemBuilderWidget final : public QWidget {
     QLabel* connection_heading_{nullptr};
     QComboBox* connection_source_{nullptr};
     QComboBox* connection_destination_{nullptr};
-    QLabel* connection_kind_{nullptr};
+    QComboBox* connection_kind_{nullptr};
+    QLabel* route_delay_label_{nullptr};
     QLineEdit* route_delay_{nullptr};
     bool refreshing_{false};
 };

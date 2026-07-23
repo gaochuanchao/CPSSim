@@ -132,6 +132,7 @@ class QtArchitectureGraphModel final : public QtNodes::AbstractGraphModel {
     std::map<QtNodes::NodeId, NodeRecord> nodes_;
     std::vector<QtNodes::ConnectionId> connections_;
     std::vector<std::pair<QtNodes::ConnectionId, GuiConnectionId>> connection_ids_;
+    std::unordered_set<QtNodes::ConnectionId> protected_connections_;
     PositionChanged position_changed_;
     ConnectionCreateRequested connection_create_requested_;
     ConnectionDeleteRequested connection_delete_requested_;
